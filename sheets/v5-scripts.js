@@ -556,6 +556,71 @@ function getTrackedRatingGroupIds() {
 }
 
 /**
+ * Recalculates the authoritative `spent_experience` from committed `xp_upgrades`
+ * (Attributes, Skills, Disciplines/Powers, Merits/Backgrounds, Blood Potency)
+ * plus any non-refunded Specialty/Ritual/Formula purchases in `xp_log`.
+ *
+ * @param {Object} sheetData - The character's normalized sheet_data object.
+ * @returns {number} Authoritative total spent XP.
+ */
+function recalculateAuthoritativeSpentXp(sheetData) {
+    if (!sheetData || typeof sheetData !== 'object') return 0;
+    const baseStats = (sheetData.base_stats && typeof sheetData.base_stats === 'object') ? sheetData.base_stats : {};
+    const xpUpgrades = (sheetData.xp_upgrades && typeof sheetData.xp_upgrades === 'object') ? sheetData.xp_upgrades : {};
+
+    let computedSpent = 0;
+    const primaryStatIds = [
+        ...V5_ATTRIBUTE_KEYS,
+        ...V5_SKILL_KEYS,
+        ...V5_DISCIPLINE_DOT_KEYS,
+        'blood_potency'
+    ];
+    for (let rowNumber = 1; rowNumber <= 7; rowNumber++) {
+        primaryStatIds.push('haven_merit_rating_' + rowNumber);
+    }
+
+    primaryStatIds.forEach(groupId => {
+        const xpDots = Number(xpUpgrades[groupId] || 0);
+        if (xpDots > 0) {
+            const baseRating = Number(baseStats[groupId] || 0);
+            const calc = calculateV5DotUpgradeCost(groupId, baseRating, baseRating + xpDots, sheetData);
+            computedSpent += Number(calc.totalCost || 0);
+        }
+    });
+
+    // For Merits/Backgrounds, avoid double-counting between split (merit_rating_N / background_rating_N) and combined (adv_flaw_rating_N)
+    let splitAdvUpgradeCost = 0;
+    for (let rowNumber = 1; rowNumber <= 12; rowNumber++) {
+        const meritXpDots = Number(xpUpgrades['merit_rating_' + rowNumber] || 0);
+        if (meritXpDots > 0) splitAdvUpgradeCost += meritXpDots * 3;
+        if (rowNumber <= 10) {
+            const bgXpDots = Number(xpUpgrades['background_rating_' + rowNumber] || 0);
+            if (bgXpDots > 0) splitAdvUpgradeCost += bgXpDots * 3;
+        }
+    }
+    let combinedAdvUpgradeCost = 0;
+    for (let rowNumber = 1; rowNumber <= 9; rowNumber++) {
+        const advXpDots = Number(xpUpgrades['adv_flaw_rating_' + rowNumber] || 0);
+        if (advXpDots > 0) combinedAdvUpgradeCost += advXpDots * 3;
+    }
+    computedSpent += Math.max(splitAdvUpgradeCost, combinedAdvUpgradeCost);
+
+    // Add non-dot purchases (Skill Specialties, Blood Sorcery Rituals, Thin-Blood Formulae) from xp_log
+    if (Array.isArray(sheetData.xp_log)) {
+        sheetData.xp_log.forEach(logEntry => {
+            if (!logEntry || logEntry.type !== 'purchase' || logEntry.refunded) return;
+            if (!logEntry.targetId || logEntry.category === 'specialty' || logEntry.category === 'ritual' || logEntry.category === 'formula') {
+                computedSpent += Number(logEntry.cost || 0);
+            }
+        });
+    }
+
+    sheetData.spent_experience = String(computedSpent);
+    sheetData.spent = String(computedSpent);
+    return computedSpent;
+}
+
+/**
  * Snapshots all existing character dots into `sheetData.base_stats` if not already initialized
  * (or if `forceResnapshot` is true), and ensures `sheetData.xp_upgrades` and `sheetData.xp_log` exist.
  * Also keeps combined (`adv_flaw_rating_N`) and split (`merit_rating_N` / `background_rating_N`) XP/Base
@@ -608,11 +673,8 @@ function ensureBaseStatsSnapshot(sheetData, forceResnapshot = false) {
     if (!sheetData.total_experience && sheetData.total_experience !== '0') {
         sheetData.total_experience = sheetData.total || '0';
     }
-    if (!sheetData.spent_experience && sheetData.spent_experience !== '0') {
-        sheetData.spent_experience = sheetData.spent || '0';
-    }
     sheetData.total = String(sheetData.total_experience);
-    sheetData.spent = String(sheetData.spent_experience);
+    recalculateAuthoritativeSpentXp(sheetData);
 }
 
 /**
@@ -1139,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const totalXpValue = Number(currentSheetData.total_experience || currentSheetData.total || 0);
-        const spentXpValue = Number(currentSheetData.spent_experience || currentSheetData.spent || 0);
+        const spentXpValue = recalculateAuthoritativeSpentXp(currentSheetData);
         const pendingCartCost = pendingXpCart.reduce((sum, item) => sum + Number(item.cost || 0), 0);
         const availableXpValue = totalXpValue - spentXpValue - pendingCartCost;
 
@@ -1149,7 +1211,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inputElement) {
                 inputElement.value = String(totalXpValue);
                 inputElement.readOnly = true;
-                inputElement.title = 'Total Experience awarded by the Storyteller';
+                inputElement.setAttribute('readonly', 'readonly');
+                inputElement.title = 'Total Experience (Controlled strictly by Storyteller awards/deductions)';
             }
         });
         ['spent_experience', 'spent'].forEach(fieldId => {
@@ -1160,8 +1223,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `${spentXpValue} (+${pendingCartCost} cart)`
                     : String(spentXpValue);
                 inputElement.readOnly = true;
+                inputElement.setAttribute('readonly', 'readonly');
                 inputElement.classList.toggle('xp-field-highlight', spentXpValue > 0 || pendingCartCost > 0);
-                inputElement.title = `Spent XP: ${spentXpValue} | Available XP: ${availableXpValue}`;
+                inputElement.title = `Spent XP: ${spentXpValue} (Calculated automatically from XP upgrades) | Available XP: ${availableXpValue}`;
             }
         });
 
@@ -1366,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!charId) return;
             try {
                 // localStorage.getItem retrieves the active user's bearer token for authenticated API calls
-                const authToken = localStorage.getItem('vtm_token');
+                const authToken = localStorage.getItem('vtm_auth_token') || localStorage.getItem('vtm_token');
                 // fetch queries the latest character record from the server so remote Storyteller unlock/lock or XP grants update live
                 const remoteResponse = await fetch(`/api/characters/${charId}`, {
                     headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
@@ -1692,6 +1756,20 @@ document.addEventListener('DOMContentLoaded', () => {
             formControlElement.id = uniqueFieldId;
         } // Close if(!formControlElement.id...) block
         
+        if (
+            formControlElement.id === 'total_experience' ||
+            formControlElement.id === 'spent_experience' ||
+            formControlElement.id === 'total' ||
+            formControlElement.id === 'spent'
+        ) {
+            formControlElement.readOnly = true;
+            formControlElement.setAttribute('readonly', 'readonly');
+            formControlElement.style.cursor = 'not-allowed';
+            formControlElement.addEventListener('keydown', (e) => e.preventDefault());
+            formControlElement.addEventListener('paste', (e) => e.preventDefault());
+            return;
+        }
+
         if (isReadonly) {
             if (formControlElement.type === 'checkbox' || formControlElement.tagName === 'SELECT') formControlElement.disabled = true;
             else formControlElement.readOnly = true;
@@ -3487,18 +3565,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const responseData = await response.json();
                 const updatedSelf = (responseData.characters || []).find(charSummary => Number(charSummary.id) === Number(charId));
                 if (updatedSelf) {
-                    currentSheetData.total_experience = String(updatedSelf.total_experience);
-                    currentSheetData.total = String(updatedSelf.total_experience);
-                    if (!Array.isArray(currentSheetData.xp_log)) currentSheetData.xp_log = [];
-                    currentSheetData.xp_log.unshift({
-                        id: 'xp_award_' + Date.now(),
-                        type: xpDelta > 0 ? 'award' : 'deduct',
-                        scope: 'campaign',
-                        amount: xpDelta,
-                        reason: sanitizedReason,
-                        by: 'Storyteller',
-                        timestamp: new Date().toISOString()
-                    });
+                    const updatedTotal = updatedSelf.total_experience !== undefined ? updatedSelf.total_experience : updatedSelf.new_total;
+                    currentSheetData.total_experience = String(updatedTotal ?? 0);
+                    currentSheetData.total = String(updatedTotal ?? 0);
+                    if (updatedSelf.sheet_data && Array.isArray(updatedSelf.sheet_data.xp_log)) {
+                        currentSheetData.xp_log = updatedSelf.sheet_data.xp_log;
+                    } else {
+                        if (!Array.isArray(currentSheetData.xp_log)) currentSheetData.xp_log = [];
+                        currentSheetData.xp_log.unshift({
+                            id: 'xp_award_' + Date.now(),
+                            type: xpDelta > 0 ? 'award' : 'deduct',
+                            scope: 'campaign',
+                            amount: xpDelta,
+                            reason: sanitizedReason,
+                            by: 'Storyteller',
+                            timestamp: new Date().toISOString()
+                        });
+                    }
                 }
                 if (reasonInputElement) reasonInputElement.value = '';
                 refreshAllXpVisuals();

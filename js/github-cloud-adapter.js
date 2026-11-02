@@ -34,7 +34,7 @@
     // Cross-origin frame check fallback
   }
 
-  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v3';
+  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v4';
   const CLOUD_CONFIG_KEY = 'vtm_chronicle_cloud_config_v2';
   const NTFY_DEFAULT_TOPIC = 'vtm-elysium-labyrinth-2026-sync';
   const CLIENT_ID = 'vtm_' + Math.random().toString(36).substring(2, 10);
@@ -273,6 +273,7 @@
       try {
         localStorage.removeItem('vtm_chronicle_cloud_state_v1');
         localStorage.removeItem('vtm_chronicle_cloud_state_v2');
+        localStorage.removeItem('vtm_chronicle_cloud_state_v3');
         const savedRaw = localStorage.getItem(STORAGE_KEY);
         if (savedRaw) {
           const saved = JSON.parse(savedRaw);
@@ -307,41 +308,11 @@
       seed._deleted = seed._deleted || {};
       db = seed;
 
-      // Ensure active user session matches a valid user in db.users
-      let currentStoredUser = null;
-      try {
-        const rawUser = localStorage.getItem('vtm_user');
-        if (rawUser) currentStoredUser = JSON.parse(rawUser);
-      } catch (e) {}
-
-      const matchedUser =
-        currentStoredUser &&
-        db.users.find(
-          (u) =>
-            Number(u.id) === Number(currentStoredUser.id) ||
-            (currentStoredUser.username &&
-              String(u.username).toLowerCase() === String(currentStoredUser.username).toLowerCase())
-        );
-
-      if (!localStorage.getItem('vtm_auth_token') || !matchedUser || Number(matchedUser.id) !== Number(currentStoredUser?.id)) {
-        const targetUser = matchedUser || db.users.find((u) => u.username === 'TohkaTakushi') || db.users[0];
-        if (targetUser) {
-          const isGm =
-            targetUser.role === 'gm' ||
-            targetUser.username === 'TohkaTakushi' ||
-            (db.chronicles || []).some((c) => Number(c.gm_id) === Number(targetUser.id));
-          const uPayload = {
-            id: targetUser.id,
-            username: targetUser.username,
-            displayName: targetUser.display_name || targetUser.username,
-            role: isGm ? 'gm' : targetUser.role || 'player',
-            bio: targetUser.bio || null,
-            avatar_url: targetUser.avatar_url || null,
-            avatar: targetUser.avatar_url || null,
-          };
-          localStorage.setItem('vtm_auth_token', makeMockToken(uPayload));
-          localStorage.setItem('vtm_user', JSON.stringify(uPayload));
-        }
+      // Clear any legacy auto-injected token (.vtm_cloud_sig) so visitors are not auto-logged in as Storyteller
+      const existingToken = localStorage.getItem('vtm_auth_token') || '';
+      if (existingToken && !existingToken.endsWith('.vtm_session_v2')) {
+        localStorage.removeItem('vtm_auth_token');
+        localStorage.removeItem('vtm_user');
       }
 
       return db;
@@ -384,10 +355,10 @@
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
-    return `${b64}.vtm_cloud_sig`;
+    return `${b64}.vtm_session_v2`;
   }
 
-  function parseAuthUser(headers) {
+  function extractValidAuthUser(headers) {
     try {
       let auth = '';
       if (headers) {
@@ -399,6 +370,7 @@
       }
       if (auth && auth.startsWith('Bearer ')) {
         const token = auth.substring(7);
+        if (!token.endsWith('.vtm_session_v2')) return null;
         const [data] = token.split('.');
         if (data) {
           const json = decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
@@ -415,6 +387,12 @@
         }
       }
     } catch (e) {}
+    return null;
+  }
+
+  function parseAuthUser(headers) {
+    const valid = extractValidAuthUser(headers);
+    if (valid) return valid;
     const fallback = (db && db.users && db.users.find((u) => u.username === 'TohkaTakushi')) ||
       (db && db.users && db.users[0]) || {
         id: 11,
@@ -998,6 +976,9 @@
         avatar: u.avatar_url || null,
       };
       const token = makeMockToken(userPayload);
+      try {
+        localStorage.setItem('vtm_user', JSON.stringify(userPayload));
+      } catch (e) {}
       return jsonResponse({ success: true, token, user: userPayload });
     }
 
@@ -1027,22 +1008,29 @@
       });
       persistDb({ table: 'users', row: newUser });
       const userPayload = { id: newUser.id, username: newUser.username, displayName: newUser.display_name, role: 'player' };
+      try {
+        localStorage.setItem('vtm_user', JSON.stringify(userPayload));
+      } catch (e) {}
       return jsonResponse({ success: true, token: makeMockToken(userPayload), user: userPayload });
     }
 
     if (path === '/api/auth/me' && method === 'GET') {
-      const u = (db.users || []).find((x) => Number(x.id) === Number(user.id)) || user;
+      const authUser = extractValidAuthUser(headers);
+      if (!authUser) {
+        return jsonResponse({ error: 'Not authenticated' }, 401);
+      }
+      const u = (db.users || []).find((x) => Number(x.id) === Number(authUser.id)) || authUser;
       const isGm =
         u.role === 'gm' ||
         u.username === 'TohkaTakushi' ||
         (db.chronicles || []).some((c) => Number(c.gm_id) === Number(u.id));
       return jsonResponse({
         user: {
-          ...user,
+          ...authUser,
           id: u.id,
           username: u.username,
           displayName: u.display_name || u.displayName || u.username,
-          role: isGm ? 'gm' : u.role || user.role || 'player',
+          role: isGm ? 'gm' : u.role || authUser.role || 'player',
           bio: u.bio || null,
           avatar_url: u.avatar_url || null,
           avatar: u.avatar_url || null,
@@ -1493,7 +1481,7 @@
       const charId = Number(body.character_id);
       const targets =
         target === 'campaign'
-          ? (db.characters || []).filter((c) => Number(c.chronicle_id) === cId && c.category === 'pc')
+          ? (db.characters || []).filter((c) => Number(c.chronicle_id) === cId && String(c.category || '').toLowerCase() === 'pc')
           : (db.characters || []).filter((c) => Number(c.id) === charId && Number(c.chronicle_id) === cId);
 
       const updatedChars = [];
@@ -1503,22 +1491,39 @@
           sd = typeof char.sheet_data === 'string' ? JSON.parse(char.sheet_data || '{}') : char.sheet_data || {};
         } catch (e) {}
         const currentTotal = parseInt(sd.total_experience || sd.total || 0, 10) || 0;
+        const currentSpent = parseInt(sd.spent_experience || sd.spent || 0, 10) || 0;
         const newTotal = Math.max(0, currentTotal + amount);
         sd.total_experience = String(newTotal);
         sd.total = String(newTotal);
+        sd.spent_experience = String(currentSpent);
+        sd.spent = String(currentSpent);
         if (!Array.isArray(sd.xp_log)) sd.xp_log = [];
+        const nowIso = new Date().toISOString();
         sd.xp_log.unshift({
-          date: new Date().toISOString(),
+          id: 'xp_award_' + Date.now() + '_' + char.id,
+          type: amount >= 0 ? 'award' : 'deduct',
+          scope: target === 'campaign' ? 'campaign' : 'individual',
           amount,
+          previousTotal: currentTotal,
+          newTotal,
           reason,
-          new_total: newTotal,
           by: user.displayName || user.username || 'Storyteller',
+          timestamp: nowIso,
+          date: nowIso,
         });
         char.sheet_data = JSON.stringify(sd);
-        char.updated_at = new Date().toISOString();
-        updatedChars.push({ id: char.id, name: char.name, new_total: newTotal, sheet_data: sd });
+        char.updated_at = nowIso;
+        updatedChars.push({
+          id: char.id,
+          name: char.name,
+          total_experience: newTotal,
+          spent_experience: currentSpent,
+          new_total: newTotal,
+          sheet_data: sd,
+        });
         emitToLocalSockets('character:updated', { id: char.id });
-        emitToLocalSockets('vtm:xp_updated', { character_id: char.id, total_experience: newTotal, xp_log: sd.xp_log });
+        emitToLocalSockets('vtm:xp_updated', { character_id: char.id, total_experience: newTotal, spent_experience: currentSpent, xp_log: sd.xp_log });
+        publishRealtimeEvent('character:updated', { id: char.id }, { table: 'characters', row: char });
       }
       persistDb();
       return jsonResponse({ success: true, updated_count: updatedChars.length, characters: updatedChars });

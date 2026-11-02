@@ -3007,11 +3007,13 @@ function openChronicleXpManagerModal() {
  */
 function renderChronicleXpRosterTable() {
     // Look up the table body element for the Chronicle XP roster in the DOM by ID
-    const rosterTableBodyElement = document.getElementById('chronicleXpRosterBody');
+    const rosterTableBodyElement =
+        document.getElementById('chronicleXpRosterTableBody') ||
+        document.getElementById('chronicleXpRosterBody');
     if (!rosterTableBodyElement) return;
 
     if (!Array.isArray(chronicleCharactersList) || chronicleCharactersList.length === 0) {
-        rosterTableBodyElement.innerHTML = '<tr><td colspan="7" style="padding:18px; text-align:center; color:#6b7280; font-style:italic;">No characters found in this chronicle.</td></tr>';
+        rosterTableBodyElement.innerHTML = '<tr><td colspan="6" style="padding:18px; text-align:center; color:#6b7280; font-style:italic;">No characters found in this chronicle.</td></tr>';
         return;
     }
 
@@ -3035,21 +3037,20 @@ function renderChronicleXpRosterTable() {
             parsedCharacterSheetData = {};
         }
 
-        const totalExperiencePoints = parseInt(parsedCharacterSheetData.total_experience, 10) || 0;
-        const spentExperiencePoints = parseInt(parsedCharacterSheetData.spent_experience, 10) || 0;
+        const totalExperiencePoints = parseInt(parsedCharacterSheetData.total_experience || parsedCharacterSheetData.total || 0, 10) || 0;
+        const spentExperiencePoints = parseInt(parsedCharacterSheetData.spent_experience || parsedCharacterSheetData.spent || 0, 10) || 0;
         const availableExperiencePoints = totalExperiencePoints - spentExperiencePoints;
         const isPlayerCharacter = String(characterRecord.category || '').trim().toLowerCase() === 'pc';
         const categoryBadgeHtml = isPlayerCharacter
-            ? '<span style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid #b45309; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">PC</span>'
-            : `<span style="background:rgba(107,114,128,0.18); color:#9ca3af; border:1px solid #374151; padding:2px 6px; border-radius:4px; font-size:10px;">${escapeHtml(characterRecord.category || 'NPC')}</span>`;
+            ? '<span style="background:rgba(245,158,11,0.18); color:#fcd34d; border:1px solid #b45309; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold; margin-left:6px;">PC</span>'
+            : `<span style="background:rgba(107,114,128,0.18); color:#9ca3af; border:1px solid #374151; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:6px;">${escapeHtml(characterRecord.category || 'NPC')}</span>`;
 
         return `
             <tr style="border-bottom:1px solid #1f2937;">
                 <td style="padding:8px;">
-                    <div style="font-weight:bold; color:#f3f4f6;">${escapeHtml(characterRecord.name || 'Unnamed')}</div>
-                    <div style="font-size:11px; color:#9ca3af;">${escapeHtml(characterRecord.player_name || 'Storyteller')}</div>
+                    <div style="font-weight:bold; color:#f3f4f6;">${escapeHtml(characterRecord.name || 'Unnamed')}${categoryBadgeHtml}</div>
                 </td>
-                <td style="padding:8px;">${categoryBadgeHtml}</td>
+                <td style="padding:8px; font-size:12px; color:#9ca3af;">${escapeHtml(characterRecord.player_name || (isPlayerCharacter ? 'Player' : 'Storyteller'))}</td>
                 <td style="padding:8px; text-align:center; font-weight:bold; color:#e5e7eb;">${totalExperiencePoints}</td>
                 <td style="padding:8px; text-align:center; font-weight:bold; color:#f87171;">${spentExperiencePoints}</td>
                 <td style="padding:8px; text-align:center; font-weight:bold; color:${availableExperiencePoints > 0 ? '#4ade80' : '#9ca3af'};">${availableExperiencePoints}</td>
@@ -3058,10 +3059,8 @@ function renderChronicleXpRosterTable() {
                         <input type="number" id="charXpAmount_${characterRecord.id}" value="1" step="1" style="width:64px; background:#09090b; border:1px solid #374151; color:#fff; padding:4px 6px; border-radius:4px; font-size:12px;">
                         <input type="text" id="charXpReason_${characterRecord.id}" placeholder="Reason (e.g. Roleplay bonus / Correction)" style="flex:1; background:#09090b; border:1px solid #374151; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px;">
                         <button class="btn-secondary btn-sm" onclick="submitChronicleXpAdjustment('character', ${characterRecord.id})" style="background:#7f1d1d; border-color:#ef4444; color:#fecaca; white-space:nowrap;">Apply</button>
+                        <button class="btn-secondary btn-sm" onclick="document.getElementById('chronicleXpManagerModal').classList.remove('active'); openCharacterSheet(${characterRecord.id}, '${escapeHtml(characterRecord.name || '').replace(/'/g, "\\'")}', '${escapeHtml(characterRecord.clan || '').replace(/'/g, "\\'")}');" style="font-size:11px; padding:4px 8px; white-space:nowrap;" title="Open Sheet to inspect Base Compliance or Refund XP"><i class="fa-solid fa-file-signature"></i> Sheet</button>
                     </div>
-                </td>
-                <td style="padding:8px; text-align:right;">
-                    <button class="btn-secondary btn-sm" onclick="document.getElementById('chronicleXpManagerModal').classList.remove('active'); openCharacterSheet(${characterRecord.id}, '${escapeHtml(characterRecord.name || '').replace(/'/g, "\\'")}', '${escapeHtml(characterRecord.clan || '').replace(/'/g, "\\'")}');" style="font-size:11px; padding:4px 8px;" title="Open Sheet to inspect Base Compliance or Refund XP"><i class="fa-solid fa-file-signature"></i> Open Sheet</button>
                 </td>
             </tr>
         `;
@@ -3079,7 +3078,9 @@ async function submitChronicleXpAdjustment(targetScope, targetCharacterId) {
 
     if (targetScope === 'campaign') {
         // Read the campaign-wide XP amount and reason input elements from the DOM by ID
-        const campaignAmountInputElement = document.getElementById('campaignXpAmountInput');
+        const campaignAmountInputElement =
+            document.getElementById('campaignXpDeltaInput') ||
+            document.getElementById('campaignXpAmountInput');
         const campaignReasonInputElement = document.getElementById('campaignXpReasonInput');
         experienceAmountDelta = parseInt(campaignAmountInputElement ? campaignAmountInputElement.value : '0', 10);
         adjustmentReasonText = campaignReasonInputElement && campaignReasonInputElement.value.trim()
@@ -3118,10 +3119,23 @@ async function submitChronicleXpAdjustment(targetScope, targetCharacterId) {
         const responseContentType = awardXpFetchResponse.headers.get('content-type') || '';
         if (awardXpFetchResponse.ok && responseContentType.includes('application/json')) {
             // Parse the JSON response returned by the server
-            await awardXpFetchResponse.json();
+            const awardXpResponseData = await awardXpFetchResponse.json();
             // Reload the chronicle characters list so the table and any open sheets reflect the updated XP totals
             await loadCharacters();
             renderChronicleXpRosterTable();
+            const openSheetFrame = document.getElementById('sheetFrame');
+            if (openSheetFrame && openSheetFrame.contentWindow) {
+                openSheetFrame.contentWindow.postMessage({ type: 'vtm:remote_character_updated' }, '*');
+            }
+            const signStr = experienceAmountDelta > 0 ? `+${experienceAmountDelta}` : `${experienceAmountDelta}`;
+            if (targetScope === 'campaign') {
+                const campaignReasonInputElement = document.getElementById('campaignXpReasonInput');
+                if (campaignReasonInputElement) campaignReasonInputElement.value = '';
+                alert(`Applied ${signStr} XP to all ${awardXpResponseData.updated_count || ''} Player Characters!`);
+            } else {
+                const characterReasonInputElement = document.getElementById(`charXpReason_${targetCharacterId}`);
+                if (characterReasonInputElement) characterReasonInputElement.value = '';
+            }
             return;
         }
 

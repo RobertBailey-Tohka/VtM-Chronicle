@@ -708,6 +708,7 @@ function logout() {
   if (typeof socket !== 'undefined' && socket && socket.connected) socket.emit('room:leave');
   // Remove the user's authentication token from browser localStorage
   localStorage.removeItem('vtm_auth_token');
+  localStorage.removeItem('vtm_user');
   currentUser = null;
   activeChronicleId = null;
   activeChronicleRole = null;
