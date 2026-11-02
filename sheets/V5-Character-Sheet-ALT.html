@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><title>V5 ALT Sheet</title><link rel="stylesheet" href="v5-styles.css?v=2"><script src="../js/github-cloud-adapter.js"></script><script src="v5-scripts.js?v=42"></script><style>.alt-header { text-align: center; color: #8b0000; font-weight: bold; text-transform: uppercase; font-size: 13px; margin: 10px 0 5px 0; letter-spacing: 1px; }</style></head><body>
+<!DOCTYPE html><html><head><title>V5 ALT Sheet</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><link rel="stylesheet" href="v5-styles.css?v=1791388792"><script src="../js/github-cloud-adapter.js"></script><script src="v5-scripts.js?v=1791393184"></script><style>.alt-header { text-align: center; color: #8b0000; font-weight: bold; text-transform: uppercase; font-size: 13px; margin: 10px 0 5px 0; letter-spacing: 1px; }</style></head><body>
     <div class="sheet-page"><div class="sheet-border" style="border-color: #8b0000;">
         <div class="vampire-logo">
             <h1>Vampire</h1>
@@ -18,7 +18,30 @@
             </div>
             <div>
                 <div class="input-line"><label>Sire</label><input type="text" id="sire"></div>
-                <div class="input-line"><label>Clan</label><input type="text" id="clan"></div>
+                <div class="input-line"><label>Clan</label>
+                    <select id="clan" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px; -webkit-appearance:none; -moz-appearance:none; appearance:none; cursor:pointer; font-family:inherit; font-size:inherit; color:inherit;">
+                        <option value="" disabled selected></option>
+                        <option value="Banu Haqim">Banu Haqim</option>
+                        <option value="Brujah">Brujah</option>
+                        <option value="Caitiff">Caitiff</option>
+                        <option value="Gangrel">Gangrel</option>
+                        <option value="Hecata">Hecata</option>
+                        <option value="Lasombra">Lasombra</option>
+                        <option value="Malkavian">Malkavian</option>
+                        <option value="The Ministry">The Ministry</option>
+                        <option value="Nosferatu">Nosferatu</option>
+                        <option value="Ravnos">Ravnos</option>
+                        <option value="Salubri">Salubri</option>
+                        <option value="Thin-Blood">Thin-Blood</option>
+                        <option value="Toreador">Toreador</option>
+                        <option value="Tremere">Tremere</option>
+                        <option value="Tzimisce">Tzimisce</option>
+                        <option value="Ventrue">Ventrue</option>
+                        <option value="Mortal">Mortal</option>
+                        <option value="Ghoul">Ghoul</option>
+                        <option value="custom">-- Custom --</option>
+                    </select>
+                </div>
                 <div class="input-line"><label>Generation</label><input type="text" id="generation"></div>
             </div>
         </div>
@@ -116,57 +139,57 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid #000; border-right: none; border-bottom: none;">
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_39"><div class="dot-group" data-max="5" id="group_39"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_0"><div class="dot-group" data-max="5" id="discipline_dots_0"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_0_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_0_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_0_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_0_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_0_4"></div>
             </div>
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_45"><div class="dot-group" data-max="5" id="group_40"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1_1"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2_1"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3_1"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4_1"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5_1"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_1"><div class="dot-group" data-max="5" id="discipline_dots_1"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_1_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_1_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_1_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_1_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_1_4"></div>
             </div>
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_51"><div class="dot-group" data-max="5" id="group_41"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1_2"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2_2"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3_2"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4_2"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5_2"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_2"><div class="dot-group" data-max="5" id="discipline_dots_2"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_2_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_2_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_2_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_2_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_2_4"></div>
             </div>
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_57"><div class="dot-group" data-max="5" id="group_42"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1_3"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2_3"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3_3"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4_3"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5_3"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_3"><div class="dot-group" data-max="5" id="discipline_dots_3"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_3_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_3_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_3_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_3_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_3_4"></div>
             </div>
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_63"><div class="dot-group" data-max="5" id="group_43"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1_4"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2_4"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3_4"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4_4"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5_4"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_4"><div class="dot-group" data-max="5" id="discipline_dots_4"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_4_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_4_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_4_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_4_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_4_4"></div>
             </div>
             
             <div style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px;">
-                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="field_69"><div class="dot-group" data-max="5" id="group_44"></div></div>
-                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="1_5"></div>
-                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="2_5"></div>
-                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="3_5"></div>
-                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="4_5"></div>
-                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="5_5"></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_name_5"><div class="dot-group" data-max="5" id="discipline_dots_5"></div></div>
+                <div class="input-line"><label>1</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_5_0"></div>
+                <div class="input-line"><label>2</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_5_1"></div>
+                <div class="input-line"><label>3</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_5_2"></div>
+                <div class="input-line"><label>4</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_5_3"></div>
+                <div class="input-line"><label>5</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="discipline_power_5_4"></div>
             </div>
             
         </div>
@@ -195,7 +218,7 @@
                 <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="flaw_name_1"><div class="dot-group" data-max="5" id="flaw_rating_1"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="flaw_name_2"><div class="dot-group" data-max="5" id="flaw_rating_2"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="flaw_name_3"><div class="dot-group" data-max="5" id="flaw_rating_3"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="flaw_name_4"><div class="dot-group" data-max="5" id="flaw_rating_4"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="flaw_name_5"><div class="dot-group" data-max="5" id="flaw_rating_5"></div></div>
                 
                 <div class="alt-header">Hunting Roll</div>
-                <div class="input-line"><input type="text" {flex_input}="" id="hunting_roll"></div>
+                <div class="input-line"><input type="text" id="hunting_roll"></div>
                 
                 <div style="margin-top: 15px;">
                     <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
@@ -204,19 +227,19 @@
                     </div>
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; border-right: none; border-bottom: none; margin-bottom: 5px;">
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Blood Surge</label><input type="text" {flex_input}="" id="blood_surge"></div>
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Mend Amount</label><input type="text" {flex_input}="" id="mend_amount"></div>
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Power Bonus</label><input type="text" {flex_input}="" id="power_bonus"></div>
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Rouse Re-Roll</label><input type="text" {flex_input}="" id="rouse_reroll"></div>
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Feeding Penalty</label><input type="text" {flex_input}="" id="feeding_penalty"></div>
-                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Bane Severity</label><input type="text" {flex_input}="" id="bane_severity"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Blood Surge</label><input type="text" id="blood_surge"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Mend Amount</label><input type="text" id="mend_amount"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Power Bonus</label><input type="text" id="power_bonus"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Rouse Re-Roll</label><input type="text" id="rouse_reroll"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Feeding Penalty</label><input type="text" id="feeding_penalty"></div>
+                        <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Bane Severity</label><input type="text" id="bane_severity"></div>
                     </div>
                     
-                    <div class="input-line" style="margin-bottom: 4px;"><label class="inline-label">Total Experience</label><input type="text" {flex_input}="" style="border-bottom: 1px dotted #000;" id="total_experience"></div>
-                    <div class="input-line" style="margin-bottom: 4px;"><label class="inline-label">Spent Experience</label><input type="text" {flex_input}="" style="border-bottom: 1px dotted #000;" id="spent_experience"></div>
+                    <div class="input-line" style="margin-bottom: 4px;"><label class="inline-label">Total Experience</label><input type="text" style="border-bottom: 1px dotted #000;" id="total_experience"></div>
+                    <div class="input-line" style="margin-bottom: 4px;"><label class="inline-label">Spent Experience</label><input type="text" style="border-bottom: 1px dotted #000;" id="spent_experience"></div>
                     
                     <div style="margin-top: 15px;"><div class="alt-header" style="margin-top: 0; margin-bottom: 10px;">Weapons</div></div>
-                    <div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="dmg"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="dmg_1"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="dmg_2"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="dmg_3"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="dmg_4"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="dmg_5"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="dmg_6"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="dmg_7"></div>
+                    <div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="weapon_name_1"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="weapon_dmg_1"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="weapon_name_2"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="weapon_dmg_2"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="weapon_name_3"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="weapon_dmg_3"></div><div class="dot-row" style="margin-bottom: 2px;"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:14px;" id="weapon_name_4"><label style="font-size:9px; color:#666; margin:0 5px;">Dmg</label><input type="text" style="flex:0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none;" id="weapon_dmg_4"></div>
                 </div>
             </div>
             
@@ -248,4 +271,4 @@
             </div>
         </div>
     </div></div>
-    </body></html>
+</body></html>

@@ -1,0 +1,478 @@
+                <div class="elysium-widget widget-dossier" id="widget-dossier" style="top: 16px; left: 938px; width: 340px; height: auto; z-index: 53;">
+                    <div class="widget-header" id="dragHeader-dossier">
+                        <span class="widget-title"><span id="dossierWidgetTitle">JULIAN VANCE'S DOSSIER</span></span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="openCurrentFullSheet()" title="Expand Full Sheet"><i class="fa-solid fa-up-right-from-square"></i></button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetCollapse('widget-dossier')">−</button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-dossier')">×</button>
+                        </div>
+                    </div>
+                    <div class="widget-body dossier-widget-body" id="dossierWidgetBody">
+                        <!-- Kindred Identity Row -->
+                        <div class="dossier-identity-row">
+                            <div class="dossier-avatar-wrap" id="dossierAvatarWrap" title="Click camera icon to upload portrait">
+                                <img src="/images/caine_portrait.jpg" alt="Kindred Portrait" id="dossierAvatarImg">
+                                <button type="button" class="btn-avatar-camera-overlay" onclick="triggerDossierAvatarUpload()" title="Upload Character Portrait">
+                                    <i class="fa-solid fa-camera"></i>
+                                </button>
+                                <input type="file" id="dossierAvatarFileInput" accept="image/*" style="display:none;" onchange="handleDossierAvatarUpload(event)">
+                            </div>
+                            <div class="dossier-id-meta">
+                                <div class="dossier-name" id="dossierCharName">Julian Vance</div>
+                                <div class="dossier-meta-item"><span>CLAN:</span> <strong id="dossierClan">Tremere</strong></div>
+                                <div class="dossier-meta-item"><span>PATH:</span> <strong id="dossierPath">Occult Scholar &amp; Investigator</strong></div>
+                                <div class="dossier-meta-item"><span>PILOT:</span> <strong id="dossierPlayerOwner" style="color:#ef4444;">TohkaTakushi</strong></div>
+                                
+                            </div>
+                        </div>
+
+                        <!-- Vital Trackers (Hunger, Health, Willpower, Humanity & Stains) with V5 Mini-Pip Boxes & Steppers -->
+                        <div class="dossier-trackers">
+                            <!-- 1. HUNGER (5 Boxes) -->
+                            <!-- 1. HUNGER (5 Clickable Boxes: No +/- buttons, click box N to set 1..N) -->
+                            <div class="tracker-item">
+                                <div class="tracker-label-row">
+                                    <span><i class="fa-solid fa-droplet" style="color:#ef4444;"></i> HUNGER</span>
+                                    <div class="dossier-stepper">
+                                        <button type="button" class="btn-step" onclick="adjustDossierVitals('hunger', -1)" title="Decrease Hunger">−</button>
+                                        <strong id="dossierHungerVal" style="font-size:12px;color:#f87171;">2 / 5</strong>
+                                        <button type="button" class="btn-step" onclick="adjustDossierVitals('hunger', 1)" title="Increase Hunger">+</button>
+                                    </div>
+                                </div>
+                                <div class="dossier-pips-row" id="dossierHungerPips"><div class="dossier-pip pip-hunger" onclick="clickDossierHunger(1)" title="Hunger 1 (Click to set 1..1)"></div><div class="dossier-pip pip-hunger" onclick="clickDossierHunger(2)" title="Hunger 2 (Click to set 1..2)"></div><div class="dossier-pip pip-empty" onclick="clickDossierHunger(3)" title="Hunger 3 (Click to set 1..3)"></div><div class="dossier-pip pip-empty" onclick="clickDossierHunger(4)" title="Hunger 4 (Click to set 1..4)"></div><div class="dossier-pip pip-empty" onclick="clickDossierHunger(5)" title="Hunger 5 (Click to set 1..5)"></div></div>
+                            </div>
+
+                            <!-- 2. HEALTH (10 Boxes: +/- adjusts Capacity, click empty boxes for Superficial/Aggravated) -->
+                            <div class="tracker-item">
+                                <div class="tracker-label-row">
+                                    <span><i class="fa-solid fa-heart-pulse" style="color:#10b981;"></i> HEALTH</span>
+                                    <div class="dossier-stepper">
+                                        <button type="button" class="btn-step" onclick="adjustDossierCapacity('health', -1)" title="Decrease Health Capacity (Add Black Box)">−</button>
+                                        <strong id="dossierHealthVal">5</strong>
+                                        <button type="button" class="btn-step" onclick="adjustDossierCapacity('health', 1)" title="Increase Health Capacity (Add Available Box)">+</button>
+                                    </div>
+                                </div>
+                                <div class="dossier-pips-row" id="dossierHealthPips"><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('health', 0)" title="Unharmed (Click to mark damage)"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('health', 1)" title="Unharmed (Click to mark damage)"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('health', 2)" title="Unharmed (Click to mark damage)"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('health', 3)" title="Unharmed (Click to mark damage)"></div><div class="dossier-pip pip-superficial" onclick="cycleDossierDamagePip('health', 4)" title="Superficial Damage (Click to upgrade)">/</div><div class="dossier-pip pip-black" onclick="cycleDossierDamagePip('health', 5)" title="Beyond Max Health (Click to override)"></div><div class="dossier-pip pip-black" onclick="cycleDossierDamagePip('health', 6)" title="Beyond Max Health (Click to override)"></div><div class="dossier-pip pip-black" onclick="cycleDossierDamagePip('health', 7)" title="Beyond Max Health (Click to override)"></div><div class="dossier-pip pip-black" onclick="cycleDossierDamagePip('health', 8)" title="Beyond Max Health (Click to override)"></div><div class="dossier-pip pip-black" onclick="cycleDossierDamagePip('health', 9)" title="Beyond Max Health (Click to override)"></div></div>
+                            </div>
+
+                            <!-- 3. WILLPOWER (10 Boxes: +/- adjusts Capacity, click empty boxes for Superficial/Aggravated) -->
+                            <div class="tracker-item">
+                                <div class="tracker-label-row">
+                                    <span><i class="fa-solid fa-fire" style="color:#3b82f6;"></i> WILLPOWER</span>
+                                    <div class="dossier-stepper">
+                                        <button type="button" class="btn-step" onclick="adjustDossierCapacity('willpower', -1)" title="Decrease Willpower Capacity (Add Black Box)">−</button>
+                                        <strong id="dossierWpVal">6 / 7</strong>
+                                        <button type="button" class="btn-step" onclick="adjustDossierCapacity('willpower', 1)" title="Increase Willpower Capacity (Add Available Box)">+</button>
+                                    </div>
+                                </div>
+                                <div class="dossier-pips-row" id="dossierWpPips"><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 0)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 1)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 2)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 3)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 4)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 5)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 6)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 7)" title="Unspent"></div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', 8)" title="Unspent"></div><div class="dossier-pip pip-superficial" onclick="cycleDossierDamagePip('willpower', 9)" title="Superficial Willpower">/</div></div>
+                            </div>
+
+                            <!-- 4. HUMANITY & STAINS (10 Boxes: Humanity from Left, Stains from Right) -->
+                            <div class="tracker-item">
+                                <div class="tracker-label-row">
+                                    <span><i class="fa-solid fa-scale-balanced" style="color:#f59e0b;"></i> HUMANITY</span>
+                                    <div class="dossier-stepper">
+                                        <button type="button" class="btn-step" onclick="adjustDossierVitals('humanity', -1)" title="Degenerate / Lose Humanity">−</button>
+                                        <strong id="dossierHumanityVal">7 / 10</strong>
+                                        <button type="button" class="btn-step" onclick="adjustDossierVitals('humanity', 1)" title="Increase Humanity">+</button>
+                                        
+                                        
+                                        
+                                        
+                                    </div>
+                                </div>
+                                <div class="dossier-pips-row" id="dossierHumanityPips"><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 0)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 1)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 2)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 3)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 4)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 5)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', 6)" title="Humanity Rating (Click to override)"></div><div class="dossier-pip pip-stain" onclick="cycleDossierDamagePip('humanity', 7)" title="Stain (Click to upgrade)">/</div><div class="dossier-pip pip-stain" onclick="cycleDossierDamagePip('humanity', 8)" title="Stain (Click to upgrade)">/</div><div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('humanity', 9)" title="Empty Box"></div></div>
+                            </div>
+                        </div>
+
+                        <!-- 1. Attributes Stats Block -->
+                        <div class="dossier-stats-block" id="dossierAttributesBlock">
+                            <div class="stats-section-title"><i class="fa-solid fa-masks-theater" style="color:#ef4444;margin-right:4px;"></i> ATTRIBUTES</div>
+                            <div id="dossierStatsContainer">
+            <div class="dossier-attrs-grid">
+                <div class="attr-col">
+                    <span class="attr-col-hdr">Physical</span>
+                    <div class="attr-micro-row"><span>Strength</span><strong>1</strong></div>
+                    <div class="attr-micro-row"><span>Dexterity</span><strong>2</strong></div>
+                    <div class="attr-micro-row"><span>Stamina</span><strong>2</strong></div>
+                </div>
+                <div class="attr-col">
+                    <span class="attr-col-hdr">Social</span>
+                    <div class="attr-micro-row"><span>Charisma</span><strong>2</strong></div>
+                    <div class="attr-micro-row"><span>Manipulation</span><strong>3</strong></div>
+                    <div class="attr-micro-row"><span>Composure</span><strong>3</strong></div>
+                </div>
+                <div class="attr-col">
+                    <span class="attr-col-hdr">Mental</span>
+                    <div class="attr-micro-row"><span>Intelligence</span><strong>4</strong></div>
+                    <div class="attr-micro-row"><span>Wits</span><strong>3</strong></div>
+                    <div class="attr-micro-row"><span>Resolve</span><strong>4</strong></div>
+                </div>
+            </div>
+        </div>
+                        </div>
+
+                        <!-- 2. Skills Block -->
+                        <div class="dossier-skills-block" id="dossierSkillsBlock">
+                            <div class="stats-section-title"><i class="fa-solid fa-bullseye" style="color:#ef4444;margin-right:4px;"></i> SKILLS</div>
+                            <div class="skill-chips-grid" id="dossierSkillsContainer">
+            <div class="skill-chip">
+                <span>Academics</span>
+                <strong>4</strong>
+            </div>
+        
+            <div class="skill-chip">
+                <span>Occult</span>
+                <strong>4</strong>
+            </div>
+        
+            <div class="skill-chip">
+                <span>Insight</span>
+                <strong>3</strong>
+            </div>
+        
+            <div class="skill-chip">
+                <span>Subterfuge</span>
+                <strong>3</strong>
+            </div>
+        
+            <div class="skill-chip">
+                <span>Awareness</span>
+                <strong>3</strong>
+            </div>
+        
+            <div class="skill-chip">
+                <span>Investigation</span>
+                <strong>3</strong>
+            </div>
+        </div>
+                        </div>
+
+                        <!-- 3. Disciplines Block -->
+                        <div class="dossier-disciplines-block" id="dossierDisciplinesBlock">
+                            <div class="stats-section-title"><i class="fa-solid fa-ankh" style="color:#ef4444;margin-right:4px;"></i> DISCIPLINES</div>
+                            <div class="discipline-chips-grid" id="dossierDisciplinesContainer">
+                <div class="discipline-entry-card">
+                    <div class="discipline-chip">
+                        <span class="disc-name">Blood Sorcery</span>
+                        <span class="disc-dots">●●●</span>
+                    </div>
+                    <div class="disc-powers-list"><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Corrosive Vitae</span></div><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Extinguish Vitae</span></div><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Blood of Potency</span></div></div>
+                </div>
+            
+                <div class="discipline-entry-card">
+                    <div class="discipline-chip">
+                        <span class="disc-name">Auspex</span>
+                        <span class="disc-dots">●●</span>
+                    </div>
+                    <div class="disc-powers-list"><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Sense the Unseen</span></div><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Scry the Soul</span></div></div>
+                </div>
+            
+                <div class="discipline-entry-card">
+                    <div class="discipline-chip">
+                        <span class="disc-name">Dominate</span>
+                        <span class="disc-dots">●</span>
+                    </div>
+                    <div class="disc-powers-list"><div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Compel</span></div></div>
+                </div>
+            </div>
+                        </div>
+
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 5. RIGHT WIDGET: CLUE EVIDENCE CARDS & CORDS -->
+                <div class="elysium-widget widget-clues" id="widget-clues" style="top: 16px; left: 1330px; width: 280px; height: 520px; z-index: 20;">
+                    <div class="widget-header" id="dragHeader-clues">
+                        <span class="widget-title"><i class="fa-solid fa-thumbtack" style="color:#ef4444;margin-right:6px;"></i> CLUE EVIDENCE BOARD</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="popOutCurrentClueMatrix()" title="Open Clue Matrix in New Floating Window"><i class="fa-solid fa-up-right-from-square"></i></button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetCollapse('widget-clues')">−</button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-clues')">×</button>
+                        </div>
+                    </div>
+                    <!-- Clue Matrix Switcher Strip -->
+                    <div class="clue-matrix-picker-strip">
+                        <div style="display:flex;align-items:center;gap:6px;width:100%;">
+                            <i class="fa-solid fa-layer-group" style="color:#ef4444;font-size:11px;"></i>
+                            <select id="clueMatrixWidgetSelect" class="map-select-dropdown" style="flex:1;font-size:11px;" onchange="handleClueMatrixWidgetChange(this.value)"><option value="">Select Investigation Matrix...</option><option value="1" selected="selected">Highway 31W Crime Scene Evidence (Blood On Highway 31W)</option><option value="2">Floating Clues (Drop Anywhere) (Blood On Highway 31W)</option><option value="9">Crime Scene (An episode)</option></select>
+                        </div>
+                    </div>
+                    <div class="widget-body clues-widget-body">
+                        <!-- Evidence Cards Canvas with SVG Red Cords -->
+                        <div class="clue-cards-canvas" id="clueCardsCanvas"><svg class="clue-cords-svg" id="clueCordsSvg" width="257.76666259765625" height="400"><line x1="112" y1="112.39999999999998" x2="136" y2="125" stroke="#dc2626" stroke-width="1.8" stroke-linecap="round" filter="drop-shadow(0 0 4px rgba(220,38,38,0.8))"></line><line x1="136" y1="184.39999999999998" x2="112" y2="249" stroke="#dc2626" stroke-width="1.8" stroke-linecap="round" filter="drop-shadow(0 0 4px rgba(220,38,38,0.8))"></line></svg>
+                <div class="clue-mockup-card clue-pos-1" onclick="openClueDetailWidget(1)" title="Inspect Evidence" style="background:#f3f4f6; border-radius:2px; border:1px solid #d1d5db; box-shadow:0 2px 4px rgba(0,0,0,0.3); background-image: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.05) 100%);">
+                    <div style="position:absolute; top:10px; color:#ef4444; font-size:9px; font-weight:900; text-align:center; border:2px solid #ef4444; padding:2px; transform:rotate(-5deg); opacity:0.8;">CLASSIFIED<br>FOU // COTERIE</div>
+                    <div style="font-size:12px; font-weight:bold; color:#111827; text-align:center; padding:0 10px; margin-top:20px;">Exsanguinated Body at Mile Marker 14</div>
+                    
+                </div>
+            
+                <div class="clue-mockup-card clue-pos-2" onclick="openClueDetailWidget(2)" title="Inspect Evidence" style="background:#f3f4f6; border-radius:2px; border:1px solid #d1d5db; box-shadow:0 2px 4px rgba(0,0,0,0.3); background-image: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.05) 100%);">
+                    <div style="position:absolute; top:10px; color:#ef4444; font-size:9px; font-weight:900; text-align:center; border:2px solid #ef4444; padding:2px; transform:rotate(-5deg); opacity:0.8;">CLASSIFIED<br>FOU // COTERIE</div>
+                    <div style="font-size:12px; font-weight:bold; color:#111827; text-align:center; padding:0 10px; margin-top:20px;">Fort Knox Dog Tags</div>
+                    <div style="position:absolute; bottom:5px; left:5px; color:#ef4444; font-size:10px; font-weight:bold;"><i class="fa-solid fa-eye-slash"></i> Hidden</div>
+                </div>
+            
+                <div class="clue-mockup-card clue-pos-3" onclick="openClueDetailWidget(3)" title="Inspect Evidence" style="background:#f3f4f6; border-radius:2px; border:1px solid #d1d5db; box-shadow:0 2px 4px rgba(0,0,0,0.3); background-image: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.05) 100%);">
+                    <div style="position:absolute; top:10px; color:#ef4444; font-size:9px; font-weight:900; text-align:center; border:2px solid #ef4444; padding:2px; transform:rotate(-5deg); opacity:0.8;">CLASSIFIED<br>FOU // COTERIE</div>
+                    <div style="font-size:12px; font-weight:bold; color:#111827; text-align:center; padding:0 10px; margin-top:20px;">Muddy Dual-Tread Tire Marks</div>
+                    <div style="position:absolute; bottom:5px; left:5px; color:#ef4444; font-size:10px; font-weight:bold;"><i class="fa-solid fa-eye-slash"></i> Hidden</div>
+                </div>
+            </div>
+
+                        <!-- Real-time Discovered Clues Target Container -->
+                        <div id="discoveredCluesList" style="display:none;"><div id="clue-card-1" class="clue-pin-card" style="transform: rotate(0deg) translate(9px, -1px); position: relative; margin: 15px; z-index: 3; background: rgb(253, 246, 227); border: 1px solid rgb(209, 213, 219); padding: 15px; box-shadow: rgba(0, 0, 0, 0.1) 0px 0px 10px inset, rgba(0, 0, 0, 0.3) 0px 4px 6px;">
+            <div style="position:absolute; top:10px; right:10px; color:#ef4444; border:2px solid #ef4444; padding:2px; font-weight:bold; transform:rotate(10deg); opacity:0.6; font-size:10px; pointer-events:none;">CLASSIFIED</div>
+            <div style="font-size:10px;text-transform:uppercase;color:#b45309;font-weight:700; border-bottom:1px dashed #b45309; padding-bottom:4px; margin-bottom:8px;">Highway 31W Crime Scene Evidence</div>
+            <h5 style="margin:0 0 5px 0; font-size:14px; font-weight:bold;"><i class="fa-solid fa-thumbtack" style="color:#ef4444; position:relative; z-index:2;"></i> Exsanguinated Body at Mile Marker 14</h5>
+            <p style="font-size:12px; line-height:1.4; margin:0 0 10px 0;">Victim found drained completely dry with twin puncture wounds in carotid artery.</p>
+            <div style="font-size:9px;color:#6b7280; border-top:1px solid #e5e7eb; padding-top:4px;">
+                <span><strong>Vector:</strong> Physical Inspection of Corpse</span><br>
+                <span><strong>Scene:</strong> Highway 31W - Mile Marker 14</span>
+            </div>
+        
+        <svg style="position:absolute; top:20px; left:20px; width:200%; height:200%; overflow:visible; z-index:-1; pointer-events:none;">
+            <line x1="0" y1="0" x2="-25" y2="-8" stroke="#ef4444" stroke-width="2" opacity="0.6"></line>
+        </svg>
+    </div></div>
+                        <div id="discoveredLoreList" style="display:none;"><div id="lore-card-3" class="lore-parchment-card">
+        <div class="lore-card-header">
+            <span class="lore-cat-badge">Military Conspiracy</span>
+            <span class="lore-matrix-tag">Fort Knox Cold War Anomalies (Floating Lore)</span>
+        </div>
+        <h5><i class="fa-solid fa-book-bookmark"></i> Project Nightwatch (1962)</h5>
+        <p class="lore-content">During the height of the Cuban Missile Crisis, Army intelligence established an underground sub-basement below the gold bullion vaults designated "Project Nightwatch." Its mission was not anti-Soviet defense, but cataloging nocturnal human exsanguinations across the Ohio Valley and developing silver-nitrate ordnance to neutralize predatory humanoids.</p>
+        <div class="lore-footer">
+            <span><i class="fa-solid fa-scroll"></i> <strong>Revealed via:</strong> Classified Fort Knox File / Stolen Microfilm</span>
+        </div>
+    </div></div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 6. DEDICATED LORE CODEX WIDGET -->
+                <div class="elysium-widget widget-lore" id="widget-lore" style="top: 80px; left: 1040px; width: 330px; height: 540px; z-index: 22; display: none;">
+                    <div class="widget-header" id="dragHeader-lore">
+                        <span class="widget-title"><i class="fa-solid fa-book-journal-whills" style="color:#f59e0b;margin-right:6px;"></i> LORE CODEX ARCHIVE</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="popOutCurrentLoreMatrix()" title="Open Lore Volume in New Floating Window"><i class="fa-solid fa-up-right-from-square"></i></button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetCollapse('widget-lore')">−</button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-lore')">×</button>
+                        </div>
+                    </div>
+                    <!-- Lore Volume Switcher Strip -->
+                    <div class="lore-matrix-picker-strip">
+                        <div style="display:flex;align-items:center;gap:6px;width:100%;">
+                            <i class="fa-solid fa-scroll" style="color:#f59e0b;font-size:11px;"></i>
+                            <select id="loreMatrixWidgetSelect" class="map-select-dropdown" style="flex:1;font-size:11px;" onchange="handleLoreMatrixWidgetChange(this.value)"><option value="">Select Lore Archive Volume...</option><option value="1" selected="selected">Radcliff Town History &amp; Legends</option><option value="2">Fort Knox Cold War Anomalies (Floating Lore)</option></select>
+                        </div>
+                    </div>
+                    <!-- Category Filter Chips -->
+                    <div class="lore-category-chips">
+                        <button class="lore-chip active" id="loreChip-all" onclick="filterLoreWidgetCategory('all')">All</button>
+                        <button class="lore-chip" id="loreChip-History" onclick="filterLoreWidgetCategory('Kindred History')">History</button>
+                        <button class="lore-chip" id="loreChip-Secrets" onclick="filterLoreWidgetCategory('City Secrets')">Secrets</button>
+                        <button class="lore-chip" id="loreChip-Magic" onclick="filterLoreWidgetCategory('Blood Magic')">Magic</button>
+                        <button class="lore-chip" id="loreChip-Alchemy" onclick="filterLoreWidgetCategory('Thin-Blood Alchemy')">Alchemy</button>
+                    </div>
+                    <!-- Lore Content Stream Body -->
+                    <div class="widget-body lore-widget-body" id="loreWidgetContent">
+        <div class="lore-entry-card">
+            <div class="lore-card-header">
+                <h5 class="lore-card-title">The Blue Flames of 1974</h5>
+                <span class="lore-cat-badge">Local History</span>
+            </div>
+            <div class="lore-card-vector">
+                <i class="fa-solid fa-feather-pointed"></i> <span>Learned via: Library Microfiche / Interview with Elderly Resident</span>
+                <span style="color:#9ca3af;margin-left:auto;">Hidden</span>
+            </div>
+            <div class="lore-card-content">Official town records state the Old Grain Mill burned down due to faulty industrial wiring on Halloween night 1974. However, unreleased firefighter logs describe flames that burned with an unnatural blue-black hue and heat that warped steel girders in under five minutes. Several witnesses reported seeing three silhouetted figures sprinting away on foot toward Fort Knox at speeds exceeding sixty miles per hour.</div>
+        </div>
+    
+        <div class="lore-entry-card">
+            <div class="lore-card-header">
+                <h5 class="lore-card-title">The Abandonment of St. Christopher Parish</h5>
+                <span class="lore-cat-badge">Kindred Secret</span>
+            </div>
+            <div class="lore-card-vector">
+                <i class="fa-solid fa-feather-pointed"></i> <span>Learned via: Confession from Father Callahan / Church Basement Archives</span>
+                <span style="color:#9ca3af;margin-left:auto;">Hidden</span>
+            </div>
+            <div class="lore-card-content">In the winter of 1984, the Catholic diocese abruptly bolted the doors of St. Christopher Parish and reassigned the resident clergy overnight without explanation. While mortal rumors whispered of financial scandal, local Kindred know that an elder Lasombra conducted midnight confessionals in total darkness, granting mortals twisted absolution in exchange for their blood.</div>
+        </div>
+    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 6. STORYTELLER CHARACTER CAST WIDGET (GM Only) -->
+                <div class="elysium-widget widget-npc-cast gm-only-control" id="widget-npc-cast" style="top: 470px; left: 1333px; width: 280px; height: 500px; z-index: 52;">
+                    <div class="widget-header" id="dragHeader-npc-cast">
+                        <span class="widget-title"><i class="fa-solid fa-masks-theater" style="color:#ef4444;margin-right:6px;"></i> CHARACTER CAST</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="toggleWidgetCollapse('widget-npc-cast')">−</button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-npc-cast')">×</button>
+                        </div>
+                    </div>
+                    <div class="npc-cast-filter-bar">
+                        <div class="npc-search-wrap">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="npcCastSearchInput" placeholder="Filter NPCs..." onkeyup="filterNpcCastList(this.value)">
+                        </div>
+                        <div class="npc-category-chips" id="dynamicNpcCategoryChips" style="flex-wrap:wrap;">
+                            <button class="npc-chip active" id="npcChip-all" onclick="filterNpcCastCategory('all')">All</button>
+                            <button class="npc-chip" id="npcChip-pc" onclick="filterNpcCastCategory('pc')">PLAYERS</button>
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                    <div class="widget-body npc-cast-body">
+                        <!-- Default Storyteller Persona Entry -->
+                        <div class="npc-cast-entry npc-storyteller-default active-persona" id="npcEntry-default" onclick="selectStorytellerDefaultPersona()">
+                            <div class="npc-avatar-wrap">
+                                <img src="/images/caine_portrait.jpg" alt="Storyteller" class="npc-thumb-img">
+                                <span class="npc-active-indicator ring-active"></span>
+                            </div>
+                            <div class="npc-meta-block">
+                                <div class="npc-name">Storyteller</div>
+                            </div>
+                            <span class="npc-status-badge">DEFAULT</span>
+                        </div>
+
+                        <!-- Dynamic NPC List -->
+                        <div class="npc-cast-list-container" id="npcCastListContainer"><div class="npc-cast-entry " id="npc-entry-3" title="Click to speak and roll as Baroness Evelyn Cross">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Baroness Evelyn Cross" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Baroness Evelyn Cross</div>
+                <div class="npc-subtext">Ventrue • Elder</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(3, 'Baroness Evelyn Cross', 'Ventrue');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-9" title="Click to speak and roll as Deputy Hayes">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Deputy Hayes" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Deputy Hayes</div>
+                <div class="npc-subtext">Mortal • Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(9, 'Deputy Hayes', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-4" title="Click to speak and roll as Father Callahan">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Father Callahan" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Father Callahan</div>
+                <div class="npc-subtext">Lasombra • Elder</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(4, 'Father Callahan', 'Lasombra');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-11" title="Click to speak and roll as John Doe #4">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="John Doe #4" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">John Doe #4</div>
+                <div class="npc-subtext">Mortal • Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(11, 'John Doe #4', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-7" title="Click to speak and roll as Mayor Thomas Sterling">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Mayor Thomas Sterling" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Mayor Thomas Sterling</div>
+                <div class="npc-subtext">Mortal • VIP Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(7, 'Mayor Thomas Sterling', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-8" title="Click to speak and roll as Police Chief Henderson">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Police Chief Henderson" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Police Chief Henderson</div>
+                <div class="npc-subtext">Mortal • VIP Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(8, 'Police Chief Henderson', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-12" title="Click to speak and roll as Private Miller">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Private Miller" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Private Miller</div>
+                <div class="npc-subtext">Mortal • Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(12, 'Private Miller', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-10" title="Click to speak and roll as Sarah Jenkins">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Sarah Jenkins" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Sarah Jenkins</div>
+                <div class="npc-subtext">Mortal • Human</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(10, 'Sarah Jenkins', 'Mortal');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-5" title="Click to speak and roll as Sheriff Marcus">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="Sheriff Marcus" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">Sheriff Marcus</div>
+                <div class="npc-subtext">Brujah • Kindred</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(5, 'Sheriff Marcus', 'Brujah');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div><div class="npc-cast-entry " id="npc-entry-6" title="Click to speak and roll as The Sewer Rat">
+            <div class="npc-avatar-wrap">
+                <img src="/images/caine_portrait.jpg" alt="The Sewer Rat" class="npc-thumb-img">
+                <span class="npc-active-indicator "></span>
+            </div>
+            <div class="npc-meta-block">
+                <div class="npc-name">The Sewer Rat</div>
+                <div class="npc-subtext">Nosferatu • Kindred</div>
+            </div>
+            <div class="npc-right-actions">
+                <button type="button" class="btn-npc-peek" onclick="event.stopPropagation(); openCharacterSheet(6, 'The Sewer Rat', 'Nosferatu');" title="Open Full Sheet"><i class="fa-solid fa-file-lines"></i></button>
+            </div>
+        </div></div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- SLEEK FLOATING DESKTOP DOCK (Bottom Center) -->
+                <nav class="elysium-floating-dock">
+                    <button class="dock-btn" onclick="toggleWidget('widget-chat')" title="Crimson Revelry Chat">
+                        <i class="fa-solid fa-comments"></i> <span>Chat</span>
+                    </button>
+                    <button class="dock-btn" onclick="toggleWidget('widget-dice')" title="Blood &amp; Bone Dice Roller">
+                        <i class="fa-solid fa-dice-d10"></i> <span>Dice</span>
+                    </button>
+                    <button class="dock-btn" onclick="toggleWidget('widget-map')" title="Gameboard Map">
+                        <i class="fa-solid fa-map"></i> <span>Map</span>
+                    </button>

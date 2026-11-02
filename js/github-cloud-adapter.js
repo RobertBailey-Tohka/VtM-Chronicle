@@ -1,18 +1,20 @@
 /**
  * Vampire: The Masquerade (V5) — Elysium Virtual Tabletop
- * Serverless GitHub Pages & Cloud Sync Adapter
+ * Serverless GitHub Pages & Cloud Sync Adapter (Oct 26 / Nov 1 Edition)
  *
  * Automatically activates when hosted on GitHub Pages (*.github.io) or when
  * the local Express/MariaDB backend (/api/health) is unreachable.
  *
  * Features:
  * - Full REST API emulation for all /api/* routes (Auth, Chronicles, Campaigns,
- *   Episodes, Gameboard State/Canvas/Pins, Clues, Lore, Characters, V5 Sheets,
- *   Vitals, Rules Codex, Clan Symbols, Asset Library, Chat, and Dice Rolls)
+ *   Episodes, Gameboard State/Canvas/Pins/Relationship Map, Clues, Lore,
+ *   Characters, V5 Sheets, Vitals, Award XP, Controllers, NPC Fields,
+ *   Personal Notes, Rules Codex Tree/PDFs, Clan Symbols, Asset Library + Default Assets,
+ *   TinyMCE Gallery, Chat, and Dice Rolls)
  * - Full Socket.IO client/server emulation
  * - Real-time cross-device & cross-tab synchronization via ntfy.sh SSE +
- *   BroadcastChannel + Cloud JSON State Sync (bytebin / custom webhook)
- * - Automatic GitHub Pages repository subpath asset resolution (/images, /uploads, /sheets)
+ *   BroadcastChannel + Cloud JSON State Sync (bytebin)
+ * - Automatic GitHub Pages repository subpath asset resolution
  */
 (function () {
   'use strict';
@@ -32,9 +34,9 @@
     // Cross-origin frame check fallback
   }
 
-  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v1';
-  const CLOUD_CONFIG_KEY = 'vtm_chronicle_cloud_config_v1';
-  const NTFY_DEFAULT_TOPIC = 'vtm-elysium-radcliff-2000-sync';
+  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v2';
+  const CLOUD_CONFIG_KEY = 'vtm_chronicle_cloud_config_v2';
+  const NTFY_DEFAULT_TOPIC = 'vtm-elysium-labyrinth-2026-sync';
   const CLIENT_ID = 'vtm_' + Math.random().toString(36).substring(2, 10);
 
   // Detect base path (e.g. "/VtM-Chronicle" on GitHub Pages)
@@ -60,8 +62,13 @@
     if (
       (url.startsWith('/images/') ||
         url.startsWith('/uploads/') ||
+        url.startsWith('/default_assets/') ||
         url.startsWith('/sheets/') ||
-        url.startsWith('/css/')) &&
+        url.startsWith('/css/') ||
+        url.startsWith('/js/') ||
+        url.startsWith('/pdfjs/') ||
+        url.startsWith('/webfonts/') ||
+        url === '/dossier_template.html') &&
       !url.startsWith(BASE_PATH + '/')
     ) {
       return BASE_PATH + url;
@@ -125,11 +132,18 @@
   let db = null;
 
   // BroadcastChannel for instant multi-tab sync
-  const localBus = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vtm_chronicle_bus_v1') : null;
+  const localBus = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vtm_chronicle_bus_v2') : null;
 
   // Virtual Socket.IO registry
   const virtualSockets = new Set();
   const characterRollHistory = {};
+
+  function defaultChronicleId() {
+    if (db && Array.isArray(db.chronicles) && db.chronicles.length > 0) {
+      return Number(db.chronicles[0].id) || 6;
+    }
+    return 6;
+  }
 
   function getCloudConfig() {
     try {
@@ -192,11 +206,16 @@
         } catch (e) {}
       }
 
+      if (seed && seed.tables && typeof seed.tables === 'object') {
+        seed = { ...seed, ...seed.tables };
+        delete seed.tables;
+      }
+
       if (!seed) {
         seed = {
-          users: [{ id: 3, username: 'TohkaTakushi', display_name: 'TohkaTakushi', role: 'gm' }],
-          chronicles: [{ id: 1, title: 'Shadows of Humanity', setting_city: 'Radcliff, KY', setting_year: '2000', gm_id: 3 }],
-          campaigns: [{ id: 1, chronicle_id: 1, title: 'Main Campaign', gm_id: 3 }],
+          users: [{ id: 11, username: 'TohkaTakushi', display_name: 'TohkaTakushi', role: 'gm' }],
+          chronicles: [{ id: 6, title: "Labyrinth's Children", setting_city: 'Louisville, KY', setting_year: '1999', gm_id: 11 }],
+          campaigns: [{ id: 5, chronicle_id: 6, title: 'The Labrynth', gm_id: 11 }],
           chronicle_members: [],
           episodes: [],
           clue_matrices: [],
@@ -213,7 +232,41 @@
           chat_messages: [],
           characters: [],
           dice_rolls: [],
+          personal_notes: [],
+          default_assets: [],
+          default_asset_categories: [],
+          uploaded_files: [],
         };
+      }
+
+      // Ensure all expected table arrays exist
+      const expectedArrays = [
+        'users',
+        'chronicles',
+        'campaigns',
+        'chronicle_members',
+        'episodes',
+        'clue_matrices',
+        'clues',
+        'lore_matrices',
+        'lore_entries',
+        'gameboard_state',
+        'gameboard_pins',
+        'npc_categories',
+        'rules_codex',
+        'clan_symbols',
+        'asset_categories',
+        'chronicle_assets',
+        'chat_messages',
+        'characters',
+        'dice_rolls',
+        'personal_notes',
+        'default_assets',
+        'default_asset_categories',
+        'uploaded_files',
+      ];
+      for (const tbl of expectedArrays) {
+        if (!Array.isArray(seed[tbl])) seed[tbl] = [];
       }
 
       // Overlay any locally saved edits
@@ -222,14 +275,19 @@
         if (savedRaw) {
           const saved = JSON.parse(savedRaw);
           if (saved && saved.characters && saved.chronicles) {
-            // Merge table-by-table so newly extracted tables/rows from seed are preserved
             for (const key of Object.keys(seed)) {
-              if (Array.isArray(seed[key]) && Array.isArray(saved[key])) {
+              if (
+                Array.isArray(seed[key]) &&
+                Array.isArray(saved[key]) &&
+                key !== 'default_assets' &&
+                key !== 'default_asset_categories'
+              ) {
                 const byId = new Map(seed[key].map((item) => [Number(item.id), item]));
                 for (const sItem of saved[key]) {
-                  byId.set(Number(sItem.id), { ...byId.get(Number(sItem.id)), ...sItem });
+                  if (sItem && sItem.id !== undefined) {
+                    byId.set(Number(sItem.id), { ...byId.get(Number(sItem.id)), ...sItem });
+                  }
                 }
-                // Handle deletions if tracked
                 if (Array.isArray(saved._deleted?.[key])) {
                   for (const delId of saved._deleted[key]) byId.delete(Number(delId));
                 }
@@ -247,18 +305,37 @@
       seed._deleted = seed._deleted || {};
       db = seed;
 
-      // Ensure default login token is ready if none is set so the user can jump right in or switch accounts
-      if (!localStorage.getItem('vtm_auth_token') && db.users && db.users.length > 0) {
-        const defaultGm = db.users.find((u) => u.username === 'TohkaTakushi') || db.users[0];
-        if (defaultGm) {
+      // Ensure active user session matches a valid user in db.users
+      let currentStoredUser = null;
+      try {
+        const rawUser = localStorage.getItem('vtm_user');
+        if (rawUser) currentStoredUser = JSON.parse(rawUser);
+      } catch (e) {}
+
+      const matchedUser =
+        currentStoredUser &&
+        db.users.find(
+          (u) =>
+            Number(u.id) === Number(currentStoredUser.id) ||
+            (currentStoredUser.username &&
+              String(u.username).toLowerCase() === String(currentStoredUser.username).toLowerCase())
+        );
+
+      if (!localStorage.getItem('vtm_auth_token') || !matchedUser || Number(matchedUser.id) !== Number(currentStoredUser?.id)) {
+        const targetUser = matchedUser || db.users.find((u) => u.username === 'TohkaTakushi') || db.users[0];
+        if (targetUser) {
+          const isGm =
+            targetUser.role === 'gm' ||
+            targetUser.username === 'TohkaTakushi' ||
+            (db.chronicles || []).some((c) => Number(c.gm_id) === Number(targetUser.id));
           const uPayload = {
-            id: defaultGm.id,
-            username: defaultGm.username,
-            displayName: defaultGm.display_name || defaultGm.username,
-            role: defaultGm.role || 'gm',
-            bio: defaultGm.bio || null,
-            avatar_url: defaultGm.avatar_url || null,
-            avatar: defaultGm.avatar_url || null,
+            id: targetUser.id,
+            username: targetUser.username,
+            displayName: targetUser.display_name || targetUser.username,
+            role: isGm ? 'gm' : targetUser.role || 'player',
+            bio: targetUser.bio || null,
+            avatar_url: targetUser.avatar_url || null,
+            avatar: targetUser.avatar_url || null,
           };
           localStorage.setItem('vtm_auth_token', makeMockToken(uPayload));
           localStorage.setItem('vtm_user', JSON.stringify(uPayload));
@@ -323,16 +400,26 @@
         const [data] = token.split('.');
         if (data) {
           const json = decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
-          return JSON.parse(json);
+          const parsed = JSON.parse(json);
+          if (db && Array.isArray(db.users)) {
+            const byId = db.users.find((u) => Number(u.id) === Number(parsed.id));
+            if (byId) return { ...parsed, id: byId.id, username: byId.username, displayName: byId.display_name || byId.username };
+            const byName = db.users.find(
+              (u) => parsed.username && String(u.username).toLowerCase() === String(parsed.username).toLowerCase()
+            );
+            if (byName) return { ...parsed, id: byName.id, username: byName.username, displayName: byName.display_name || byName.username };
+          }
+          return parsed;
         }
       }
     } catch (e) {}
-    const fallback = (db && db.users && db.users.find((u) => u.username === 'TohkaTakushi')) || {
-      id: 3,
-      username: 'TohkaTakushi',
-      displayName: 'TohkaTakushi',
-      role: 'gm',
-    };
+    const fallback = (db && db.users && db.users.find((u) => u.username === 'TohkaTakushi')) ||
+      (db && db.users && db.users[0]) || {
+        id: 11,
+        username: 'TohkaTakushi',
+        displayName: 'TohkaTakushi',
+        role: 'gm',
+      };
     return {
       id: fallback.id,
       username: fallback.username,
@@ -418,7 +505,6 @@
           body: bodyStr,
         }).catch(() => {});
       } else {
-        // Payload is large (e.g. full character sheet or canvas): push to bytebin and notify peers
         pushCloudSnapshot(false);
       }
     }
@@ -464,7 +550,11 @@
     try {
       const res = await nativeFetch(`https://bytebin.lucko.me/${encodeURIComponent(key)}`);
       if (res.ok) {
-        const remoteDb = await res.json();
+        let remoteDb = await res.json();
+        if (remoteDb && remoteDb.tables && typeof remoteDb.tables === 'object') {
+          remoteDb = { ...remoteDb, ...remoteDb.tables };
+          delete remoteDb.tables;
+        }
         if (remoteDb && remoteDb.characters && remoteDb.chronicles) {
           db = remoteDb;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
@@ -515,7 +605,7 @@
     } catch (e) {}
   }
 
-  // ---------------- V5 DICE ENGINE (Exact replica of server.js rollV5Dice) ----------------
+  // ---------------- V5 DICE ENGINE (Exact replica of services/dice_and_sockets.js) ----------------
   function rollV5Dice(rollerName, characterId, characterName, poolSize, hungerCount, isSecret, isStorytellerWorld) {
     const hungerDiceCount = Math.min(Number(hungerCount) || 0, Number(poolSize) || 1);
     const regularDiceCount = Math.max(0, (Number(poolSize) || 1) - hungerDiceCount);
@@ -624,7 +714,7 @@
     const sock = {
       id: CLIENT_ID,
       connected: true,
-      chronicleId: 1,
+      chronicleId: 6,
       on(event, fn) {
         if (!handlers[event]) handlers[event] = [];
         handlers[event].push(fn);
@@ -661,9 +751,13 @@
   async function handleSocketClientEmit(sock, event, data) {
     await ensureDbLoaded();
     const user = parseAuthUser();
+    const defChronId = defaultChronicleId();
 
     if (event === 'room:join') {
-      const campId = typeof data === 'object' && data !== null ? Number(data.chronicleId || data.campaignId) || 1 : Number(data) || 1;
+      const campId =
+        typeof data === 'object' && data !== null
+          ? Number(data.chronicleId || data.campaignId) || defChronId
+          : Number(data) || defChronId;
       sock.chronicleId = campId;
       let charData = null;
       if (data && data.characterId) {
@@ -711,9 +805,18 @@
     }
 
     if (event === 'dice:roll') {
-      const { chronicleId, campaignId, rollerName, characterId, characterName, poolSize, hungerCount, isSecret, isStorytellerWorld } =
-        data || {};
-      const campId = Number(chronicleId || campaignId) || 1;
+      const {
+        chronicleId,
+        campaignId,
+        rollerName,
+        characterId,
+        characterName,
+        poolSize,
+        hungerCount,
+        isSecret,
+        isStorytellerWorld,
+      } = data || {};
+      const campId = Number(chronicleId || campaignId) || defChronId;
       const roll = rollV5Dice(rollerName, characterId, characterName, poolSize, hungerCount, isSecret, isStorytellerWorld);
       roll.id = nextId('dice_rolls');
       roll.chronicle_id = campId;
@@ -726,7 +829,7 @@
     }
 
     if (event === 'scene:push') {
-      const campId = Number((data && (data.chronicleId || data.campaignId)) || 1);
+      const campId = Number((data && (data.chronicleId || data.campaignId)) || defChronId);
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === campId) || db.gameboard_state[0];
       if (!gs) {
         gs = { id: 1, chronicle_id: campId };
@@ -740,6 +843,12 @@
       persistDb();
       emitToLocalSockets('gameboard:scene_updated', gs);
       publishRealtimeEvent('gameboard:scene_updated', gs, { table: 'gameboard_state', row: gs });
+      return;
+    }
+
+    if (event === 'vtm:live_sheet_edit' || event === 'sheet:live_edit') {
+      emitToLocalSockets(event, data);
+      publishRealtimeEvent(event, data);
     }
   }
 
@@ -763,16 +872,24 @@
     });
   }
 
-  function formatCharacterForApi(r) {
-    let authIds = [];
-    try {
-      authIds =
-        typeof r.authorized_user_ids === 'string'
-          ? JSON.parse(r.authorized_user_ids || '[]')
-          : r.authorized_user_ids || [];
-    } catch (e) {
-      authIds = [];
+  function safeParseJsonArray(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string' && val.trim()) {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
     }
+    return [];
+  }
+
+  function formatCharacterForApi(r) {
+    const authIds = safeParseJsonArray(r.authorized_user_ids);
+    const concealedFields = safeParseJsonArray(r.concealed_fields);
+    const hiddenFromIds = safeParseJsonArray(r.hidden_from_user_ids);
+
     let sheetData = {};
     try {
       sheetData = typeof r.sheet_data === 'string' ? JSON.parse(r.sheet_data || '{}') : r.sheet_data || {};
@@ -806,13 +923,16 @@
     return {
       ...r,
       humanity: hum,
-      authorized_user_ids: Array.isArray(authIds) ? authIds : [],
+      authorized_user_ids: authIds,
+      concealed_fields: concealedFields,
+      hidden_from_user_ids: hiddenFromIds,
       sheet_data: sheetData,
     };
   }
 
   async function handleApiRequest(urlObj, method, headers, rawBody) {
     await ensureDbLoaded();
+    const defChronId = defaultChronicleId();
     let path = urlObj.pathname;
     if (BASE_PATH && path.startsWith(BASE_PATH + '/')) {
       path = path.substring(BASE_PATH.length);
@@ -862,11 +982,15 @@
         persistDb({ table: 'users', row: u });
       }
       if (!u) return jsonResponse({ error: 'User not found.' }, 401);
+      const isGm =
+        u.role === 'gm' ||
+        u.username === 'TohkaTakushi' ||
+        (db.chronicles || []).some((c) => Number(c.gm_id) === Number(u.id));
       const userPayload = {
         id: u.id,
         username: u.username,
         displayName: u.display_name || u.username,
-        role: u.role || 'player',
+        role: isGm ? 'gm' : u.role || 'player',
         bio: u.bio || null,
         avatar_url: u.avatar_url || null,
         avatar: u.avatar_url || null,
@@ -891,10 +1015,9 @@
         avatar_url: null,
       };
       db.users.push(newUser);
-      // Automatically admit to Chronicle 1 so new players can join right away
       db.chronicle_members.push({
         id: nextId('chronicle_members'),
-        chronicle_id: 1,
+        chronicle_id: defChronId,
         user_id: newUser.id,
         status: 'active',
         role: 'player',
@@ -907,17 +1030,32 @@
 
     if (path === '/api/auth/me' && method === 'GET') {
       const u = (db.users || []).find((x) => Number(x.id) === Number(user.id)) || user;
+      const isGm =
+        u.role === 'gm' ||
+        u.username === 'TohkaTakushi' ||
+        (db.chronicles || []).some((c) => Number(c.gm_id) === Number(u.id));
       return jsonResponse({
         user: {
           ...user,
           id: u.id,
           username: u.username,
           displayName: u.display_name || u.displayName || u.username,
-          role: u.role || user.role || 'gm',
+          role: isGm ? 'gm' : u.role || user.role || 'player',
           bio: u.bio || null,
           avatar_url: u.avatar_url || null,
+          avatar: u.avatar_url || null,
         },
       });
+    }
+
+    if (path === '/api/auth/me' && method === 'PUT') {
+      const u = (db.users || []).find((x) => Number(x.id) === Number(user.id));
+      const newAvatar = stripBasePathFromUrl(body.avatar || body.avatar_url || null);
+      if (u) {
+        u.avatar_url = newAvatar;
+        persistDb({ table: 'users', row: u });
+      }
+      return jsonResponse({ success: true, avatar: newAvatar });
     }
 
     if (path === '/api/auth/dashboard' && method === 'GET') {
@@ -940,8 +1078,8 @@
     if (path === '/api/users/profile' && method === 'PUT') {
       const u = (db.users || []).find((x) => Number(x.id) === Number(user.id));
       if (u) {
-        u.bio = body.bio || null;
-        u.avatar_url = body.avatar_url || null;
+        if (body.bio !== undefined) u.bio = body.bio || null;
+        if (body.avatar_url !== undefined) u.avatar_url = stripBasePathFromUrl(body.avatar_url) || null;
         persistDb({ table: 'users', row: u });
       }
       return jsonResponse({ success: true });
@@ -956,9 +1094,57 @@
       return jsonResponse({ success: true });
     }
 
-    // 3. Gameboard State, Map, Scene, Canvas
+    // 2b. Personal Notes (/api/notes)
+    if (path === '/api/notes' && method === 'GET') {
+      const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
+      const notes = (db.personal_notes || [])
+        .filter((n) => Number(n.user_id) === Number(user.id) && Number(n.chronicle_id) === chronicleId)
+        .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+      return jsonResponse(notes);
+    }
+
+    if (path === '/api/notes' && method === 'POST') {
+      const chronicleId = Number(body.chronicle_id || body.campaign_id) || defChronId;
+      const now = new Date().toISOString();
+      const note = {
+        id: nextId('personal_notes'),
+        user_id: user.id,
+        chronicle_id: chronicleId,
+        campaign_id: body.campaign_id ? Number(body.campaign_id) : null,
+        title: body.title || 'New Note',
+        content: body.content || '',
+        created_at: now,
+        updated_at: now,
+      };
+      db.personal_notes.push(note);
+      persistDb({ table: 'personal_notes', row: note });
+      return jsonResponse(note);
+    }
+
+    const noteItemMatch = path.match(/^\/api\/notes\/(\d+)$/);
+    if (noteItemMatch) {
+      const noteId = Number(noteItemMatch[1]);
+      if (method === 'PUT') {
+        const note = (db.personal_notes || []).find((n) => Number(n.id) === noteId);
+        if (note) {
+          if (body.title !== undefined) note.title = body.title;
+          if (body.content !== undefined) note.content = body.content;
+          note.updated_at = new Date().toISOString();
+          persistDb({ table: 'personal_notes', row: note });
+        }
+        return jsonResponse({ success: true });
+      }
+      if (method === 'DELETE') {
+        db.personal_notes = (db.personal_notes || []).filter((n) => Number(n.id) !== noteId);
+        recordDelete('personal_notes', noteId);
+        persistDb({ table: 'personal_notes', deleteId: noteId });
+        return jsonResponse({ success: true });
+      }
+    }
+
+    // 3. Gameboard State, Map, Scene, Canvas, Relationship Map
     if (path === '/api/gameboard/state' && method === 'GET') {
-      const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+      const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
       const gs =
         (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === chronicleId) ||
         (db.gameboard_state || [])[0] ||
@@ -1014,7 +1200,7 @@
     }
 
     if (path === '/api/gameboard/map' && method === 'POST') {
-      const targetChronicleId = Number(body.chronicle_id) || 1;
+      const targetChronicleId = Number(body.chronicle_id) || defChronId;
       const mapUrl = stripBasePathFromUrl(body.map_url);
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
       if (gs) {
@@ -1041,7 +1227,7 @@
     }
 
     if (path === '/api/gameboard/scene' && method === 'POST') {
-      const targetChronicleId = Number(body.chronicle_id) || 1;
+      const targetChronicleId = Number(body.chronicle_id) || defChronId;
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
       if (gs) {
         if (body.active_scene_banner !== undefined && body.active_scene_banner !== null)
@@ -1064,7 +1250,7 @@
     }
 
     if (path === '/api/gameboard/canvas' && method === 'POST') {
-      const targetChronicleId = Number(body.chronicle_id) || 1;
+      const targetChronicleId = Number(body.chronicle_id) || defChronId;
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
       if (gs) {
         const cleanedCanvas = rewritePayloadUrlsIn(body.canvas_state);
@@ -1091,9 +1277,37 @@
       return jsonResponse({ success: true });
     }
 
+    if (path === '/api/gameboard/relationship-map' && method === 'POST') {
+      const targetChronicleId = Number(body.chronicle_id) || defChronId;
+      let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
+      if (gs) {
+        const cleanedMap = rewritePayloadUrlsIn(body.map_state);
+        gs.relationship_map_state = typeof cleanedMap === 'string' ? cleanedMap : JSON.stringify(cleanedMap || {});
+        gs.updated_at = new Date().toISOString();
+        persistDb();
+        emitToLocalSockets('gameboard:relationship_map_updated', {
+          chronicle_id: targetChronicleId,
+          campaign_id: targetChronicleId,
+          map_state: cleanedMap,
+          updated_by: user.displayName || user.username,
+        });
+        publishRealtimeEvent(
+          'gameboard:relationship_map_updated',
+          {
+            chronicle_id: targetChronicleId,
+            campaign_id: targetChronicleId,
+            map_state: cleanedMap,
+            updated_by: user.displayName || user.username,
+          },
+          { table: 'gameboard_state', row: gs }
+        );
+      }
+      return jsonResponse({ success: true });
+    }
+
     // 4. Chat Messages
     if (path === '/api/chat/messages' && method === 'GET') {
-      const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+      const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
       const msgs = (db.chat_messages || [])
         .filter((m) => Number(m.chronicle_id) === chronicleId)
         .sort((a, b) => Number(a.id) - Number(b.id))
@@ -1102,7 +1316,7 @@
     }
 
     if (path === '/api/chat/messages' && method === 'POST') {
-      const chronicleId = Number(body.chronicle_id) || 1;
+      const chronicleId = Number(body.chronicle_id) || defChronId;
       const isGM = isChronicleGM(chronicleId, user.id);
       const newMsg = {
         id: nextId('chat_messages'),
@@ -1141,10 +1355,13 @@
           y: Number(body.y) || 0,
           title: body.title || 'New Pin',
           description: body.description || '',
+          security_measures: body.security_measures || '',
+          infiltration_routes: body.infiltration_routes || '',
           created_at: new Date().toISOString(),
         };
         db.gameboard_pins.push(pin);
         persistDb({ table: 'gameboard_pins', row: pin });
+        emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         return jsonResponse({ id: pin.id, pin });
       }
     }
@@ -1158,7 +1375,12 @@
         if (pin) {
           if (body.title !== undefined) pin.title = body.title;
           if (body.description !== undefined) pin.description = body.description;
+          if (body.security_measures !== undefined) pin.security_measures = body.security_measures;
+          if (body.infiltration_routes !== undefined) pin.infiltration_routes = body.infiltration_routes;
+          if (body.x !== undefined) pin.x = Number(body.x);
+          if (body.y !== undefined) pin.y = Number(body.y);
           persistDb({ table: 'gameboard_pins', row: pin });
+          emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         }
         return jsonResponse({ success: true });
       }
@@ -1166,11 +1388,12 @@
         db.gameboard_pins = (db.gameboard_pins || []).filter((p) => Number(p.id) !== pinId);
         recordDelete('gameboard_pins', pinId);
         persistDb({ table: 'gameboard_pins', deleteId: pinId });
+        emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         return jsonResponse({ success: true });
       }
     }
 
-    // 6. Chronicles & Directory & Members
+    // 6. Chronicles & Directory & Members & UI Settings & Award XP
     if (path === '/api/chronicles' && method === 'GET') {
       const list = (db.chronicles || []).map((c) => {
         const campaigns = (db.campaigns || [])
@@ -1231,7 +1454,7 @@
         const mem = (db.chronicle_members || []).find(
           (cm) => Number(cm.chronicle_id) === Number(c.id) && Number(cm.user_id) === Number(user.id)
         );
-        const isOwner = Number(c.gm_id) === Number(user.id) || user.role === 'gm';
+        const isOwner = Number(c.gm_id) === Number(user.id) || user.role === 'gm' || user.username === 'TohkaTakushi';
         const activePlayers = (db.chronicle_members || []).filter(
           (cm) => Number(cm.chronicle_id) === Number(c.id) && (cm.status === 'active' || !cm.status)
         ).length;
@@ -1245,6 +1468,58 @@
         };
       });
       return jsonResponse(list);
+    }
+
+    const chronUiSettingsMatch = path.match(/^\/api\/chronicles\/(\d+)\/ui_settings$/);
+    if (chronUiSettingsMatch && method === 'PUT') {
+      const cId = Number(chronUiSettingsMatch[1]);
+      const chron = (db.chronicles || []).find((c) => Number(c.id) === cId);
+      if (chron) {
+        chron.ui_settings = typeof body === 'string' ? body : JSON.stringify(body || {});
+        persistDb({ table: 'chronicles', row: chron });
+        emitToLocalSockets('chronicle:ui_settings_updated', { chronicle_id: cId, ui_settings: body });
+      }
+      return jsonResponse({ success: true });
+    }
+
+    const awardXpMatch = path.match(/^\/api\/chronicles\/(\d+)\/award-xp$/);
+    if (awardXpMatch && method === 'POST') {
+      const cId = Number(awardXpMatch[1]);
+      const amount = Number(body.amount) || 0;
+      const reason = body.reason || 'Storyteller Award';
+      const target = body.target;
+      const charId = Number(body.character_id);
+      const targets =
+        target === 'campaign'
+          ? (db.characters || []).filter((c) => Number(c.chronicle_id) === cId && c.category === 'pc')
+          : (db.characters || []).filter((c) => Number(c.id) === charId && Number(c.chronicle_id) === cId);
+
+      const updatedChars = [];
+      for (const char of targets) {
+        let sd = {};
+        try {
+          sd = typeof char.sheet_data === 'string' ? JSON.parse(char.sheet_data || '{}') : char.sheet_data || {};
+        } catch (e) {}
+        const currentTotal = parseInt(sd.total_experience || sd.total || 0, 10) || 0;
+        const newTotal = Math.max(0, currentTotal + amount);
+        sd.total_experience = String(newTotal);
+        sd.total = String(newTotal);
+        if (!Array.isArray(sd.xp_log)) sd.xp_log = [];
+        sd.xp_log.unshift({
+          date: new Date().toISOString(),
+          amount,
+          reason,
+          new_total: newTotal,
+          by: user.displayName || user.username || 'Storyteller',
+        });
+        char.sheet_data = JSON.stringify(sd);
+        char.updated_at = new Date().toISOString();
+        updatedChars.push({ id: char.id, name: char.name, new_total: newTotal, sheet_data: sd });
+        emitToLocalSockets('character:updated', { id: char.id });
+        emitToLocalSockets('vtm:xp_updated', { character_id: char.id, total_experience: newTotal, xp_log: sd.xp_log });
+      }
+      persistDb();
+      return jsonResponse({ success: true, updated_count: updatedChars.length, characters: updatedChars });
     }
 
     const chronIdMatch = path.match(/^\/api\/chronicles\/(\d+)$/);
@@ -1266,6 +1541,12 @@
           max_characters_per_player: body.max_characters_per_player ?? chron.max_characters_per_player,
         });
         persistDb({ table: 'chronicles', row: chron });
+        return jsonResponse({ success: true });
+      }
+      if (method === 'DELETE') {
+        db.chronicles = (db.chronicles || []).filter((c) => Number(c.id) !== cId);
+        recordDelete('chronicles', cId);
+        persistDb({ table: 'chronicles', deleteId: cId });
         return jsonResponse({ success: true });
       }
     }
@@ -1291,6 +1572,31 @@
           };
         });
       return jsonResponse(members);
+    }
+
+    const memberRoleMatch = path.match(/^\/api\/chronicles\/(\d+)\/members\/(\d+)\/role$/);
+    if (memberRoleMatch && method === 'PUT') {
+      const cId = Number(memberRoleMatch[1]);
+      const targetUserId = Number(memberRoleMatch[2]);
+      const mem = (db.chronicle_members || []).find(
+        (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId
+      );
+      if (mem) {
+        mem.role = body.role || 'player';
+        persistDb({ table: 'chronicle_members', row: mem });
+      }
+      return jsonResponse({ success: true, message: 'Role updated' });
+    }
+
+    const memberDelMatch = path.match(/^\/api\/chronicles\/(\d+)\/members\/(\d+)$/);
+    if (memberDelMatch && method === 'DELETE') {
+      const cId = Number(memberDelMatch[1]);
+      const targetUserId = Number(memberDelMatch[2]);
+      db.chronicle_members = (db.chronicle_members || []).filter(
+        (cm) => !(Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId)
+      );
+      persistDb();
+      return jsonResponse({ success: true });
     }
 
     const availPlayersMatch = path.match(/^\/api\/chronicles\/(\d+)\/available-players$/);
@@ -1359,6 +1665,26 @@
       }
     }
 
+    const campItemMatch = path.match(/^\/api\/campaigns\/(\d+)$/);
+    if (campItemMatch) {
+      const campId = Number(campItemMatch[1]);
+      if (method === 'PUT') {
+        const camp = (db.campaigns || []).find((c) => Number(c.id) === campId);
+        if (camp) {
+          if (body.title !== undefined) camp.title = body.title;
+          if (body.description !== undefined) camp.description = body.description;
+          persistDb({ table: 'campaigns', row: camp });
+        }
+        return jsonResponse({ success: true });
+      }
+      if (method === 'DELETE') {
+        db.campaigns = (db.campaigns || []).filter((c) => Number(c.id) !== campId);
+        recordDelete('campaigns', campId);
+        persistDb({ table: 'campaigns', deleteId: campId });
+        return jsonResponse({ success: true });
+      }
+    }
+
     const chronEpsMatch = path.match(/^\/api\/chronicles\/(\d+)\/episodes$/);
     if (chronEpsMatch && method === 'POST') {
       const cId = Number(chronEpsMatch[1]);
@@ -1372,6 +1698,8 @@
         campaign_id: campId,
         episode_number: Number(body.episode_number) || 1,
         title: body.title || 'New Episode',
+        location: body.location || '',
+        revealed: body.revealed ? 1 : 0,
         concepts: body.concepts || '',
         hook: body.hook || '',
         scenes: typeof body.scenes === 'string' ? body.scenes : JSON.stringify(body.scenes || []),
@@ -1386,7 +1714,7 @@
     }
 
     if (path === '/api/episodes' && method === 'GET') {
-      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
       const eps = (db.episodes || [])
         .filter((e) => Number(e.chronicle_id) === cId || Number(e.campaign_id) === cId)
         .sort((a, b) => Number(a.episode_number) - Number(b.episode_number));
@@ -1400,6 +1728,12 @@
           if (ep) ep.episode_number = Number(item.episode_number);
         }
         persistDb();
+      } else if (Array.isArray(body.episode_ids)) {
+        body.episode_ids.forEach((epId, idx) => {
+          const ep = (db.episodes || []).find((e) => Number(e.id) === Number(epId));
+          if (ep) ep.episode_number = idx + 1;
+        });
+        persistDb();
       }
       return jsonResponse({ success: true });
     }
@@ -1407,6 +1741,12 @@
     const epItemMatch = path.match(/^\/api\/episodes\/(\d+)$/);
     if (epItemMatch) {
       const epId = Number(epItemMatch[1]);
+      if (method === 'DELETE') {
+        db.episodes = (db.episodes || []).filter((e) => Number(e.id) !== epId);
+        recordDelete('episodes', epId);
+        persistDb({ table: 'episodes', deleteId: epId });
+        return jsonResponse({ success: true });
+      }
       const ep = (db.episodes || []).find((e) => Number(e.id) === epId);
       if (!ep) return jsonResponse({ error: 'Episode not found' }, 404);
       if (method === 'GET') {
@@ -1438,6 +1778,8 @@
       }
       if (method === 'PUT') {
         if (body.title !== undefined) ep.title = body.title;
+        if (body.location !== undefined) ep.location = body.location;
+        if (body.revealed !== undefined) ep.revealed = body.revealed ? 1 : 0;
         if (body.episode_number !== undefined) ep.episode_number = body.episode_number;
         if (body.concepts !== undefined) ep.concepts = body.concepts;
         if (body.hook !== undefined) ep.hook = body.hook;
@@ -1457,7 +1799,7 @@
     // 8. Clue Matrices & Clues
     if (path === '/api/matrices') {
       if (method === 'GET') {
-        const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+        const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
         const epId = q.get('episode_id') ? Number(q.get('episode_id')) : null;
         const mats = (db.clue_matrices || [])
           .filter((m) => Number(m.chronicle_id) === cId && (!epId || Number(m.episode_id) === epId || !m.episode_id))
@@ -1470,7 +1812,7 @@
       if (method === 'POST') {
         const m = {
           id: nextId('clue_matrices'),
-          chronicle_id: Number(body.chronicle_id || body.campaign_id) || 1,
+          chronicle_id: Number(body.chronicle_id || body.campaign_id) || defChronId,
           episode_id: body.episode_id ? Number(body.episode_id) : null,
           title: body.title || 'New Matrix',
           notes: body.notes || '',
@@ -1497,6 +1839,7 @@
         matrix_id: Number(body.matrix_id) || 1,
         title: body.title || 'New Clue',
         description: body.description || '',
+        emotional_depth: body.emotional_depth || '',
         delivery_method: body.delivery_method || 'Found item',
         location_hint: body.location_hint || 'Floating',
         discovered: 0,
@@ -1508,6 +1851,29 @@
       return jsonResponse({ success: true, id: clue.id });
     }
 
+    const clueItemMatch = path.match(/^\/api\/clues\/(\d+)$/);
+    if (clueItemMatch) {
+      const clueId = Number(clueItemMatch[1]);
+      if (method === 'PUT') {
+        const clue = (db.clues || []).find((c) => Number(c.id) === clueId);
+        if (clue) {
+          if (body.title !== undefined) clue.title = body.title;
+          if (body.description !== undefined) clue.description = body.description;
+          if (body.emotional_depth !== undefined) clue.emotional_depth = body.emotional_depth;
+          if (body.delivery_method !== undefined) clue.delivery_method = body.delivery_method;
+          if (body.location_hint !== undefined) clue.location_hint = body.location_hint;
+          persistDb({ table: 'clues', row: clue });
+        }
+        return jsonResponse({ success: true });
+      }
+      if (method === 'DELETE') {
+        db.clues = (db.clues || []).filter((c) => Number(c.id) !== clueId);
+        recordDelete('clues', clueId);
+        persistDb({ table: 'clues', deleteId: clueId });
+        return jsonResponse({ success: true });
+      }
+    }
+
     const clueToggleMatch = path.match(/^\/api\/clues\/(\d+)\/toggle$/);
     if (clueToggleMatch && method === 'POST') {
       const clueId = Number(clueToggleMatch[1]);
@@ -1516,8 +1882,12 @@
       clue.discovered = clue.discovered ? 0 : 1;
       clue.discovered_at = clue.discovered ? new Date().toISOString() : null;
       const mat = (db.clue_matrices || []).find((m) => Number(m.id) === Number(clue.matrix_id));
-      const enriched = { ...clue, matrix_title: mat?.title || '', chronicle_id: mat?.chronicle_id || 1 };
+      const enriched = { ...clue, matrix_title: mat?.title || '', chronicle_id: mat?.chronicle_id || defChronId };
       persistDb();
+      emitToLocalSockets('gameboard:clue_update', {
+        chronicle_id: enriched.chronicle_id,
+        campaign_id: enriched.chronicle_id,
+      });
       if (clue.discovered) {
         emitToLocalSockets('gameboard:clue_revealed', enriched);
         publishRealtimeEvent('gameboard:clue_revealed', enriched, { table: 'clues', row: clue });
@@ -1531,7 +1901,7 @@
     // 9. Lore Matrices & Entries
     if (path === '/api/lore_matrices') {
       if (method === 'GET') {
-        const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+        const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
         const rows = (db.lore_matrices || [])
           .filter((lm) => Number(lm.chronicle_id) === cId)
           .map((lm) => ({
@@ -1543,7 +1913,7 @@
       if (method === 'POST') {
         const lm = {
           id: nextId('lore_matrices'),
-          chronicle_id: Number(body.chronicle_id || body.campaign_id) || 1,
+          chronicle_id: Number(body.chronicle_id || body.campaign_id) || defChronId,
           episode_id: body.episode_id ? Number(body.episode_id) : null,
           title: body.title || 'New Lore Matrix',
           notes: body.notes || '',
@@ -1553,6 +1923,15 @@
         persistDb({ table: 'lore_matrices', row: lm });
         return jsonResponse({ success: true, id: lm.id });
       }
+    }
+
+    const loreMatDelMatch = path.match(/^\/api\/lore_matrices\/(\d+)$/);
+    if (loreMatDelMatch && method === 'DELETE') {
+      const lmId = Number(loreMatDelMatch[1]);
+      db.lore_matrices = (db.lore_matrices || []).filter((m) => Number(m.id) !== lmId);
+      recordDelete('lore_matrices', lmId);
+      persistDb({ table: 'lore_matrices', deleteId: lmId });
+      return jsonResponse({ success: true });
     }
 
     if (path === '/api/lore_entries' && method === 'POST') {
@@ -1572,6 +1951,27 @@
       return jsonResponse({ success: true, id: entry.id });
     }
 
+    const loreEntryItemMatch = path.match(/^\/api\/lore_entries\/(\d+)$/);
+    if (loreEntryItemMatch) {
+      const leId = Number(loreEntryItemMatch[1]);
+      if (method === 'PUT') {
+        const le = (db.lore_entries || []).find((x) => Number(x.id) === leId);
+        if (le) {
+          if (body.title !== undefined) le.title = body.title;
+          if (body.revelation_vector !== undefined) le.revelation_vector = body.revelation_vector;
+          if (body.content !== undefined) le.content = body.content;
+          persistDb({ table: 'lore_entries', row: le });
+        }
+        return jsonResponse({ success: true });
+      }
+      if (method === 'DELETE') {
+        db.lore_entries = (db.lore_entries || []).filter((x) => Number(x.id) !== leId);
+        recordDelete('lore_entries', leId);
+        persistDb({ table: 'lore_entries', deleteId: leId });
+        return jsonResponse({ success: true });
+      }
+    }
+
     const loreToggleMatch = path.match(/^\/api\/lore(?:_entries)?\/(\d+)\/toggle$/);
     if (loreToggleMatch && method === 'POST') {
       const loreId = Number(loreToggleMatch[1]);
@@ -1580,7 +1980,7 @@
       le.discovered = le.discovered ? 0 : 1;
       le.discovered_at = le.discovered ? new Date().toISOString() : null;
       const lm = (db.lore_matrices || []).find((m) => Number(m.id) === Number(le.matrix_id));
-      const enriched = { ...le, matrix_title: lm?.title || '', chronicle_id: lm?.chronicle_id || 1 };
+      const enriched = { ...le, matrix_title: lm?.title || '', chronicle_id: lm?.chronicle_id || defChronId };
       persistDb();
       if (le.discovered) {
         emitToLocalSockets('gameboard:lore_revealed', enriched);
@@ -1592,9 +1992,19 @@
       return jsonResponse({ success: true, lore: enriched, discovered: le.discovered });
     }
 
-    // 10. Characters, Sheets, Vitals, Categories
+    // 10. Characters, Sheets, Vitals, Categories, Controllers, NPC Fields
+    const chronCharsMatch = path.match(/^\/api\/chronicles\/(\d+)\/characters$/);
+    if (chronCharsMatch && method === 'GET') {
+      const cId = Number(chronCharsMatch[1]);
+      const list = (db.characters || [])
+        .filter((c) => Number(c.chronicle_id) === cId)
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .map(formatCharacterForApi);
+      return jsonResponse(list);
+    }
+
     if (path === '/api/characters' && method === 'GET') {
-      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || 1;
+      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
       const cat = q.get('category');
       const list = (db.characters || [])
         .filter((c) => Number(c.chronicle_id) === cId && (!cat || c.category === cat))
@@ -1604,12 +2014,13 @@
     }
 
     if (path === '/api/characters' && method === 'POST') {
-      const cId = Number(body.chronicle_id || body.campaign_id) || 1;
+      const cId = Number(body.chronicle_id || body.campaign_id) || defChronId;
       const newChar = {
         id: nextId('characters'),
         chronicle_id: cId,
         user_id: body.user_id || user.id,
         name: body.name || 'New Kindred',
+        short_name: body.short_name || null,
         player_name: body.player_name || user.displayName || user.username,
         category: body.category || 'pc',
         clan: body.clan || 'Caitiff',
@@ -1623,6 +2034,8 @@
         willpower_aggravated: 0,
         humanity: 7,
         authorized_user_ids: '[]',
+        concealed_fields: '[]',
+        hidden_from_user_ids: '[]',
         sheet_data: typeof body.sheet_data === 'object' ? JSON.stringify(body.sheet_data) : body.sheet_data || '{}',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -1632,6 +2045,62 @@
       emitToLocalSockets('character:updated', { id: newChar.id });
       publishRealtimeEvent('character:updated', { id: newChar.id }, { table: 'characters', row: newChar });
       return jsonResponse({ success: true, id: newChar.id });
+    }
+
+    const charControllersMatch = path.match(/^\/api\/characters\/(\d+)\/manage-controllers$/);
+    if (charControllersMatch && method === 'POST') {
+      const charId = Number(charControllersMatch[1]);
+      const char = (db.characters || []).find((c) => Number(c.id) === charId);
+      if (!char) return jsonResponse({ error: 'Character not found' }, 404);
+      if (body.primary_user_id !== undefined) char.user_id = Number(body.primary_user_id);
+      if (body.player_name !== undefined) char.player_name = body.player_name;
+      if (body.authorized_user_ids !== undefined) {
+        char.authorized_user_ids = Array.isArray(body.authorized_user_ids)
+          ? JSON.stringify(body.authorized_user_ids)
+          : body.authorized_user_ids;
+      }
+      persistDb({ table: 'characters', row: char });
+      emitToLocalSockets('vtm:sheet_updated', {
+        characterId: charId,
+        user_id: char.user_id,
+        authorized_user_ids: safeParseJsonArray(char.authorized_user_ids),
+        player_name: char.player_name,
+      });
+      return jsonResponse({ success: true, message: 'Character controllers updated successfully.' });
+    }
+
+    const charNpcFieldsMatch = path.match(/^\/api\/characters\/(\d+)\/npc-fields$/);
+    if (charNpcFieldsMatch && method === 'PUT') {
+      const charId = Number(charNpcFieldsMatch[1]);
+      const char = (db.characters || []).find((c) => Number(c.id) === charId);
+      if (!char) return jsonResponse({ error: 'Character not found' }, 404);
+      const allowedFields = [
+        'npc_mask_truth',
+        'npc_current_want',
+        'npc_taboos',
+        'npc_mannerisms',
+        'npc_biases',
+        'npc_hidden_secret',
+        'npc_active_memories',
+        'npc_faction_timeline',
+      ];
+      if (body.field && allowedFields.includes(body.field)) {
+        char[body.field] = body.value || '';
+        char.updated_at = new Date().toISOString();
+        persistDb({ table: 'characters', row: char });
+      }
+      return jsonResponse({ success: true, field: body.field, value: body.value });
+    }
+
+    const charAvatarMatch = path.match(/^\/api\/characters\/(\d+)\/avatar$/);
+    if (charAvatarMatch && method === 'POST') {
+      const charId = Number(charAvatarMatch[1]);
+      const char = (db.characters || []).find((c) => Number(c.id) === charId);
+      if (!char) return jsonResponse({ error: 'Character not found' }, 404);
+      if (body.avatar_url) char.avatar_url = stripBasePathFromUrl(body.avatar_url);
+      if (body.vault_url) char.vault_url = stripBasePathFromUrl(body.vault_url);
+      persistDb({ table: 'characters', row: char });
+      return jsonResponse({ success: true, avatar_url: char.avatar_url });
     }
 
     const charVitalsMatch = path.match(/^\/api\/characters\/(\d+)\/vitals$/);
@@ -1772,6 +2241,7 @@
         }
 
         if (body.name !== undefined) char.name = body.name;
+        if (body.short_name !== undefined) char.short_name = body.short_name;
         if (body.clan !== undefined) char.clan = body.clan;
         if (body.concept !== undefined) char.concept = body.concept;
         if (body.hunger !== undefined) char.hunger = Number(body.hunger);
@@ -1782,6 +2252,16 @@
           char.authorized_user_ids = Array.isArray(body.authorized_user_ids)
             ? JSON.stringify(body.authorized_user_ids)
             : body.authorized_user_ids;
+        }
+        if (body.concealed_fields !== undefined) {
+          char.concealed_fields = Array.isArray(body.concealed_fields)
+            ? JSON.stringify(body.concealed_fields)
+            : body.concealed_fields;
+        }
+        if (body.hidden_from_user_ids !== undefined) {
+          char.hidden_from_user_ids = Array.isArray(body.hidden_from_user_ids)
+            ? JSON.stringify(body.hidden_from_user_ids)
+            : body.hidden_from_user_ids;
         }
         char.updated_at = new Date().toISOString();
         persistDb();
@@ -1810,11 +2290,25 @@
     }
 
     // 11. NPC Categories
+    if (path === '/api/npc-categories/reorder' && method === 'PUT') {
+      if (Array.isArray(body.updates)) {
+        for (const item of body.updates) {
+          const cat = (db.npc_categories || []).find((c) => Number(c.id) === Number(item.id));
+          if (cat) cat.sort_order = Number(item.sort_order) || 0;
+        }
+        persistDb();
+      }
+      return jsonResponse({ success: true });
+    }
+
     const npcCatChronMatch = path.match(/^\/api\/chronicles\/(\d+)\/npc-categories$/);
     if (npcCatChronMatch) {
       const cId = Number(npcCatChronMatch[1]);
       if (method === 'GET') {
-        return jsonResponse((db.npc_categories || []).filter((c) => Number(c.chronicle_id) === cId));
+        const cats = (db.npc_categories || [])
+          .filter((c) => Number(c.chronicle_id) === cId)
+          .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
+        return jsonResponse(cats);
       }
       if (method === 'POST') {
         const cat = {
@@ -1822,6 +2316,7 @@
           chronicle_id: cId,
           name: body.name || 'New Category',
           description: body.description || 'Character Vault Roster',
+          sort_order: 0,
           created_at: new Date().toISOString(),
         };
         db.npc_categories.push(cat);
@@ -1860,7 +2355,7 @@
       }
     }
 
-    // 12. Rules Codex
+    // 12. Rules Codex (Hierarchical Tree + PDF Upload + Reorder)
     if (path === '/api/rules/categories' && method === 'GET') {
       const cats = Array.from(
         new Set((db.rules_codex || []).map((r) => r.category).filter(Boolean))
@@ -1871,27 +2366,65 @@
     if (path === '/api/rules/search' && method === 'GET') {
       const query = (q.get('q') || '').toLowerCase();
       const cat = q.get('category') || '';
-      const results = (db.rules_codex || []).filter((r) => {
-        if (cat && r.category !== cat) return false;
-        if (!query) return true;
-        return (
-          (r.title || '').toLowerCase().includes(query) ||
-          (r.summary || '').toLowerCase().includes(query) ||
-          (r.content || '').toLowerCase().includes(query) ||
-          (r.tags || '').toLowerCase().includes(query)
-        );
-      });
+      const chronId = q.get('chronicle_id') ? Number(q.get('chronicle_id')) : null;
+      const results = (db.rules_codex || [])
+        .filter((r) => {
+          if (chronId && r.chronicle_id !== null && r.chronicle_id !== undefined && Number(r.chronicle_id) !== chronId) {
+            return false;
+          }
+          if (cat && r.category !== cat) return false;
+          if (!query) return true;
+          return (
+            (r.title || '').toLowerCase().includes(query) ||
+            (r.summary || '').toLowerCase().includes(query) ||
+            (r.content || '').toLowerCase().includes(query) ||
+            (r.tags || '').toLowerCase().includes(query)
+          );
+        })
+        .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || (a.title || '').localeCompare(b.title || ''));
       return jsonResponse(results);
+    }
+
+    if (path === '/api/rules/reorder' && method === 'PUT') {
+      if (Array.isArray(body.updates)) {
+        for (const item of body.updates) {
+          const rule = (db.rules_codex || []).find((r) => Number(r.id) === Number(item.id));
+          if (rule) {
+            rule.parent_id = item.parent_id ? Number(item.parent_id) : null;
+            rule.sort_order = Number(item.sort_order) || 0;
+          }
+        }
+        persistDb();
+        emitToLocalSockets('rules:updated', { reordered: true });
+      }
+      return jsonResponse({ success: true });
+    }
+
+    if (path === '/api/rules/upload_pdf' && method === 'POST') {
+      let pdfUrl = body.pdf_url || '';
+      const pdfBlob = body.pdf || body.file;
+      if (pdfBlob && typeof Blob !== 'undefined' && pdfBlob instanceof Blob) {
+        pdfUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(pdfBlob);
+        });
+      }
+      return jsonResponse({ success: true, pdf_url: pdfUrl });
     }
 
     if (path === '/api/rules' && method === 'POST') {
       const rule = {
         id: nextId('rules_codex'),
+        parent_id: body.parent_id ? Number(body.parent_id) : null,
+        chronicle_id: body.chronicle_id ? Number(body.chronicle_id) : null,
         title: body.title || 'Untitled Rule',
         category: body.category || 'Core Rules',
         summary: body.summary || '',
         content: body.content || '',
+        pdf_url: body.pdf_url ? stripBasePathFromUrl(body.pdf_url) : null,
         tags: body.tags || '',
+        sort_order: Number(body.sort_order) || 0,
       };
       db.rules_codex.push(rule);
       persistDb({ table: 'rules_codex', row: rule });
@@ -1906,11 +2439,16 @@
         const rule = (db.rules_codex || []).find((r) => Number(r.id) === rId);
         if (rule) {
           Object.assign(rule, {
+            parent_id: body.parent_id !== undefined ? (body.parent_id ? Number(body.parent_id) : null) : rule.parent_id,
+            chronicle_id:
+              body.chronicle_id !== undefined ? (body.chronicle_id ? Number(body.chronicle_id) : null) : rule.chronicle_id,
             title: body.title ?? rule.title,
             category: body.category ?? rule.category,
             summary: body.summary ?? rule.summary,
             content: body.content ?? rule.content,
+            pdf_url: body.pdf_url !== undefined ? stripBasePathFromUrl(body.pdf_url) : rule.pdf_url,
             tags: body.tags ?? rule.tags,
+            sort_order: body.sort_order !== undefined ? Number(body.sort_order) : rule.sort_order,
           });
           persistDb({ table: 'rules_codex', row: rule });
           emitToLocalSockets('rules:updated', { id: rule.id, title: rule.title });
@@ -1928,7 +2466,7 @@
 
     // 13. Dice Rolls Ledger
     if (path === '/api/rolls' && method === 'GET') {
-      const cId = Number(q.get('chronicle_id')) || 1;
+      const cId = Number(q.get('chronicle_id')) || defChronId;
       const rolls = (db.dice_rolls || [])
         .filter((r) => Number(r.chronicle_id) === cId)
         .sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
@@ -1936,24 +2474,45 @@
       return jsonResponse(rolls);
     }
 
-    // 14. Assets, Uploads, Asset Categories, Clan Symbols
+    // 14. Assets, Default Assets, TinyMCE Gallery, Uploads, Asset Categories, Clan Symbols
     if (path === '/api/upload' && method === 'POST') {
       return jsonResponse({ success: true, url: body.data });
     }
 
+    if (path === '/api/tinymce-gallery' && method === 'GET') {
+      const uploadedList = (db.uploaded_files || []).map((f) => ({
+        title: f.filename,
+        value: f.url,
+      }));
+      const assetList = (db.chronicle_assets || []).map((a) => ({
+        title: a.filename,
+        value: a.url,
+      }));
+      const seen = new Set();
+      const merged = [];
+      for (const item of [...assetList, ...uploadedList]) {
+        if (item.value && !seen.has(item.value)) {
+          seen.add(item.value);
+          merged.push(item);
+        }
+      }
+      return jsonResponse(merged);
+    }
+
     if (path === '/api/assets' && method === 'GET') {
-      const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || 1;
+      const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || defChronId;
       const rows = (db.chronicle_assets || [])
         .filter((a) => Number(a.chronicle_id) === cId)
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-      return jsonResponse({ success: true, assets: rows });
+      const defaultAssets = db.default_assets || [];
+      return jsonResponse({ success: true, assets: [...defaultAssets, ...rows] });
     }
 
     if (path === '/api/assets/upload' && method === 'POST') {
-      const cId = Number(body.chronicleId || body.chronicle_id) || 1;
+      const cId = Number(body.chronicleId || body.chronicle_id) || defChronId;
       let dataUrl = body.data || '';
       let fname = body.filename || 'upload.png';
-      if (body.file && typeof File !== 'undefined' && body.file instanceof Blob) {
+      if (body.file && typeof Blob !== 'undefined' && body.file instanceof Blob) {
         fname = body.file.name || fname;
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
@@ -1961,8 +2520,38 @@
           reader.readAsDataURL(body.file);
         });
       }
+
+      const entityType = body.entityType;
+      const entityId = body.entityId;
+      if (entityType && entityId) {
+        if (entityType === 'user_profile') {
+          const u = (db.users || []).find((x) => Number(x.id) === Number(entityId));
+          if (u) u.avatar_url = dataUrl;
+        } else if (entityType === 'character_avatar') {
+          const ch = (db.characters || []).find((x) => Number(x.id) === Number(entityId));
+          if (ch) ch.avatar_url = dataUrl;
+        } else if (entityType === 'character_vault') {
+          const ch = (db.characters || []).find((x) => Number(x.id) === Number(entityId));
+          if (ch) ch.vault_url = dataUrl;
+        } else if (entityType === 'clan_symbol') {
+          const existingSym = (db.clan_symbols || []).find(
+            (s) => Number(s.chronicle_id) === cId && s.clan_name === entityId
+          );
+          if (existingSym) existingSym.symbol_url = dataUrl;
+          else {
+            db.clan_symbols.push({
+              id: nextId('clan_symbols'),
+              chronicle_id: cId,
+              clan_name: entityId,
+              symbol_url: dataUrl,
+            });
+          }
+        }
+      }
+
+      const skipGallery = body.skipGallery === 'true' || body.skipGallery === true;
       const asset = {
-        id: nextId('chronicle_assets'),
+        id: skipGallery ? 'temp_' + Date.now() : nextId('chronicle_assets'),
         chronicle_id: cId,
         user_id: user.id,
         filename: fname,
@@ -1970,8 +2559,10 @@
         category: body.category || 'Uncategorized',
         created_at: new Date().toISOString(),
       };
-      db.chronicle_assets.push(asset);
-      persistDb({ table: 'chronicle_assets', row: asset });
+      if (!skipGallery) {
+        db.chronicle_assets.push(asset);
+      }
+      persistDb();
       return jsonResponse({ success: true, asset });
     }
 
@@ -1995,32 +2586,85 @@
       }
     }
 
+    if (path === '/api/asset-categories/reorder' && method === 'PUT') {
+      if (Array.isArray(body.updates)) {
+        for (const item of body.updates) {
+          const cat = (db.asset_categories || []).find((c) => Number(c.id) === Number(item.id));
+          if (cat) {
+            cat.parent_id = item.parent_id ? Number(item.parent_id) : null;
+            cat.sort_order = Number(item.sort_order) || 0;
+          }
+        }
+        persistDb();
+      }
+      return jsonResponse({ success: true });
+    }
+
+    const assetCatItemMatch = path.match(/^\/api\/asset-categories\/(\d+)$/);
+    if (assetCatItemMatch) {
+      const catId = Number(assetCatItemMatch[1]);
+      const cat = (db.asset_categories || []).find((c) => Number(c.id) === catId);
+      if (!cat) return jsonResponse({ error: 'Category not found' }, 404);
+      if (method === 'PUT') {
+        const oldName = cat.name;
+        if (body.name) cat.name = body.name.trim();
+        for (const a of db.chronicle_assets || []) {
+          if (Number(a.chronicle_id) === Number(cat.chronicle_id) && a.category === oldName) {
+            a.category = cat.name;
+          }
+        }
+        persistDb({ table: 'asset_categories', row: cat });
+        return jsonResponse({ success: true, name: cat.name });
+      }
+      if (method === 'DELETE') {
+        for (const a of db.chronicle_assets || []) {
+          if (Number(a.chronicle_id) === Number(cat.chronicle_id) && a.category === cat.name) {
+            a.category = 'Uncategorized';
+          }
+        }
+        db.asset_categories = (db.asset_categories || []).filter((c) => Number(c.id) !== catId);
+        recordDelete('asset_categories', catId);
+        persistDb({ table: 'asset_categories', deleteId: catId });
+        return jsonResponse({ success: true });
+      }
+    }
+
     if (path === '/api/asset-categories') {
       if (method === 'GET') {
-        const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || 1;
-        const cats = (db.asset_categories || []).filter((c) => Number(c.chronicle_id) === cId);
-        return jsonResponse({ success: true, categories: cats });
+        const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || defChronId;
+        const cats = (db.asset_categories || [])
+          .filter((c) => Number(c.chronicle_id) === cId)
+          .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || (a.name || '').localeCompare(b.name || ''));
+        const defaultCats = db.default_asset_categories || [];
+        return jsonResponse({ success: true, categories: [...defaultCats, ...cats] });
       }
       if (method === 'POST') {
-        const cId = Number(body.chronicleId || body.chronicle_id) || 1;
+        const cId = Number(body.chronicleId || body.chronicle_id) || defChronId;
         const name = (body.name || '').trim();
-        if (name && !(db.asset_categories || []).some((c) => Number(c.chronicle_id) === cId && c.name === name)) {
-          const cat = { id: nextId('asset_categories'), chronicle_id: cId, name };
+        let cat = (db.asset_categories || []).find((c) => Number(c.chronicle_id) === cId && c.name === name);
+        if (name && !cat) {
+          cat = {
+            id: nextId('asset_categories'),
+            chronicle_id: cId,
+            name,
+            parent_id: body.parent_id ? Number(body.parent_id) : null,
+            sort_order: 0,
+          };
           db.asset_categories.push(cat);
           persistDb({ table: 'asset_categories', row: cat });
         }
-        return jsonResponse({ success: true, name });
+        return jsonResponse({ success: true, id: cat ? cat.id : null, name, parent_id: cat ? cat.parent_id : null });
       }
     }
 
     if (path === '/api/clan-symbols') {
       if (method === 'GET') {
-        const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || 1;
+        const cId = Number(q.get('chronicleId') || q.get('chronicle_id')) || defChronId;
         const rows = (db.clan_symbols || []).filter((s) => Number(s.chronicle_id) === cId);
         return jsonResponse(rows);
       }
       if (method === 'POST') {
-        const cId = Number(body.chronicleId || body.chronicle_id) || 1;
+        const cId = Number(body.chronicleId || body.chronicle_id) || defChronId;
         const existing = (db.clan_symbols || []).find(
           (s) => Number(s.chronicle_id) === cId && s.clan_name === body.clan_name
         );
@@ -2053,7 +2697,7 @@
     return jsonResponse({ success: true });
   }
 
-  // Intercept window.fetch for /api/* requests when in Serverless / GitHub Pages mode
+  // Intercept window.fetch for /api/* requests and root-relative asset requests on GitHub Pages
   window.fetch = async function (input, init = {}) {
     const rawUrl = typeof input === 'string' ? input : input && input.url ? input.url : String(input);
     const urlObj = new URL(rawUrl, window.location.origin);
@@ -2071,10 +2715,43 @@
         return handleApiRequest(urlObj, method, headers, body);
       }
     }
+
+    if (BASE_PATH && typeof input === 'string' && input.startsWith('/') && !input.startsWith(BASE_PATH + '/')) {
+      return nativeFetch(prefixAssetUrl(input), init);
+    }
     return nativeFetch(input, init);
   };
 
   // ---------------- SUBPATH DOM ASSET FIXER & CLOUD SYNC UI ----------------
+  if (BASE_PATH) {
+    try {
+      const origSetAttr = Element.prototype.setAttribute;
+      Element.prototype.setAttribute = function (name, value) {
+        if ((name === 'src' || name === 'href') && typeof value === 'string' && value.startsWith('/')) {
+          value = prefixAssetUrl(value);
+        }
+        return origSetAttr.call(this, name, value);
+      };
+
+      for (const Proto of [
+        typeof HTMLImageElement !== 'undefined' ? HTMLImageElement.prototype : null,
+        typeof HTMLIFrameElement !== 'undefined' ? HTMLIFrameElement.prototype : null,
+      ]) {
+        if (!Proto) continue;
+        const desc = Object.getOwnPropertyDescriptor(Proto, 'src');
+        if (desc && typeof desc.set === 'function') {
+          Object.defineProperty(Proto, 'src', {
+            ...desc,
+            set(val) {
+              const fixed = typeof val === 'string' && val.startsWith('/') ? prefixAssetUrl(val) : val;
+              return desc.set.call(this, fixed);
+            },
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
   function fixSubpathDomAssets(root = document) {
     if (!BASE_PATH) return;
     const els = root.querySelectorAll ? root.querySelectorAll('img[src^="/"], iframe[src^="/"], option[value^="/"]') : [];
@@ -2224,7 +2901,7 @@
                 <input type="file" id="vtmImportJsonInput" accept=".json" style="display:none;">
               </label>
               <button type="button" class="btn-action-outline btn-sm" id="vtmResetCanonicalBtn" style="border-color:#ef4444; color:#fca5a5;">
-                <i class="fa-solid fa-rotate-left"></i> Reset to Linux Backup State
+                <i class="fa-solid fa-rotate-left"></i> Reset to Linux Mint Live State
               </button>
             </div>
           </div>
@@ -2239,11 +2916,15 @@
         const uid = Number(btn.getAttribute('data-switch-user'));
         const u = users.find((x) => Number(x.id) === uid);
         if (u) {
+          const isGm =
+            u.role === 'gm' ||
+            u.username === 'TohkaTakushi' ||
+            (db.chronicles || []).some((c) => Number(c.gm_id) === Number(u.id));
           const payload = {
             id: u.id,
             username: u.username,
             displayName: u.display_name || u.username,
-            role: u.role || (u.username === 'TohkaTakushi' ? 'gm' : 'player'),
+            role: isGm ? 'gm' : u.role || 'player',
             bio: u.bio || null,
             avatar_url: u.avatar_url || null,
             avatar: u.avatar_url || null,
@@ -2289,7 +2970,11 @@
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const imported = JSON.parse(reader.result);
+          let imported = JSON.parse(reader.result);
+          if (imported && imported.tables && typeof imported.tables === 'object') {
+            imported = { ...imported, ...imported.tables };
+            delete imported.tables;
+          }
           if (imported && imported.characters && imported.chronicles) {
             db = imported;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
@@ -2306,7 +2991,7 @@
     };
 
     modal.querySelector('#vtmResetCanonicalBtn').onclick = () => {
-      if (confirm('Reset local browser state back to the canonical Linux database dump?')) {
+      if (confirm('Reset local browser state back to the canonical Linux Mint database dump?')) {
         localStorage.removeItem(STORAGE_KEY);
         window.location.reload();
       }
