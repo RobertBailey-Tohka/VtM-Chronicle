@@ -34,7 +34,7 @@
     // Cross-origin frame check fallback
   }
 
-  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v2';
+  const STORAGE_KEY = 'vtm_chronicle_cloud_state_v3';
   const CLOUD_CONFIG_KEY = 'vtm_chronicle_cloud_config_v2';
   const NTFY_DEFAULT_TOPIC = 'vtm-elysium-labyrinth-2026-sync';
   const CLIENT_ID = 'vtm_' + Math.random().toString(36).substring(2, 10);
@@ -272,6 +272,7 @@
       // Overlay any locally saved edits
       try {
         localStorage.removeItem('vtm_chronicle_cloud_state_v1');
+        localStorage.removeItem('vtm_chronicle_cloud_state_v2');
         const savedRaw = localStorage.getItem(STORAGE_KEY);
         if (savedRaw) {
           const saved = JSON.parse(savedRaw);
