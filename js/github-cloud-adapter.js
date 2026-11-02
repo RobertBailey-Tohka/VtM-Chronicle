@@ -2734,6 +2734,27 @@
         return origSetAttr.call(this, name, value);
       };
 
+      const htmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+      if (htmlDesc && typeof htmlDesc.set === 'function') {
+        Object.defineProperty(Element.prototype, 'innerHTML', {
+          ...htmlDesc,
+          set(val) {
+            if (typeof val === 'string') {
+              val = val
+                .replace(
+                  /((?:src|href)=["'])\/(images|uploads|default_assets|sheets|css|js|pdfjs|webfonts)\//g,
+                  `$1${BASE_PATH}/$2/`
+                )
+                .replace(
+                  /(url\(["']?)\/(images|uploads|default_assets|sheets|css|js|pdfjs|webfonts)\//g,
+                  `$1${BASE_PATH}/$2/`
+                );
+            }
+            return htmlDesc.set.call(this, val);
+          },
+        });
+      }
+
       for (const Proto of [
         typeof HTMLImageElement !== 'undefined' ? HTMLImageElement.prototype : null,
         typeof HTMLIFrameElement !== 'undefined' ? HTMLIFrameElement.prototype : null,
