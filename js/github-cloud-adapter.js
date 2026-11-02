@@ -271,10 +271,11 @@
 
       // Overlay any locally saved edits
       try {
+        localStorage.removeItem('vtm_chronicle_cloud_state_v1');
         const savedRaw = localStorage.getItem(STORAGE_KEY);
         if (savedRaw) {
           const saved = JSON.parse(savedRaw);
-          if (saved && saved.characters && saved.chronicles) {
+          if (saved && Array.isArray(saved.characters) && Array.isArray(saved.chronicles) && saved.chronicles.length > 0) {
             for (const key of Object.keys(seed)) {
               if (
                 Array.isArray(seed[key]) &&
