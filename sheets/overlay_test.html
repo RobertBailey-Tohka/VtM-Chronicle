@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>V5 Overlay Test</title>
+    <style>
+    
+body {
+    background-color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: "Times New Roman", Times, serif;
+    padding: 20px;
+}
+
+.sheet-page {
+    position: relative;
+    width: 816px;
+    height: 1056px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: #fff;
+    margin-bottom: 20px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+}
+
+.oi {
+    position: absolute;
+    background: rgba(255, 0, 0, 0.2); /* Red tint for debugging alignment */
+    border: 1px solid red; /* Debug border */
+    font-family: inherit;
+    font-size: 14px;
+    padding: 2px;
+    box-sizing: border-box;
+}
+
+.od {
+    position: absolute;
+    display: flex;
+    gap: 4px;
+    background: rgba(0, 0, 255, 0.2); /* Blue tint for debugging dots */
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border: 1px solid #111;
+    border-radius: 50%;
+    background-color: transparent;
+}
+
+    </style>
+</head>
+<body>
+    <div class="sheet-page" style="background-image: url('V5-Character Sheet 4pg conv/V5-Character Sheet 4pg conv 0.jpeg');">
+        <!-- NAME -->
+        <input type="text" class="oi" style="top: 12%; left: 10%; width: 22%;">
+        <!-- CONCEPT -->
+        <input type="text" class="oi" style="top: 14.5%; left: 12%; width: 20%;">
+        <!-- CHRONICLE -->
+        <input type="text" class="oi" style="top: 17%; left: 13%; width: 19%;">
+        
+        <!-- STRENGTH DOTS -->
+        <div class="od" style="top: 24%; left: 24%;">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+    </div>
+</body>
+</html>

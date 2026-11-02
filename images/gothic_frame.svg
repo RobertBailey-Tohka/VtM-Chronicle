@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="redGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b91c1c"/>
+      <stop offset="50%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </linearGradient>
+  </defs>
+  
+  <rect x="3" y="3" width="94" height="94" fill="none" stroke="url(#redGlow)" stroke-width="1.5" rx="4"/>
+  <rect x="6" y="6" width="88" height="88" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" rx="2"/>
+
+  <!-- Ornaments (within the 15px margin) -->
+  <path d="M 3 15 L 15 3 L 15 8 L 8 15 Z" fill="url(#redGlow)" opacity="0.8"/>
+  <circle cx="9" cy="9" r="1.5" fill="#111827"/>
+
+  <path d="M 97 15 L 85 3 L 85 8 L 92 15 Z" fill="url(#redGlow)" opacity="0.8"/>
+  <circle cx="91" cy="9" r="1.5" fill="#111827"/>
+
+  <path d="M 3 85 L 15 97 L 15 92 L 8 85 Z" fill="url(#redGlow)" opacity="0.8"/>
+  <circle cx="9" cy="91" r="1.5" fill="#111827"/>
+
+  <path d="M 97 85 L 85 97 L 85 92 L 92 85 Z" fill="url(#redGlow)" opacity="0.8"/>
+  <circle cx="91" cy="91" r="1.5" fill="#111827"/>
+  
+  <!-- Center Droop at Bottom (within the bottom 15px) -->
+  <path d="M 40 97 C 45 100, 55 100, 60 97 Z" fill="url(#redGlow)"/>
+</svg>

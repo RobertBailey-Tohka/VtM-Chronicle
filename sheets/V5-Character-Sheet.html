@@ -1,0 +1,249 @@
+<!DOCTYPE html><html><head><title>V5 Regular Sheet</title><link rel="stylesheet" href="v5-styles.css?v=2"><script src="../js/github-cloud-adapter.js"></script><script src="v5-scripts.js?v=47"></script></head><body>
+    <div class="sheet-page"><div class="sheet-border">
+        <div class="vampire-logo">
+            <h1>Vampire</h1>
+            <p>The Masquerade</p>
+        </div>
+        
+        <div class="boxed-grid-3">
+            <div class="box-cell"><label>Name</label><input type="text" id="name"></div>
+            <div class="box-cell"><label>Concept</label><input type="text" id="concept"></div>
+            <div class="box-cell"><label>Predator</label><input type="text" id="predator"></div>
+            <div class="box-cell"><label>Chronicle</label><input type="text" id="chronicle"></div>
+            <div class="box-cell"><label>Ambition</label><input type="text" id="ambition"></div>
+            <div class="box-cell"><label>Clan</label>
+                <select id="clan">
+                        <option value="" disabled selected></option>
+                        <option value="Banu Haqim">Banu Haqim</option>
+                        <option value="Brujah">Brujah</option>
+                        <option value="Caitiff">Caitiff</option>
+                        <option value="Gangrel">Gangrel</option>
+                        <option value="Hecata">Hecata</option>
+                        <option value="Lasombra">Lasombra</option>
+                        <option value="Malkavian">Malkavian</option>
+                        <option value="The Ministry">The Ministry</option>
+                        <option value="Nosferatu">Nosferatu</option>
+                        <option value="Ravnos">Ravnos</option>
+                        <option value="Salubri">Salubri</option>
+                        <option value="Thin-Blood">Thin-Blood</option>
+                        <option value="Toreador">Toreador</option>
+                        <option value="Tremere">Tremere</option>
+                        <option value="Tzimisce">Tzimisce</option>
+                        <option value="Ventrue">Ventrue</option>
+                        </select>
+            </div>
+            <div class="box-cell"><label>Sire</label><input type="text" id="sire"></div>
+            <div class="box-cell"><label>Desire</label><input type="text" id="desire"></div>
+            <div class="box-cell"><label>Generation</label><input type="text" id="generation"></div>
+        </div>
+        
+        <div class="section-header"><span class="dark-red">Attributes</span></div>
+        <div class="grid-3">
+            <div class="center-dots">
+                <label>Physical</label>
+                <div class="dot-row" style="width:100%;"><span>Strength</span> <div class="dot-group" data-max="5" id="strength"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Dexterity</span> <div class="dot-group" data-max="5" id="dexterity"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Stamina</span> <div class="dot-group" data-max="5" id="stamina"></div></div>
+            </div>
+            <div class="center-dots">
+                <label>Social</label>
+                <div class="dot-row" style="width:100%;"><span>Charisma</span> <div class="dot-group" data-max="5" id="charisma"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Manipulation</span> <div class="dot-group" data-max="5" id="manipulation"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Composure</span> <div class="dot-group" data-max="5" id="composure"></div></div>
+            </div>
+            <div class="center-dots">
+                <label>Mental</label>
+                <div class="dot-row" style="width:100%;"><span>Intelligence</span> <div class="dot-group" data-max="5" id="intelligence"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Wits</span> <div class="dot-group" data-max="5" id="wits"></div></div>
+                <div class="dot-row" style="width:100%;"><span>Resolve</span> <div class="dot-group" data-max="5" id="resolve"></div></div>
+            </div>
+        </div>
+        
+        <div class="grid-2" style="margin-top: 10px; margin-bottom: 10px; width: 60%; margin-left: auto; margin-right: auto;">
+            <div class="center-dots">
+                <label class="dark-red" style="text-transform: none; font-weight: bold;">Health</label>
+                <div class="dot-group square-group" data-max="10" id="health_states"></div>
+            </div>
+            <div class="center-dots">
+                <label class="dark-red" style="text-transform: none; font-weight: bold;">Willpower</label>
+                <div class="dot-group square-group" data-max="10" id="willpower_states"></div>
+            </div>
+        </div>
+        
+        <div class="section-header"><span class="dark-red">Skills</span></div>
+        <div class="grid-3">
+            <div>
+                <div class="dot-row"><span>Athletics</span><input type="text" class="line-fill" id="athletics_specialty"><div class="dot-group" data-max="5" id="athletics"></div></div>
+                <div class="dot-row"><span>Brawl</span><input type="text" class="line-fill" id="brawl_specialty"><div class="dot-group" data-max="5" id="brawl"></div></div>
+                <div class="dot-row"><span>Craft</span><input type="text" class="line-fill" id="craft_specialty"><div class="dot-group" data-max="5" id="craft"></div></div>
+                <div class="dot-row"><span>Drive</span><input type="text" class="line-fill" id="drive_specialty"><div class="dot-group" data-max="5" id="drive"></div></div>
+                <div class="dot-row"><span>Firearms</span><input type="text" class="line-fill" id="firearms_specialty"><div class="dot-group" data-max="5" id="firearms"></div></div>
+                <div class="dot-row"><span>Larceny</span><input type="text" class="line-fill" id="larceny_specialty"><div class="dot-group" data-max="5" id="larceny"></div></div>
+                <div class="dot-row"><span>Melee</span><input type="text" class="line-fill" id="melee_specialty"><div class="dot-group" data-max="5" id="melee"></div></div>
+                <div class="dot-row"><span>Stealth</span><input type="text" class="line-fill" id="stealth_specialty"><div class="dot-group" data-max="5" id="stealth"></div></div>
+                <div class="dot-row"><span>Survival</span><input type="text" class="line-fill" id="survival_specialty"><div class="dot-group" data-max="5" id="survival"></div></div>
+            </div>
+            <div>
+                <div class="dot-row"><span>Animal Ken</span><input type="text" class="line-fill" id="animal_ken_specialty"><div class="dot-group" data-max="5" id="animal_ken"></div></div>
+                <div class="dot-row"><span>Etiquette</span><input type="text" class="line-fill" id="etiquette_specialty"><div class="dot-group" data-max="5" id="etiquette"></div></div>
+                <div class="dot-row"><span>Insight</span><input type="text" class="line-fill" id="insight_specialty"><div class="dot-group" data-max="5" id="insight"></div></div>
+                <div class="dot-row"><span>Intimidation</span><input type="text" class="line-fill" id="intimidation_specialty"><div class="dot-group" data-max="5" id="intimidation"></div></div>
+                <div class="dot-row"><span>Leadership</span><input type="text" class="line-fill" id="leadership_specialty"><div class="dot-group" data-max="5" id="leadership"></div></div>
+                <div class="dot-row"><span>Performance</span><input type="text" class="line-fill" id="performance_specialty"><div class="dot-group" data-max="5" id="performance"></div></div>
+                <div class="dot-row"><span>Persuasion</span><input type="text" class="line-fill" id="persuasion_specialty"><div class="dot-group" data-max="5" id="persuasion"></div></div>
+                <div class="dot-row"><span>Streetwise</span><input type="text" class="line-fill" id="streetwise_specialty"><div class="dot-group" data-max="5" id="streetwise"></div></div>
+                <div class="dot-row"><span>Subterfuge</span><input type="text" class="line-fill" id="subterfuge_specialty"><div class="dot-group" data-max="5" id="subterfuge"></div></div>
+            </div>
+            <div>
+                <div class="dot-row"><span>Academics</span><input type="text" class="line-fill" id="academics_specialty"><div class="dot-group" data-max="5" id="academics"></div></div>
+                <div class="dot-row"><span>Awareness</span><input type="text" class="line-fill" id="awareness_specialty"><div class="dot-group" data-max="5" id="awareness"></div></div>
+                <div class="dot-row"><span>Finance</span><input type="text" class="line-fill" id="finance_specialty"><div class="dot-group" data-max="5" id="finance"></div></div>
+                <div class="dot-row"><span>Investigation</span><input type="text" class="line-fill" id="investigation_specialty"><div class="dot-group" data-max="5" id="investigation"></div></div>
+                <div class="dot-row"><span>Medicine</span><input type="text" class="line-fill" id="medicine_specialty"><div class="dot-group" data-max="5" id="medicine"></div></div>
+                <div class="dot-row"><span>Occult</span><input type="text" class="line-fill" id="occult_specialty"><div class="dot-group" data-max="5" id="occult"></div></div>
+                <div class="dot-row"><span>Politics</span><input type="text" class="line-fill" id="politics_specialty"><div class="dot-group" data-max="5" id="politics"></div></div>
+                <div class="dot-row"><span>Science</span><input type="text" class="line-fill" id="science_specialty"><div class="dot-group" data-max="5" id="science"></div></div>
+                <div class="dot-row"><span>Technology</span><input type="text" class="line-fill" id="technology_specialty"><div class="dot-group" data-max="5" id="technology"></div></div>
+            </div>
+        </div>
+        
+        <div class="section-header"><span class="dark-red">Disciplines</span></div>
+        <div class="grid-3">
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_0"><div class="dot-group" data-max="5" id="discipline_dots_0"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_0_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_0_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_0_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_0_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_0_4"></div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_1"><div class="dot-group" data-max="5" id="discipline_dots_1"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_1_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_1_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_1_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_1_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_1_4"></div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_2"><div class="dot-group" data-max="5" id="discipline_dots_2"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_2_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_2_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_2_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_2_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_2_4"></div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_3"><div class="dot-group" data-max="5" id="discipline_dots_3"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_3_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_3_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_3_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_3_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_3_4"></div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_4"><div class="dot-group" data-max="5" id="discipline_dots_4"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_4_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_4_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_4_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_4_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_4_4"></div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_name_5"><div class="dot-group" data-max="5" id="discipline_dots_5"></div></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_5_0"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_5_1"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_5_2"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_5_3"></div>
+                <div class="input-line"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="discipline_power_5_4"></div>
+            </div>
+            
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px;">
+            <div class="input-line" style="flex: 1; margin-right: 20px;"><label class="inline-label">Resonance</label><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="resonance"></div>
+            <div class="center-dots" style="margin-right: 30px; flex-direction: row; align-items: center; margin-bottom: 0;"><label class="inline-label">Hunger</label><div class="dot-group square-group" data-max="5" id="hunger"></div></div>
+            <div class="center-dots" style="flex-direction: row; align-items: center; margin-bottom: 0;"><label class="inline-label">Humanity</label><div class="dot-group square-group" data-max="10" id="humanity_states"></div></div>
+        </div>
+    </div></div>
+    
+    <div class="sheet-page"><div class="sheet-border">
+        <div class="vampire-logo">
+            <h1>Vampire</h1>
+            <p>The Masquerade</p>
+        </div>
+        
+        <div class="grid-3" style="gap: 0; border: 1px solid #000; border-right: none; margin-bottom: 15px;">
+            <div class="box-paragraph" style="border: none; border-right: 1px solid #000;">
+                <div class="box-header">Chronicle Tenets</div>
+                <textarea id="chronicle_tenets"></textarea>
+            </div>
+            <div class="box-paragraph" style="border: none; border-right: 1px solid #000;">
+                <div class="box-header">Touchstones &amp; Convictions</div>
+                <textarea id="touchstones_convictions"></textarea>
+            </div>
+            <div class="box-paragraph" style="border: none; border-right: 1px solid #000;">
+                <div class="box-header">Clan Bane</div>
+                <textarea id="clan_bane"></textarea>
+            </div>
+        </div>
+        
+        <div class="grid-2" style="gap: 15px;">
+            <div>
+                <div class="section-header" style="margin-top:0;"><span class="dark-red">Advantages &amp; Flaws</span></div>
+                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_1"><div class="dot-group" data-max="5" id="adv_flaw_rating_1"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_2"><div class="dot-group" data-max="5" id="adv_flaw_rating_2"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_3"><div class="dot-group" data-max="5" id="adv_flaw_rating_3"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_4"><div class="dot-group" data-max="5" id="adv_flaw_rating_4"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_5"><div class="dot-group" data-max="5" id="adv_flaw_rating_5"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_6"><div class="dot-group" data-max="5" id="adv_flaw_rating_6"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_7"><div class="dot-group" data-max="5" id="adv_flaw_rating_7"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_8"><div class="dot-group" data-max="5" id="adv_flaw_rating_8"></div></div>
+<div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="adv_flaw_name_9"><div class="dot-group" data-max="5" id="adv_flaw_rating_9"></div></div>
+                
+                <div class="box-paragraph" style="margin-top: 15px; height: 350px;">
+                    <div class="box-label">Notes</div>
+                    <textarea style="height: 100%; border: none;" id="notes"></textarea>
+                </div>
+            </div>
+            
+            <div>
+                <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
+                    <span class="inline-label">Blood Potency</span>
+                    <div class="dot-group" data-max="10" id="blood_potency"></div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; border-right: none; border-bottom: none; margin-bottom: 15px;">
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Blood Surge</label><input type="text" id="blood_surge"></div>
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Mend Amount</label><input type="text" id="mend_amount"></div>
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Power Bonus</label><input type="text" id="power_bonus"></div>
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Rouse Re-Roll</label><input type="text" id="rouse_reroll"></div>
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Feeding Penalty</label><input type="text" id="feeding_penalty"></div>
+                    <div class="box-cell-stat" style="border: none; border-right: 1px solid #000; border-bottom: 1px solid #000;"><label>Bane Severity</label><input type="text" id="bane_severity"></div>
+                </div>
+                
+                <div class="input-line" style="margin-bottom: 10px;"><label class="inline-label">Total Experience</label><input type="text" {flex_input}="" style="border-bottom: 1px dotted #000;" id="total_experience"></div>
+                <div class="input-line" style="margin-bottom: 20px;"><label class="inline-label">Spent Experience</label><input type="text" {flex_input}="" style="border-bottom: 1px dotted #000;" id="spent_experience"></div>
+                
+                <div style="border: 1px solid #000; border-bottom: none;">
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>True age</label><input type="text" id="true_age"></div>
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>Apparent age</label><input type="text" id="apparent_age"></div>
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>Date of birth</label><input type="text" id="date_of_birth"></div>
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>Date of death</label><input type="text" id="date_of_death"></div>
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>Appearance</label><input type="text" id="appearance"></div>
+                    <div class="box-cell-bio" style="border: none; border-bottom: 1px solid #000;"><label>Distinguishing features</label><input type="text" id="distinguishing_features"></div>
+                    <div class="box-paragraph" style="height: 185px; border: none; border-bottom: 1px solid #000;">
+                        <div class="box-label">History</div>
+                        <textarea style="height: 100%;" id="history"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div></div>
+    </body></html>

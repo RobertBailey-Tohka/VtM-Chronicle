@@ -1,0 +1,385 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <title>V5 Character Sheet 4-Page (Clean)</title>
+    <link rel="stylesheet" href="v5-styles.css?v=2">
+    <script src="../js/github-cloud-adapter.js"></script>
+    <script src="v5-scripts.js?v=42"></script>
+</head>
+<body>
+    
+    <div class="sheet-page">
+        <div class="sheet-border">
+            <div class="vampire-logo">
+                <h1>Vampire</h1>
+                <p>The Masquerade</p>
+            </div>
+            
+            <div class="grid-top">
+                <div>
+                    <div class="input-line"><label>Name:</label><input type="text" id="name"></div>
+                    <div class="input-line"><label>Concept:</label><input type="text" id="concept"></div>
+                    <div class="input-line"><label>Chronicle:</label><input type="text" id="chronicle"></div>
+                </div>
+                <div>
+                    <div class="input-line"><label>Ambition:</label><input type="text" id="ambition"></div>
+                    <div class="input-line"><label>Desire:</label><input type="text" id="desire"></div>
+                    <div class="input-line"><label>Predator Type:</label><input type="text" id="predator_type"></div>
+                </div>
+                <div>
+                    <div class="input-line"><label>Clan:</label><input type="text" id="clan"></div>
+                    <div class="input-line"><label>Generation:</label><input type="text" id="generation"></div>
+                    <div class="input-line"><label>Sire:</label><input type="text" id="sire"></div>
+                </div>
+            </div>
+
+            <div class="section-header"><span>Attributes</span></div>
+            <div class="grid-3">
+                <div class="center-dots">
+                    <label>Physical</label>
+                    <div class="dot-row" style="width:100%;"><span>Strength</span> <div class="dot-group" data-max="5" id="strength"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Dexterity</span> <div class="dot-group" data-max="5" id="dexterity"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Stamina</span> <div class="dot-group" data-max="5" id="stamina"></div></div>
+                </div>
+                <div class="center-dots">
+                    <label>Social</label>
+                    <div class="dot-row" style="width:100%;"><span>Charisma</span> <div class="dot-group" data-max="5" id="charisma"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Manipulation</span> <div class="dot-group" data-max="5" id="manipulation"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Composure</span> <div class="dot-group" data-max="5" id="composure"></div></div>
+                </div>
+                <div class="center-dots">
+                    <label>Mental</label>
+                    <div class="dot-row" style="width:100%;"><span>Intelligence</span> <div class="dot-group" data-max="5" id="intelligence"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Wits</span> <div class="dot-group" data-max="5" id="wits"></div></div>
+                    <div class="dot-row" style="width:100%;"><span>Resolve</span> <div class="dot-group" data-max="5" id="resolve"></div></div>
+                </div>
+            </div>
+
+            <div class="section-header"><span>Skills</span></div>
+            <div class="grid-3">
+                <div>
+                    <div class="dot-row"><span>Athletics</span><input type="text" class="line-fill" id="athletics_specialty"><div class="dot-group" data-max="5" id="athletics"></div></div>
+                    <div class="dot-row"><span>Brawl</span><input type="text" class="line-fill" id="brawl_specialty"><div class="dot-group" data-max="5" id="brawl"></div></div>
+                    <div class="dot-row"><span>Craft</span><input type="text" class="line-fill" id="craft_specialty"><div class="dot-group" data-max="5" id="craft"></div></div>
+                    <div class="dot-row"><span>Drive</span><input type="text" class="line-fill" id="drive_specialty"><div class="dot-group" data-max="5" id="drive"></div></div>
+                    <div class="dot-row"><span>Firearms</span><input type="text" class="line-fill" id="firearms_specialty"><div class="dot-group" data-max="5" id="firearms"></div></div>
+                    <div class="dot-row"><span>Larceny</span><input type="text" class="line-fill" id="larceny_specialty"><div class="dot-group" data-max="5" id="larceny"></div></div>
+                    <div class="dot-row"><span>Melee</span><input type="text" class="line-fill" id="melee_specialty"><div class="dot-group" data-max="5" id="melee"></div></div>
+                    <div class="dot-row"><span>Stealth</span><input type="text" class="line-fill" id="stealth_specialty"><div class="dot-group" data-max="5" id="stealth"></div></div>
+                    <div class="dot-row"><span>Survival</span><input type="text" class="line-fill" id="survival_specialty"><div class="dot-group" data-max="5" id="survival"></div></div>
+                </div>
+                <div>
+                    <div class="dot-row"><span>Animal Ken</span><input type="text" class="line-fill" id="animal_ken_specialty"><div class="dot-group" data-max="5" id="animal_ken"></div></div>
+                    <div class="dot-row"><span>Etiquette</span><input type="text" class="line-fill" id="etiquette_specialty"><div class="dot-group" data-max="5" id="etiquette"></div></div>
+                    <div class="dot-row"><span>Insight</span><input type="text" class="line-fill" id="insight_specialty"><div class="dot-group" data-max="5" id="insight"></div></div>
+                    <div class="dot-row"><span>Intimidation</span><input type="text" class="line-fill" id="intimidation_specialty"><div class="dot-group" data-max="5" id="intimidation"></div></div>
+                    <div class="dot-row"><span>Leadership</span><input type="text" class="line-fill" id="leadership_specialty"><div class="dot-group" data-max="5" id="leadership"></div></div>
+                    <div class="dot-row"><span>Performance</span><input type="text" class="line-fill" id="performance_specialty"><div class="dot-group" data-max="5" id="performance"></div></div>
+                    <div class="dot-row"><span>Persuasion</span><input type="text" class="line-fill" id="persuasion_specialty"><div class="dot-group" data-max="5" id="persuasion"></div></div>
+                    <div class="dot-row"><span>Streetwise</span><input type="text" class="line-fill" id="streetwise_specialty"><div class="dot-group" data-max="5" id="streetwise"></div></div>
+                    <div class="dot-row"><span>Subterfuge</span><input type="text" class="line-fill" id="subterfuge_specialty"><div class="dot-group" data-max="5" id="subterfuge"></div></div>
+                </div>
+                <div>
+                    <div class="dot-row"><span>Academics</span><input type="text" class="line-fill" id="academics_specialty"><div class="dot-group" data-max="5" id="academics"></div></div>
+                    <div class="dot-row"><span>Awareness</span><input type="text" class="line-fill" id="awareness_specialty"><div class="dot-group" data-max="5" id="awareness"></div></div>
+                    <div class="dot-row"><span>Finance</span><input type="text" class="line-fill" id="finance_specialty"><div class="dot-group" data-max="5" id="finance"></div></div>
+                    <div class="dot-row"><span>Investigation</span><input type="text" class="line-fill" id="investigation_specialty"><div class="dot-group" data-max="5" id="investigation"></div></div>
+                    <div class="dot-row"><span>Medicine</span><input type="text" class="line-fill" id="medicine_specialty"><div class="dot-group" data-max="5" id="medicine"></div></div>
+                    <div class="dot-row"><span>Occult</span><input type="text" class="line-fill" id="occult_specialty"><div class="dot-group" data-max="5" id="occult"></div></div>
+                    <div class="dot-row"><span>Politics</span><input type="text" class="line-fill" id="politics_specialty"><div class="dot-group" data-max="5" id="politics"></div></div>
+                    <div class="dot-row"><span>Science</span><input type="text" class="line-fill" id="science_specialty"><div class="dot-group" data-max="5" id="science"></div></div>
+                    <div class="dot-row"><span>Technology</span><input type="text" class="line-fill" id="technology_specialty"><div class="dot-group" data-max="5" id="technology"></div></div>
+                </div>
+            </div>
+
+            <div class="grid-3" style="margin-top: 20px;">
+                <div class="paragraph-box"><label>Chronicle Tenets</label><textarea style="height: 70px;" id="chronicle_tenets"></textarea></div>
+                <div class="paragraph-box"><label>Touchstones &amp; Convictions</label><textarea style="height: 70px;" id="touchstones_convictions"></textarea></div>
+                <div class="paragraph-box"><label>Clan Bane</label><textarea style="height: 70px;" id="clan_bane"></textarea></div>
+            </div>
+
+            <div class="grid-60-40">
+                <div>
+                    <div class="section-header"><span>Disciplines</span></div>
+                    <div class="grid-2">
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_39"><div class="dot-group" data-max="5" id="group_36"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5"></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_45"><div class="dot-group" data-max="5" id="group_37"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1_1"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2_1"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3_1"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4_1"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5_1"></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_51"><div class="dot-group" data-max="5" id="group_38"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1_2"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2_2"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3_2"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4_2"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5_2"></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_57"><div class="dot-group" data-max="5" id="group_39"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1_3"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2_3"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3_3"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4_3"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5_3"></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_63"><div class="dot-group" data-max="5" id="group_40"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1_4"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2_4"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3_4"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4_4"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5_4"></div>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_69"><div class="dot-group" data-max="5" id="group_41"></div></div>
+                            <div class="input-line"><label>1</label><input type="text" id="1_5"></div>
+                            <div class="input-line"><label>2</label><input type="text" id="2_5"></div>
+                            <div class="input-line"><label>3</label><input type="text" id="3_5"></div>
+                            <div class="input-line"><label>4</label><input type="text" id="4_5"></div>
+                            <div class="input-line"><label>5</label><input type="text" id="5_5"></div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div>
+                    <div style="height: 15px;"></div>
+                    <div class="center-dots">
+                        <label>Health</label>
+                        <div class="dot-group square-group" data-max="10" id="health_states"></div>
+                    </div>
+                    <div class="center-dots">
+                        <label>Willpower</label>
+                        <div class="dot-group square-group" data-max="10" id="willpower_states"></div>
+                    </div>
+                    <div class="center-dots">
+                        <label>Humanity</label>
+                        <div class="dot-group square-group" data-max="10" id="humanity_states"></div>
+                    </div>
+                    <div class="center-dots">
+                        <label>Hunger</label>
+                        <div class="dot-group square-group" data-max="5" id="hunger"></div>
+                    </div>
+                    <div class="center-dots" style="margin-bottom: 5px;">
+                        <label>Blood Potency</label>
+                        <div class="dot-group" data-max="10" id="blood_potency"></div>
+                    </div>
+                    <div class="grid-2" style="gap: 10px; margin-bottom: 5px;">
+                        <div class="input-line"><label>Blood Surge:</label><input type="text" id="blood_surge"></div>
+                        <div class="input-line"><label>Mend Amount:</label><input type="text" id="mend_amount"></div>
+                    </div>
+                    <div class="grid-2" style="gap: 10px; margin-bottom: 5px;">
+                        <div class="input-line"><label>Power Bonus:</label><input type="text" id="power_bonus"></div>
+                        <div class="input-line"><label>Rouse Re-Roll:</label><input type="text" id="rouse_reroll"></div>
+                    </div>
+                    <div class="grid-2" style="gap: 10px; margin-bottom: 6px;">
+                        <div class="input-line"><label>Feeding Penalty:</label><input type="text" id="feeding_penalty"></div>
+                        <div class="input-line"><label>Bane Severity:</label><input type="text" id="bane_severity"></div>
+                    </div>
+                    <div class="grid-2" style="gap: 10px;">
+                        <div class="paragraph-box"><label>Resonance</label><input type="text" style="width:100%; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="resonance"></div>
+                        <div class="paragraph-box"><label>Hunting</label><input type="text" style="width:100%; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="hunting"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="sheet-page">
+        <div class="sheet-border">
+            <div class="vampire-logo">
+                <h1>Vampire</h1>
+                <p>The Masquerade</p>
+            </div>
+            
+            <div class="grid-40-60">
+                <div>
+                    <div class="section-header"><span>Merits</span></div>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_1"><div class="dot-group" data-max="5" id="merit_rating_1"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_2"><div class="dot-group" data-max="5" id="merit_rating_2"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_3"><div class="dot-group" data-max="5" id="merit_rating_3"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_4"><div class="dot-group" data-max="5" id="merit_rating_4"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_5"><div class="dot-group" data-max="5" id="merit_rating_5"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_6"><div class="dot-group" data-max="5" id="merit_rating_6"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_7"><div class="dot-group" data-max="5" id="merit_rating_7"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_8"><div class="dot-group" data-max="5" id="merit_rating_8"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_9"><div class="dot-group" data-max="5" id="merit_rating_9"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_10"><div class="dot-group" data-max="5" id="merit_rating_10"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_11"><div class="dot-group" data-max="5" id="merit_rating_11"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="merit_name_12"><div class="dot-group" data-max="5" id="merit_rating_12"></div></div>
+                    
+                    <div class="section-header" style="margin-top:20px;"><span>Flaws</span></div>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_1"><div class="dot-group" data-max="5" id="flaw_rating_1"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_2"><div class="dot-group" data-max="5" id="flaw_rating_2"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_3"><div class="dot-group" data-max="5" id="flaw_rating_3"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_4"><div class="dot-group" data-max="5" id="flaw_rating_4"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_5"><div class="dot-group" data-max="5" id="flaw_rating_5"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_6"><div class="dot-group" data-max="5" id="flaw_rating_6"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_7"><div class="dot-group" data-max="5" id="flaw_rating_7"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_8"><div class="dot-group" data-max="5" id="flaw_rating_8"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_9"><div class="dot-group" data-max="5" id="flaw_rating_9"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_10"><div class="dot-group" data-max="5" id="flaw_rating_10"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_11"><div class="dot-group" data-max="5" id="flaw_rating_11"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="flaw_name_12"><div class="dot-group" data-max="5" id="flaw_rating_12"></div></div>
+                    
+                    <div class="section-header" style="margin-top:20px;"><span>Rituals</span></div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:10px; margin-bottom:5px;"><span>NAME</span><span>LEVEL</span></div>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_1"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_2"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_3"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_4"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_5"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_6"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_7"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_8"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_9"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_10"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_11"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_12"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="name_13"><input type="text" style="flex: 0 0 30px; width:30px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="name_14"></div>
+                    
+                    <div class="section-header" style="margin-top:20px;"><span>Experience</span></div>
+                    <div class="input-line"><label>Total:</label><input type="text" id="total"></div>
+                    <div class="input-line"><label>Spent:</label><input type="text" id="spent"></div>
+                </div>
+                <div>
+                    <div class="section-header"><span>Backgrounds</span></div>
+                    <div class="grid-2">
+                        <div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_1"><div class="dot-group" data-max="5" id="background_rating_1"></div></div>
+                                <textarea id="background_desc_1"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_2"><div class="dot-group" data-max="5" id="background_rating_2"></div></div>
+                                <textarea id="background_desc_2"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_3"><div class="dot-group" data-max="5" id="background_rating_3"></div></div>
+                                <textarea id="background_desc_3"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_4"><div class="dot-group" data-max="5" id="background_rating_4"></div></div>
+                                <textarea id="background_desc_4"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_5"><div class="dot-group" data-max="5" id="background_rating_5"></div></div>
+                                <textarea id="background_desc_5"></textarea>
+                            </div>
+                            
+                        </div>
+                        <div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_6"><div class="dot-group" data-max="5" id="background_rating_6"></div></div>
+                                <textarea id="background_desc_6"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_7"><div class="dot-group" data-max="5" id="background_rating_7"></div></div>
+                                <textarea id="background_desc_7"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_8"><div class="dot-group" data-max="5" id="background_rating_8"></div></div>
+                                <textarea id="background_desc_8"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_9"><div class="dot-group" data-max="5" id="background_rating_9"></div></div>
+                                <textarea id="background_desc_9"></textarea>
+                            </div>
+                            
+                            <div class="background-block paragraph-box">
+                                <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="background_name_10"><div class="dot-group" data-max="5" id="background_rating_10"></div></div>
+                                <textarea id="background_desc_10"></textarea>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="sheet-page">
+        <div class="sheet-border">
+            <div class="vampire-logo">
+                <h1>Vampire</h1>
+                <p>The Masquerade</p>
+            </div>
+            
+            <div class="section-header"><span>Possessions</span></div>
+            <div class="grid-2">
+                <div class="paragraph-box"><label>Gear (Carried)</label><textarea style="height: 120px;" id="gear_carried"></textarea></div>
+                <div class="paragraph-box"><label>Equipment (Owned)</label><textarea style="height: 120px;" id="equipment_owned"></textarea></div>
+            </div>
+            <div class="grid-2" style="margin-top: 10px;">
+                <div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:10px; margin-bottom:5px;"><span>WEAPONS</span><span>DAMAGE</span></div>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_1"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_2"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_3"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_4"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_5"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_6"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_7"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_8"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_9"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_10"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_11"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="weapons_12"><input type="text" style="flex: 0 0 50px; width:50px; border:none; border-bottom:1px solid #000; background:transparent; outline:none; text-align:center;" id="weapons_13"></div>
+                </div>
+                <div>
+                    <div style="display:flex; justify-content:center; font-weight:bold; font-size:10px; margin-bottom:5px;"><span>VEHICLES</span></div>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_1"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_2"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_3"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_4"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_5"></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="vehicles_6"></div>
+                </div>
+            </div>
+            
+            <div class="section-header" style="margin-top:20px;"><span>Haven</span></div>
+            <div class="grid-3" style="gap:5px;">
+                <div style="display:flex; align-items:center; font-size:12px;"><label style="margin-right:5px;">No Haven?</label><input type="checkbox" id="no_haven"></div>
+                <div style="display:flex; align-items:center; font-size:12px;"><label style="margin-right:5px;">Haven Rating:</label><div class="dot-group" data-max="5" id="haven_rating"></div></div>
+                <div class="input-line"><label>Haven Name:</label><input type="text" id="haven_name"></div>
+            </div>
+            <div class="grid-2" style="margin-top:10px;">
+                <div>
+                    <label style="font-size:11px; font-weight:bold;">Haven Merits</label>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_168"><div class="dot-group" data-max="5" id="group_82"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_169"><div class="dot-group" data-max="5" id="group_83"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_170"><div class="dot-group" data-max="5" id="group_84"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_171"><div class="dot-group" data-max="5" id="group_85"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_172"><div class="dot-group" data-max="5" id="group_86"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_173"><div class="dot-group" data-max="5" id="group_87"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_174"><div class="dot-group" data-max="5" id="group_88"></div></div>
+                </div>
+                <div>
+                    <label style="font-size:11px; font-weight:bold;">Haven Flaws</label>
+                    <div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_175"><div class="dot-group" data-max="5" id="group_89"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_176"><div class="dot-group" data-max="5" id="group_90"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_177"><div class="dot-group" data-max="5" id="group_91"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_178"><div class="dot-group" data-max="5" id="group_92"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_179"><div class="dot-group" data-max="5" id="group_93"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_180"><div class="dot-group" data-max="5" id="group_94"></div></div><div class="dot-row"><input type="text" style="flex: 1 1 0px; min-width: 0; width: 0; border:none; border-bottom:1px solid #000; background:transparent; outline:none; height:18px;" id="field_181"><div class="dot-group" data-max="5" id="group_95"></div></div>
+                </div>
+            </div>
+            
+            <div class="paragraph-box" style="margin-top: 15px;">
+                <div class="input-line"><label>Location:</label><input type="text" id="location"></div>
+                <textarea style="height: 70px; margin-top:5px;" id="location_1"></textarea>
+            </div>
+            <div class="paragraph-box">
+                <div class="input-line"><label>Description:</label><input type="text" id="description"></div>
+                <textarea style="height: 180px; margin-top:5px;" id="description_1"></textarea>
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="sheet-page">
+        <div class="sheet-border">
+            <div class="vampire-logo">
+                <h1>Vampire</h1>
+                <p>The Masquerade</p>
+            </div>
+            
+            <div class="section-header"><span>History</span></div>
+            <div class="paragraph-box"><textarea style="height: 300px;" id="history"></textarea></div>
+            
+            <div class="section-header" style="margin-top:20px;"><span>Description</span></div>
+            <div class="grid-2">
+                <div>
+                    <div class="input-line"><label>True Age:</label><input type="text" style="text-align:right;" id="true_age"></div>
+                    <div class="input-line"><label>Apparent Age:</label><input type="text" style="text-align:right;" id="apparent_age"></div>
+                    <div class="input-line"><label>Date of Birth:</label><input type="text" style="text-align:right;" id="date_of_birth"></div>
+                    <div class="input-line"><label>Date of Death:</label><input type="text" style="text-align:right;" id="date_of_death"></div>
+                    <div class="input-line"><label>Nationality:</label><input type="text" style="text-align: right;" id="nationality"></div>
+                    <div class="input-line"><label>Race:</label><input type="text" style="text-align: right;" id="race"></div>
+                    <div class="input-line"><label>Hair:</label><input type="text" style="text-align: right;" id="hair"></div>
+                    <div class="input-line"><label>Eyes:</label><input type="text" style="text-align: right;" id="eyes"></div>
+                    <div class="input-line"><label>Height:</label><input type="text" style="text-align: right;" id="height"></div>
+                    <div class="input-line"><label>Weight:</label><input type="text" style="text-align: right;" id="weight"></div>
+                    <div class="input-line"><label>Gender:</label><input type="text" style="text-align: right;" id="gender"></div>
+                </div>
+                <div class="paragraph-box"><textarea style="height: 220px; border-bottom: 1px solid #000;" id="true_age_1"></textarea></div>
+            </div>
+            
+            <div class="section-header" style="margin-top:20px;"><span>Visuals</span></div>
+            <div class="grid-2">
+                <div style="text-align:center; font-size:11px; font-weight:bold;">RELATIONSHIP MAP</div>
+                <div style="text-align:center; font-size:11px; font-weight:bold;">CHARACTER SKETCH</div>
+            </div>
+            <div style="height: 200px; border-left: 1px dashed #000; margin: 10px auto; width: 1px;"></div>
+        </div>
+    </div>
+
+
+
+</body></html>
