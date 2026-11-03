@@ -441,11 +441,17 @@
     return false;
   }
 
-  // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + ntfy.sh SSE) ----------------
-  let sseSource = null;
+  // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + Multi-Relay ntfy SSE) ----------------
+  const NTFY_RELAYS = [
+    'https://ntfy.envs.net',
+    'https://ntfy.hostux.net',
+    'https://ntfy.sh',
+  ];
+  let sseSources = [];
   let sseReconnectTimer = null;
   let fastLivePollTimer = null;
   let currentCloudStatusLabel = 'CLOUD VTT';
+  let pktSeq = 0;
   const activePresencesByUserId = new Map();
   const processedRealtimeIds = new Set();
   let localPresenceRecord = null;
@@ -457,7 +463,7 @@
     const key = String(id);
     if (processedRealtimeIds.has(key)) return true;
     processedRealtimeIds.add(key);
-    if (processedRealtimeIds.size > 600) {
+    if (processedRealtimeIds.size > 1200) {
       const first = processedRealtimeIds.values().next().value;
       processedRealtimeIds.delete(first);
     }
@@ -489,7 +495,22 @@
     }
   }
 
+  function postToAllRelays(topic, bodyStr) {
+    const encodedTopic = encodeURIComponent(topic);
+    for (const base of NTFY_RELAYS) {
+      nativeFetch(`${base}/${encodedTopic}`, {
+        method: 'POST',
+        body: bodyStr,
+      }).catch(() => {});
+    }
+  }
+
   function sendRawNtfyPacket(pkt) {
+    if (!pkt) return false;
+    if (!pkt.pktUid) {
+      pkt.pktUid = `${CLIENT_ID}_${Date.now()}_${++pktSeq}`;
+    }
+    markRealtimeIdProcessed(pkt.pktUid);
     if (localBus) {
       try {
         localBus.postMessage(pkt);
@@ -499,12 +520,9 @@
     if (cfg.syncEnabled && cfg.topic && navigator.onLine) {
       const bodyStr = JSON.stringify(pkt);
       if (bodyStr.length < 3800) {
-        nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
-          method: 'POST',
-          body: bodyStr,
-        }).catch(() => {});
+        postToAllRelays(cfg.topic, bodyStr);
         return true;
-      } else if (pkt && pkt.type !== 'overflow_pkt') {
+      } else if (pkt.type !== 'overflow_pkt') {
         nativeFetch('https://bytebin.lucko.me/post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -514,15 +532,13 @@
           .then((json) => {
             if (json && json.key) {
               const overflowEnvelope = JSON.stringify({
+                pktUid: `${pkt.pktUid}_ovf`,
                 senderId: pkt.senderId || CLIENT_ID,
                 ts: pkt.ts || Date.now(),
                 type: 'overflow_pkt',
                 key: json.key,
               });
-              nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
-                method: 'POST',
-                body: overflowEnvelope,
-              }).catch(() => {});
+              postToAllRelays(cfg.topic, overflowEnvelope);
             }
           })
           .catch(() => {});
@@ -701,23 +717,84 @@
     if (gs) {
       broadcastSceneSyncPacket(gs);
     }
+    const recentRolls = (db.dice_rolls || []).slice(-12);
+    const recentChat = (db.chat_messages || []).slice(-12);
+    if (recentRolls.length > 0 || recentChat.length > 0) {
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'ledger_sync',
+        rolls: recentRolls,
+        chat: recentChat,
+      });
+    }
+  }
+
+  function upsertDiceRollIntoDb(roll) {
+    if (!roll || !db) return false;
+    if (!Array.isArray(db.dice_rolls)) db.dice_rolls = [];
+    const existingIdx = db.dice_rolls.findIndex(
+      (r) =>
+        (roll.roll_uid && r.roll_uid && r.roll_uid === roll.roll_uid) ||
+        (Number(r.id) === Number(roll.id) && r.roller_name === roll.roller_name)
+    );
+    if (existingIdx >= 0) {
+      db.dice_rolls[existingIdx] = { ...db.dice_rolls[existingIdx], ...roll };
+      return false;
+    }
+    db.dice_rolls.push(roll);
+    return true;
   }
 
   function applyIncomingPacket(pkt, isReplay = false) {
     if (!pkt) return;
     if (!isReplay && pkt.senderId === CLIENT_ID) return;
-    if (pkt.pktId && markRealtimeIdProcessed(pkt.pktId)) return;
+    const dedupKey = pkt.pktUid || pkt.pktId;
+    if (dedupKey && markRealtimeIdProcessed(dedupKey)) return;
 
     if (pkt.type === 'overflow_pkt' && pkt.key) {
       nativeFetch(`https://bytebin.lucko.me/${encodeURIComponent(pkt.key)}`)
         .then((res) => (res && res.ok ? res.json() : null))
         .then((unpacked) => {
           if (unpacked && typeof unpacked === 'object' && unpacked.type !== 'overflow_pkt') {
-            if (pkt.pktId) unpacked.pktId = `${pkt.pktId}_unpacked`;
+            if (dedupKey && !unpacked.pktUid) unpacked.pktId = `${dedupKey}_unpacked`;
             applyIncomingPacket(unpacked, isReplay);
           }
         })
         .catch(() => {});
+      return;
+    }
+
+    if (pkt.type === 'ledger_sync' && db) {
+      let rollsAdded = false;
+      let chatAdded = false;
+      if (Array.isArray(pkt.rolls)) {
+        for (const r of pkt.rolls) {
+          if (upsertDiceRollIntoDb(r)) rollsAdded = true;
+        }
+      }
+      if (Array.isArray(pkt.chat)) {
+        if (!Array.isArray(db.chat_messages)) db.chat_messages = [];
+        for (const m of pkt.chat) {
+          if (!m || m.id === undefined) continue;
+          const exists = db.chat_messages.some(
+            (x) => Number(x.id) === Number(m.id) && x.sender_name === m.sender_name && x.message === m.message
+          );
+          if (!exists) {
+            db.chat_messages.push(m);
+            chatAdded = true;
+          }
+        }
+      }
+      if (rollsAdded || chatAdded) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+        if (!isReplay) {
+          if (rollsAdded && typeof window.loadRecentRolls === 'function') window.loadRecentRolls();
+          if (chatAdded && typeof window.loadChatMessages === 'function') window.loadChatMessages();
+        }
+      }
       return;
     }
 
@@ -784,18 +861,15 @@
 
     if (pkt.type === 'dice_roll' && pkt.roll) {
       const roll = pkt.roll;
-      const rollDedupKey = roll.roll_uid || `roll_${roll.id}_${roll.roller_name}`;
+      const rollDedupKey = roll.roll_uid || `roll_${roll.id}_${roll.roller_name}_${roll.created_at || ''}`;
       if (markRealtimeIdProcessed(rollDedupKey)) return;
       if (db) {
-        if (!Array.isArray(db.dice_rolls)) db.dice_rolls = [];
-        const existingIdx = db.dice_rolls.findIndex((r) => Number(r.id) === Number(roll.id));
-        if (existingIdx >= 0) db.dice_rolls[existingIdx] = roll;
-        else db.dice_rolls.push(roll);
+        upsertDiceRollIntoDb(roll);
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
         } catch (e) {}
       }
-      if (!isReplay || Date.now() - (pkt.ts || 0) < 15000) {
+      if (!isReplay || Date.now() - (pkt.ts || 0) < 20000) {
         emitToLocalSockets('dice:result', roll);
       }
       return;
@@ -1117,18 +1191,12 @@
         const { key } = await res.json();
         if (key) {
           saveCloudConfig({ lastCloudKey: key });
-          const cfg = getCloudConfig();
-          if (cfg.topic) {
-            nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
-              method: 'POST',
-              body: JSON.stringify({
-                senderId: CLIENT_ID,
-                ts: Date.now(),
-                type: 'cloud_snapshot',
-                key,
-              }),
-            }).catch(() => {});
-          }
+          sendRawNtfyPacket({
+            senderId: CLIENT_ID,
+            ts: Date.now(),
+            type: 'cloud_snapshot',
+            key,
+          });
           updateCloudBadgeStatus('CLOUD SYNCED');
           if (showAlert) alert(`Chronicle state synced to cloud! Share code: ${key}`);
           return key;
@@ -1171,50 +1239,61 @@
   async function pollRecentNtfyHistory(topic, sinceWindow = '12h', allowRecentDiceRollReplay = false) {
     try {
       await ensureDbLoaded();
-      const res = await nativeFetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(sinceWindow)}`);
-      if (!res || !res.ok) return;
-      const text = await res.text();
-      if (!text) return;
-      const lines = text.split('\n').filter((l) => l.trim());
-      for (const line of lines) {
-        try {
-          const wrapper = JSON.parse(line);
-          if (wrapper && wrapper.event === 'message' && wrapper.message) {
-            const pkt = JSON.parse(wrapper.message);
-            if (!pkt) continue;
-            if (wrapper.id) pkt.pktId = wrapper.id;
-            if (
-              allowRecentDiceRollReplay &&
-              (pkt.type === 'dice_roll' || (pkt.type === 'socket_event' && pkt.event === 'dice:result')) &&
-              Date.now() - (pkt.ts || (wrapper.time ? wrapper.time * 1000 : 0)) < 14000
-            ) {
-              await applyIncomingPacket(pkt, false);
-              continue;
+      const encodedTopic = encodeURIComponent(topic);
+      const encodedSince = encodeURIComponent(sinceWindow);
+      const responses = await Promise.allSettled(
+        NTFY_RELAYS.slice(0, 2).map((base) =>
+          nativeFetch(`${base}/${encodedTopic}/json?poll=1&since=${encodedSince}`)
+        )
+      );
+      for (const r of responses) {
+        if (r.status !== 'fulfilled' || !r.value || !r.value.ok) continue;
+        const text = await r.value.text();
+        if (!text) continue;
+        const lines = text.split('\n').filter((l) => l.trim());
+        for (const line of lines) {
+          try {
+            const wrapper = JSON.parse(line);
+            if (wrapper && wrapper.event === 'message' && wrapper.message) {
+              const pkt = JSON.parse(wrapper.message);
+              if (!pkt) continue;
+              if (wrapper.id && !pkt.pktId) pkt.pktId = wrapper.id;
+              if (
+                allowRecentDiceRollReplay &&
+                (pkt.type === 'dice_roll' || (pkt.type === 'socket_event' && pkt.event === 'dice:result')) &&
+                Date.now() - (pkt.ts || (wrapper.time ? wrapper.time * 1000 : 0)) < 20000
+              ) {
+                await applyIncomingPacket(pkt, false);
+                continue;
+              }
+              // Replay state-syncing packets, dice ledger history, and recent presence packets without re-popping old dice roll animations
+              if (
+                pkt.type === 'dice_roll' ||
+                pkt.type === 'ledger_sync' ||
+                pkt.type === 'xp_sync' ||
+                pkt.type === 'st_authoritative_sync' ||
+                pkt.type === 'char_delta' ||
+                pkt.type === 'scene_sync' ||
+                pkt.type === 'socket_event' ||
+                pkt.type === 'overflow_pkt' ||
+                pkt.type === 'presence_update' ||
+                pkt.type === 'presence_leave' ||
+                pkt.type === 'db:patch' ||
+                pkt.type === 'cloud_snapshot' ||
+                pkt.type === 'cloud:snapshot'
+              ) {
+                if (pkt.type === 'presence_update') pkt.requestReply = false;
+                await applyIncomingPacket(pkt, !allowRecentDiceRollReplay);
+              }
             }
-            // Replay state-syncing packets and recent presence packets without re-popping old dice roll animations
-            if (
-              pkt.type === 'xp_sync' ||
-              pkt.type === 'st_authoritative_sync' ||
-              pkt.type === 'char_delta' ||
-              pkt.type === 'scene_sync' ||
-              pkt.type === 'socket_event' ||
-              pkt.type === 'overflow_pkt' ||
-              pkt.type === 'presence_update' ||
-              pkt.type === 'presence_leave' ||
-              pkt.type === 'db:patch' ||
-              pkt.type === 'cloud_snapshot' ||
-              pkt.type === 'cloud:snapshot'
-            ) {
-              // Suppress reply storm while replaying historical presence packets
-              if (pkt.type === 'presence_update') pkt.requestReply = false;
-              await applyIncomingPacket(pkt, !allowRecentDiceRollReplay);
-            }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
       if (!allowRecentDiceRollReplay) {
         emitToLocalSockets('character:updated', {});
         emitToLocalSockets('episode:updated', {});
+        if (typeof window.loadRecentRolls === 'function') window.loadRecentRolls();
+        if (typeof window.loadChatMessages === 'function') window.loadChatMessages();
         const gs =
           (db && (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId())) ||
           (db && (db.gameboard_state || [])[0]);
@@ -1250,39 +1329,55 @@
   function connectNtfySse(topic) {
     if (!topic || typeof EventSource === 'undefined') return;
     try {
-      if (sseSource) {
+      if (Array.isArray(sseSources)) {
+        for (const s of sseSources) {
+          try {
+            s.close();
+          } catch (e) {}
+        }
+      }
+      sseSources = [];
+      let announcedOnOpen = false;
+      const encodedTopic = encodeURIComponent(topic);
+      for (const base of NTFY_RELAYS) {
         try {
-          sseSource.close();
+          const src = new EventSource(`${base}/${encodedTopic}/sse`);
+          src.onopen = () => {
+            updateCloudBadgeStatus('CLOUD LIVE');
+            if (!announcedOnOpen) {
+              announcedOnOpen = true;
+              broadcastLocalPresence(true);
+              broadcastStorytellerAuthoritativeState();
+            }
+          };
+          src.onmessage = (ev) => {
+            try {
+              const wrapper = JSON.parse(ev.data);
+              if (wrapper && wrapper.event === 'message' && wrapper.message) {
+                const pkt = JSON.parse(wrapper.message);
+                if (pkt) {
+                  if (wrapper.id && !pkt.pktId) pkt.pktId = wrapper.id;
+                  applyIncomingPacket(pkt, false);
+                }
+              }
+            } catch (e) {}
+          };
+          src.onerror = () => {
+            const anyOpen = sseSources.some((s) => s && s.readyState === 1);
+            if (!anyOpen) {
+              updateCloudBadgeStatus('RECONNECTING...');
+              if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+              sseReconnectTimer = setTimeout(() => {
+                const latestCfg = getCloudConfig();
+                if (latestCfg.syncEnabled && latestCfg.topic) {
+                  connectNtfySse(latestCfg.topic);
+                }
+              }, 4500);
+            }
+          };
+          sseSources.push(src);
         } catch (e) {}
       }
-      sseSource = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}/sse`);
-      sseSource.onopen = () => {
-        updateCloudBadgeStatus('CLOUD LIVE');
-        broadcastLocalPresence(true);
-        broadcastStorytellerAuthoritativeState();
-      };
-      sseSource.onmessage = (ev) => {
-        try {
-          const wrapper = JSON.parse(ev.data);
-          if (wrapper && wrapper.event === 'message' && wrapper.message) {
-            const pkt = JSON.parse(wrapper.message);
-            if (pkt) {
-              if (wrapper.id) pkt.pktId = wrapper.id;
-              applyIncomingPacket(pkt, false);
-            }
-          }
-        } catch (e) {}
-      };
-      sseSource.onerror = () => {
-        updateCloudBadgeStatus('RECONNECTING...');
-        if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
-        sseReconnectTimer = setTimeout(() => {
-          const latestCfg = getCloudConfig();
-          if (latestCfg.syncEnabled && latestCfg.topic) {
-            connectNtfySse(latestCfg.topic);
-          }
-        }, 4500);
-      };
     } catch (e) {}
   }
 
@@ -1532,6 +1627,14 @@
       const { characterId, isSpectator } = data || {};
       const c = characterId ? (db.characters || []).find((x) => Number(x.id) === Number(characterId)) : null;
       const baseUser = validUser || user;
+      const nextCharId = c ? c.id : null;
+      const nextSpectator = Boolean(isSpectator || !c);
+      const nextHunger = c ? Number(c.hunger || 1) : 0;
+      const changed =
+        !localPresenceRecord ||
+        Number(localPresenceRecord.characterId || 0) !== Number(nextCharId || 0) ||
+        Boolean(localPresenceRecord.isSpectator) !== nextSpectator ||
+        Number(localPresenceRecord.hunger || 0) !== nextHunger;
       const presence = {
         ...(sock.presence || {
           socketId: sock.id,
@@ -1540,18 +1643,20 @@
           displayName: baseUser.displayName || baseUser.username,
           role: baseUser.role || 'player',
         }),
-        isSpectator: Boolean(isSpectator || !c),
-        characterId: c ? c.id : null,
+        isSpectator: nextSpectator,
+        characterId: nextCharId,
         characterName: c ? c.name : null,
         characterClan: c ? c.clan : null,
         avatarUrl: c ? c.avatar_url : null,
-        hunger: c ? Number(c.hunger || 1) : 0,
+        hunger: nextHunger,
       };
       sock.presence = presence;
       localPresenceRecord = presence;
       activePresencesByUserId.set(Number(presence.userId), { ...presence, lastSeen: Date.now() });
       emitCombinedPresences();
-      broadcastLocalPresence(false);
+      if (changed) {
+        broadcastLocalPresence(false);
+      }
       return;
     }
 
@@ -3538,10 +3643,17 @@
 
     // 13. Dice Rolls Ledger
     if (path === '/api/rolls' && method === 'GET') {
-      const cId = Number(q.get('chronicle_id')) || defChronId;
+      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
+      const seenKeys = new Set();
       const rolls = (db.dice_rolls || [])
-        .filter((r) => Number(r.chronicle_id) === cId)
+        .filter((r) => Number(r.chronicle_id || r.campaign_id || defChronId) === cId)
         .sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
+        .filter((r) => {
+          const key = r.roll_uid || `${r.id}_${r.roller_name}_${r.created_at || r.timestamp || ''}`;
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
+        })
         .slice(0, 50);
       return jsonResponse(rolls);
     }
