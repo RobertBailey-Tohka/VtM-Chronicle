@@ -279,9 +279,16 @@ function displayCampaignOverview(chronicleRecord) {
   // Look up the header chronicle title element in the DOM by ID
   const chronicleTitleElement = document.getElementById('headerChronicleTitle');
   if (chronicleTitleElement) chronicleTitleElement.innerText = chronicleRecord.title.toUpperCase();
-  // Look up the header act label element in the DOM by ID
+  // Look up the header act label element in the DOM by ID (preserve active episode title if already loaded)
   const actLabelElement = document.getElementById('headerActLabel');
-  if (actLabelElement) actLabelElement.innerText = 'ACT 1';
+  if (actLabelElement) {
+    if (window.liveGameboardSceneState && window.liveGameboardSceneState.active_episode_title) {
+      const arcLabel = (window.liveGameboardSceneState.active_arc_title || 'ACT 1').toUpperCase();
+      actLabelElement.innerText = `${arcLabel}: ${window.liveGameboardSceneState.active_episode_title.toUpperCase()}`;
+    } else if (!actLabelElement.innerText || actLabelElement.innerText.trim() === '' || actLabelElement.innerText.trim() === 'ACT 1') {
+      actLabelElement.innerText = 'ACT 1';
+    }
+  }
   // Look up the header chronicle metadata element in the DOM by ID
   const chronicleMetaElement = document.getElementById('headerChronicleMeta');
   if (chronicleMetaElement) chronicleMetaElement.innerText = `${chronicleRecord.setting_city} • ${chronicleRecord.setting_year} • Vampire: The Masquerade V5`;
@@ -353,22 +360,50 @@ async function saveEpisodeOrder() {
     }
 }
 
+function updatePushEpisodeHeaderBtn() {
+  const pushBtn = document.querySelector('.episode-details-pane button[onclick*="pushEpisodeToGameboard"]');
+  if (!pushBtn) return;
+  const isLive = Boolean(activeEpisodeId && window.liveGameboardEpisodeId && Number(activeEpisodeId) === Number(window.liveGameboardEpisodeId));
+  if (isLive) {
+    pushBtn.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> Active on Gameboard (Re-Push)';
+    pushBtn.style.background = 'linear-gradient(135deg, #059669, #10b981)';
+    pushBtn.style.borderColor = '#34d399';
+    pushBtn.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.45)';
+  } else {
+    pushBtn.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> Push to Gameboard (Set Active)';
+    pushBtn.style.background = '';
+    pushBtn.style.borderColor = '';
+    pushBtn.style.boxShadow = '';
+  }
+}
+
 function renderEpisodesList(episodeRecordsList) {
   // Look up the episode cards list container in the DOM by ID
   const episodeCardsListElement = document.getElementById('episodeCardsList');
+  if (!episodeCardsListElement) return;
   episodeCardsListElement.innerHTML = '';
   episodeRecordsList.forEach((episodeRecord, episodeIndex) => {
+    const isSelected = Number(episodeRecord.id) === Number(activeEpisodeId);
+    const isLiveOnBoard = Boolean(window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
     // Create a new <div> element in memory to represent the episode card
     const episodeCardElement = document.createElement('div');
-    episodeCardElement.className = `episode-card-item ${episodeRecord.id === activeEpisodeId ? 'active' : ''}`;
+    episodeCardElement.className = `episode-card-item ${isSelected ? 'active' : ''}`;
+    if (isLiveOnBoard) {
+      episodeCardElement.style.borderColor = 'rgba(16, 185, 129, 0.65)';
+      episodeCardElement.style.boxShadow = 'inset 0 0 10px rgba(16, 185, 129, 0.15)';
+    }
     episodeCardElement.onclick = () => loadEpisodeDetails(episodeRecord.id);
     episodeCardElement.draggable = true;
     episodeCardElement.dataset.id = episodeRecord.id;
     episodeCardElement.innerHTML = `
             <span class="ep-num" style="cursor: grab;">Ep ${episodeRecord.episode_number}</span>
-            <div class="ep-meta" style="flex:1; cursor: pointer;">
-                <strong>${episodeRecord.title}</strong>
-                </div>
+            <div class="ep-meta" style="flex:1; cursor: pointer; display:flex; align-items:center; gap:6px; min-width:0;">
+                <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(episodeRecord.title || 'Untitled')}</strong>
+                ${isLiveOnBoard ? '<span class="ep-live-badge" style="font-size:9px; font-weight:800; padding:1px 5px; border-radius:3px; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.5); letter-spacing:0.5px; flex-shrink:0;">LIVE</span>' : ''}
+            </div>
+            <button class="btn-push-ep-card btn-action-outline btn-sm" onclick="event.stopPropagation(); pushEpisodeToGameboard(${episodeRecord.id})" style="padding:2px 6px; border:none; background:transparent; color:${isLiveOnBoard ? '#10b981' : '#f59e0b'};" title="${isLiveOnBoard ? 'Currently Active on Gameboard (Click to Re-Push)' : 'Push Episode to Gameboard'}">
+                <i class="fa-solid fa-satellite-dish"></i>
+            </button>
             <button class="btn-reveal-toggle btn-action-outline btn-sm" onclick="event.stopPropagation(); toggleEpisodeReveal(${episodeRecord.id}, ${!episodeRecord.revealed})" style="padding:2px 6px; border:none; background:transparent; color:${episodeRecord.revealed ? '#10b981' : '#6b7280'};" title="${episodeRecord.revealed ? 'Currently Revealed to Players. Click to Hide.' : 'Currently Hidden. Click to Reveal.'}">
                 <i class="fa-solid ${episodeRecord.revealed ? 'fa-eye' : 'fa-eye-slash'}"></i>
             </button>
@@ -481,8 +516,11 @@ function renderEpisodesList(episodeRecordsList) {
 
 async function loadEpisodeDetails(episodeId) {
   activeEpisodeId = episodeId;
-  // Query all episode card items in the DOM and remove the 'active' highlight class
-  document.querySelectorAll('.episode-card-item').forEach(episodeCardElement => episodeCardElement.classList.remove('active'));
+  // Query all episode card items in the DOM and toggle the 'active' highlight class on the selected episode
+  document.querySelectorAll('.episode-card-item').forEach(episodeCardElement => {
+    episodeCardElement.classList.toggle('active', Number(episodeCardElement.dataset.id) === Number(episodeId));
+  });
+  updatePushEpisodeHeaderBtn();
   try {
     // Perform an authenticated HTTP GET request to fetch the full details of the selected episode
     const fetchResponse = await authFetch(`/api/episodes/${episodeId}`);
@@ -1413,9 +1451,11 @@ async function renderChronicleTimelineEpisodes() {
     
     const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
     let timelineSidebarHtml = '';
+    const sortedEpisodes = episodeRecordsList.slice().sort((firstEpisode, secondEpisode) => firstEpisode.episode_number - secondEpisode.episode_number);
     
-    episodeRecordsList.sort((firstEpisode, secondEpisode) => firstEpisode.episode_number - secondEpisode.episode_number).forEach(episodeRecord => {
-      const isRevealed = Boolean(episodeRecord.revealed);
+    sortedEpisodes.forEach(episodeRecord => {
+      const isRevealed = Boolean(episodeRecord.revealed) || (window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
+      const isLiveEp = Boolean(window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
       
       if (!isRevealed && !isStoryteller) {
           // Locked episode for players
@@ -1430,17 +1470,27 @@ async function renderChronicleTimelineEpisodes() {
       } else {
           // Revealed episode or GM view
           const isHiddenBadge = (!isRevealed && isStoryteller) ? '<i class="fa-solid fa-eye-slash" style="color:#ef4444; margin-left:4px;" title="Hidden from players"></i>' : '';
+          const liveBadge = isLiveEp ? '<span style="font-size:8px; padding:1px 4px; border-radius:3px; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.5); margin-left:4px;">LIVE</span>' : '';
           
           timelineSidebarHtml += `
-            <div style="position: relative; cursor: pointer; transition: all 0.2s;" class="timeline-ep-item" onclick="loadTimelineEpisodeDetail(${episodeRecord.id}, this)" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='none'">
-                <div class="timeline-dot" style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; transition: all 0.2s;"></div>
-                <div style="font-size: 10px; color: #9ca3af; font-weight: bold;" class="timeline-ep-num">Ep ${episodeRecord.episode_number} ${isHiddenBadge}</div>
+            <div style="position: relative; cursor: pointer; transition: all 0.2s;" class="timeline-ep-item" data-ep-id="${episodeRecord.id}" onclick="loadTimelineEpisodeDetail(${episodeRecord.id}, this)" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='none'">
+                <div class="timeline-dot" style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: ${isLiveEp ? '#10b981' : '#9ca3af'}; transition: all 0.2s;"></div>
+                <div style="font-size: 10px; color: #9ca3af; font-weight: bold;" class="timeline-ep-num">Ep ${episodeRecord.episode_number} ${isHiddenBadge}${liveBadge}</div>
                 <div style="font-size: 12px; color: #d1d5db; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" class="timeline-ep-title">${escapeHtml(episodeRecord.title)}</div>
             </div>
           `;
       }
     });
     timelineSidebarElement.innerHTML = timelineSidebarHtml;
+    const targetAutoEpId = window.liveGameboardEpisodeId || (sortedEpisodes.find(e => e.revealed) || sortedEpisodes[0])?.id;
+    const timelineContentEl = document.getElementById('storyTimelineContent');
+    if (targetAutoEpId && timelineContentEl && (timelineContentEl.innerText.includes('Select an episode') || window.lastTimelineLoadedEpId === Number(targetAutoEpId))) {
+      const itemEl = timelineSidebarElement.querySelector(`.timeline-ep-item[data-ep-id="${targetAutoEpId}"]`);
+      if (itemEl) {
+        window.lastTimelineLoadedEpId = Number(targetAutoEpId);
+        loadTimelineEpisodeDetail(targetAutoEpId, itemEl);
+      }
+    }
   } catch (errorObject) {
     // Log any error loading story timeline episodes to the developer console
     console.error('Failed to load story episodes:', errorObject);
@@ -1876,48 +1926,150 @@ function syncWorkshopToOmni(workshopFieldId, updatedFieldValue) {
 }
 
 
-window.pushEpisodeToGameboard = function() {
-  if (!activeChronicleId || !activeEpisodeId) return;
-  
-  let primaryEpisodeMapUrl = null;
-  if (currentEpisodeData && currentEpisodeData.maps && currentEpisodeData.maps.length > 0) {
-      primaryEpisodeMapUrl = typeof currentEpisodeData.maps[0] === 'string' ? currentEpisodeData.maps[0] : currentEpisodeData.maps[0].url;
+window.pushEpisodeToGameboard = async function(targetEpisodeId = null) {
+  const epId = targetEpisodeId || activeEpisodeId;
+  if (!activeChronicleId || !epId) {
+    if (typeof vtmAlert === 'function') vtmAlert('Please select an episode first.', 'Notice');
+    else alert('Please select an episode first.');
+    return;
   }
-  
-  // Perform an authenticated HTTP POST request to set the active episode on the live gameboard scene
-  authFetch('/api/gameboard/scene', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    // Serialize the chronicle ID and active episode ID into a JSON payload
-    body: JSON.stringify({
-      chronicle_id: activeChronicleId,
-      active_episode_id: activeEpisodeId
-    })
-  }).then(fetchResponse => fetchResponse.json()).then(responsePayload => {
-    if (responsePayload.success) {
-      
-      const completeEpisodePush = () => {
-          // Display a native browser alert confirming the episode is now active and revealed
-          alert('Episode set as Active! It is now revealed to players.');
-          if (typeof checkGameState === 'function') checkGameState();
-          toggleEpisodeReveal(activeEpisodeId, true);
-      };
-      
-      if (primaryEpisodeMapUrl) {
-          // Perform an authenticated HTTP POST request to push the episode's primary map to the gameboard
-          authFetch('/api/gameboard/map', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              // Serialize the chronicle ID and primary map URL into a JSON payload
-              body: JSON.stringify({ chronicle_id: activeChronicleId, map_url: primaryEpisodeMapUrl })
-          }).then(() => completeEpisodePush()).catch(() => completeEpisodePush());
-      } else {
-          completeEpisodePush();
+
+  try {
+    let epRecord = (currentEpisodeData && Number(currentEpisodeData.id) === Number(epId)) ? currentEpisodeData : null;
+    const isEditingCurrentEp = Number(epId) === Number(activeEpisodeId);
+
+    if (isEditingCurrentEp && document.getElementById('epTitleInput')) {
+      const editedTitle = document.getElementById('epTitleInput')?.value.trim() || (epRecord ? epRecord.title : 'Untitled Episode');
+      const editedLocation = document.getElementById('epLocation')?.value.trim() ?? (epRecord ? epRecord.location : '');
+      const editedHook = document.getElementById('epHook')?.value.trim() ?? (epRecord ? epRecord.hook : '');
+      const editedConcepts = document.getElementById('epConcepts')?.value.trim() ?? (epRecord ? epRecord.concepts : '');
+      const editedSummary = document.getElementById('epSummary')?.value.trim() ?? (epRecord ? epRecord.fallout_notes : '');
+      const editedMaps = (currentEpisodeData && Array.isArray(currentEpisodeData.maps)) ? currentEpisodeData.maps : [];
+
+      await authFetch(`/api/episodes/${epId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editedTitle,
+          status: 'active',
+          revealed: true,
+          hook: editedHook,
+          concepts: editedConcepts,
+          fallout_notes: editedSummary,
+          location: editedLocation,
+          maps: editedMaps
+        })
+      });
+
+      if (epRecord) {
+        epRecord.title = editedTitle;
+        epRecord.location = editedLocation;
+        epRecord.hook = editedHook;
+        epRecord.concepts = editedConcepts;
+        epRecord.fallout_notes = editedSummary;
+        epRecord.revealed = 1;
+        epRecord.status = 'active';
+        epRecord.maps = editedMaps;
+      }
+    } else {
+      await authFetch(`/api/episodes/${epId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revealed: true, status: 'active' })
+      });
+    }
+
+    if (!epRecord) {
+      const epRes = await authFetch(`/api/episodes/${epId}`);
+      if (epRes.ok) epRecord = await epRes.json();
+    }
+
+    let parsedMaps = epRecord ? epRecord.maps : [];
+    while (typeof parsedMaps === 'string') {
+      try {
+        parsedMaps = JSON.parse(parsedMaps || '[]');
+      } catch (e) {
+        parsedMaps = [];
+        break;
       }
     }
-  });
+    if (!Array.isArray(parsedMaps)) parsedMaps = [];
+
+    let primaryMapObj = null;
+    let primaryEpisodeMapUrl = null;
+    if (parsedMaps.length > 0) {
+      primaryMapObj = typeof parsedMaps[0] === 'string' ? { url: parsedMaps[0], name: '', mood: '' } : parsedMaps[0];
+      primaryEpisodeMapUrl = primaryMapObj ? primaryMapObj.url : null;
+    }
+
+    const pushedLocation =
+      (epRecord && epRecord.location) ||
+      (primaryMapObj && primaryMapObj.name) ||
+      (epRecord && epRecord.title) ||
+      '';
+    const pushedMood =
+      (epRecord && epRecord.hook) ||
+      (primaryMapObj && primaryMapObj.mood) ||
+      (epRecord && epRecord.concepts) ||
+      '';
+
+    const sceneRes = await authFetch('/api/gameboard/scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chronicle_id: activeChronicleId,
+        active_episode_id: Number(epId),
+        active_location: pushedLocation,
+        active_mood_text: pushedMood,
+        active_map_url: primaryEpisodeMapUrl || undefined
+      })
+    });
+    const responsePayload = await sceneRes.json();
+
+    if (responsePayload && responsePayload.success) {
+      window.liveGameboardEpisodeId = Number(epId);
+      if (responsePayload.state) {
+        window.liveGameboardSceneState = responsePayload.state;
+      }
+
+      if (primaryEpisodeMapUrl) {
+        await authFetch('/api/gameboard/map', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chronicle_id: activeChronicleId, map_url: primaryEpisodeMapUrl })
+        }).catch(() => {});
+        if (typeof switchCityMap === 'function') switchCityMap(primaryEpisodeMapUrl);
+      }
+
+      // Sync Omni inputs immediately if present
+      const omniLocationInput = document.getElementById('omniLocation');
+      if (omniLocationInput && pushedLocation) omniLocationInput.value = pushedLocation;
+      const omniMoodInput = document.getElementById('omniMood');
+      if (omniMoodInput && pushedMood) omniMoodInput.value = pushedMood;
+
+      // Refresh Gameboard, Timeline, Clue/Lore widgets, and Workshop UI
+      if (typeof loadGameboardState === 'function') await loadGameboardState();
+      if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
+      if (typeof loadClueMatricesForWidget === 'function') loadClueMatricesForWidget();
+      if (typeof loadLoreMatricesForWidget === 'function') loadLoreMatricesForWidget();
+      if (typeof loadOmniUnrevealedClues === 'function') loadOmniUnrevealedClues();
+      if (typeof loadOmniUnrevealedLore === 'function') loadOmniUnrevealedLore();
+      if (typeof loadOmniHookAndAgendas === 'function') loadOmniHookAndAgendas();
+      if (typeof loadCampaignsList === 'function') loadCampaignsList();
+      updatePushEpisodeHeaderBtn();
+
+      const epDisplayTitle = (epRecord && epRecord.title) ? epRecord.title : `Episode #${epId}`;
+      if (typeof vtmAlert === 'function') {
+        vtmAlert(`Episode "${epDisplayTitle}" is now LIVE on the Gameboard and revealed to all players!`, 'Episode Pushed to Gameboard');
+      } else {
+        alert(`Episode "${epDisplayTitle}" is now LIVE on the Gameboard and revealed to all players!`);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to push episode to gameboard:', err);
+    if (typeof vtmAlert === 'function') vtmAlert('Failed to push episode to Gameboard.', 'Error');
+    else alert('Failed to push episode to Gameboard.');
+  }
 };
 
 window.toggleEpisodeReveal = function(episodeId, forcedRevealState = null) {

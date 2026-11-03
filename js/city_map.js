@@ -157,6 +157,15 @@ function toggleAtmosphereBanner() {
 }
 
 function applySceneState(sceneStateData) {
+  if (!sceneStateData) return;
+  const previousEpisodeId = window.liveGameboardEpisodeId;
+  window.liveGameboardSceneState = {
+    ...(window.liveGameboardSceneState || {}),
+    ...sceneStateData,
+  };
+  if (sceneStateData.active_episode_id) {
+    window.liveGameboardEpisodeId = Number(sceneStateData.active_episode_id);
+  }
   if (sceneStateData.active_scene_banner) {
     // Look up the scene banner image element in the DOM by its ID
     const bannerImageElement = document.getElementById('sceneBannerImg') || document.getElementById('sceneBanner');
@@ -166,11 +175,15 @@ function applySceneState(sceneStateData) {
     // Look up the scene location text element in the DOM by its ID
     const locationTextElement = document.getElementById('sceneLocation');
     if (locationTextElement) locationTextElement.innerText = sceneStateData.active_location;
+    const omniLoc = document.getElementById('omniLocation');
+    if (omniLoc && document.activeElement !== omniLoc) omniLoc.value = sceneStateData.active_location;
   }
   if (sceneStateData.active_mood_text) {
     // Look up the scene mood text element in the DOM by its ID
     const moodTextElement = document.getElementById('sceneMoodText');
     if (moodTextElement) moodTextElement.innerText = sceneStateData.active_mood_text;
+    const omniMood = document.getElementById('omniMood');
+    if (omniMood && document.activeElement !== omniMood) omniMood.value = sceneStateData.active_mood_text;
   }
   if (sceneStateData.active_npc_persona) {
     // Look up the GM persona display and select elements in the DOM by their IDs
@@ -178,6 +191,32 @@ function applySceneState(sceneStateData) {
     if (personaDisplayElement) personaDisplayElement.innerText = sceneStateData.active_npc_persona;
     const personaSelectElement = document.getElementById('gmPersonaSelect');
     if (personaSelectElement) personaSelectElement.value = sceneStateData.active_npc_persona;
+  }
+  if (Array.isArray(sceneStateData.active_episode_maps)) {
+    const gameboardDropdown = document.getElementById('episodeMapSelector');
+    if (gameboardDropdown) {
+      gameboardDropdown.innerHTML = '';
+      if (sceneStateData.active_episode_maps.length === 0) {
+        gameboardDropdown.innerHTML = '<option value="/images/concept_map.jpg">Default Concept Map</option>';
+      } else {
+        window.gameboardActiveEpisodeMapsCache = sceneStateData.active_episode_maps;
+        sceneStateData.active_episode_maps.forEach((mapEntry, mapIndex) => {
+          const mapObject = typeof mapEntry === 'string' ? { url: mapEntry, name: 'Map ' + (mapIndex + 1), mood: '' } : mapEntry;
+          const optionElement = document.createElement('option');
+          optionElement.value = mapObject.url;
+          let displayLabel = mapObject.name || ('Map ' + (mapIndex + 1));
+          if (mapObject.mood) displayLabel += ' • ' + mapObject.mood;
+          displayLabel += ' (' + (mapObject.url || '').split('/').pop() + ')';
+          optionElement.innerText = displayLabel;
+          gameboardDropdown.appendChild(optionElement);
+        });
+      }
+    }
+  }
+  if (sceneStateData.active_map_url) {
+    const gameboardDropdown = document.getElementById('episodeMapSelector');
+    if (gameboardDropdown) gameboardDropdown.value = sceneStateData.active_map_url;
+    switchCityMap(sceneStateData.active_map_url);
   }
   if (sceneStateData.canvas_state) {
     loadCanvasFromState(sceneStateData.canvas_state, false);
@@ -191,12 +230,19 @@ function applySceneState(sceneStateData) {
     const clockElement = document.getElementById('gameClock');
     if (clockElement) clockElement.innerText = formatGameTimeString(sceneStateData.game_time);
   }
-  if (sceneStateData.active_arc_title && sceneStateData.active_episode_title) {
+  if (sceneStateData.active_episode_title) {
     // Look up the header act label element in the DOM by its ID
     const actLabelElement = document.getElementById('headerActLabel');
     if (actLabelElement) {
-      actLabelElement.innerText = `${sceneStateData.active_arc_title.toUpperCase()}: ${sceneStateData.active_episode_title.toUpperCase()}`;
+      const arcTitle = sceneStateData.active_arc_title || `EPISODE ${sceneStateData.active_episode_number || 1}`;
+      actLabelElement.innerText = `${arcTitle.toUpperCase()}: ${sceneStateData.active_episode_title.toUpperCase()}`;
     }
+  }
+  if (sceneStateData.active_episode_id && Number(sceneStateData.active_episode_id) !== Number(previousEpisodeId)) {
+    if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
+    if (typeof loadClueMatricesForWidget === 'function') loadClueMatricesForWidget();
+    if (typeof loadLoreMatricesForWidget === 'function') loadLoreMatricesForWidget();
+    if (typeof updatePushEpisodeHeaderBtn === 'function') updatePushEpisodeHeaderBtn();
   }
 }
 
@@ -881,10 +927,18 @@ window.pushMapToPlayers = function() {
     
     const targetMapUrl = mapSelectorElement.value;
     canvasState.backdrop = targetMapUrl;
+    switchCityMap(targetMapUrl);
     
     if (typeof saveCanvasStateImmediate === 'function') {
         saveCanvasStateImmediate();
         console.log('[GM] Pushed map to players:', targetMapUrl);
+    }
+    if (activeChronicleId && targetMapUrl) {
+        authFetch('/api/gameboard/map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chronicle_id: activeChronicleId, map_url: targetMapUrl })
+        }).catch(() => {});
     }
     
     // Auto-push the associated Scene Location and Scene Mood for this map
@@ -900,21 +954,19 @@ window.pushMapToPlayers = function() {
             
             // Sync to Omni-Drawer inputs in the DOM just in case they open it
             const omniLocationInput = document.getElementById('omniLocation');
-            if (omniLocationInput) omniLocationInput.value = locationName;
+            if (omniLocationInput && locationName) omniLocationInput.value = locationName;
             const omniMoodInput = document.getElementById('omniMood');
-            if (omniMoodInput) omniMoodInput.value = locationMood;
+            if (omniMoodInput && locationMood) omniMoodInput.value = locationMood;
             
-            // Push via API
-            if (activeChronicleId) {
-                // Perform an authenticated HTTP POST request to update the active scene location and mood on the gameboard
+            // Push via API only when non-empty so we don't wipe the episode's primary location/hook
+            if (activeChronicleId && (locationName || locationMood)) {
+                const payload = { chronicle_id: activeChronicleId };
+                if (locationName) payload.active_location = locationName;
+                if (locationMood) payload.active_mood_text = locationMood;
                 authFetch('/api/gameboard/scene', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chronicle_id: activeChronicleId,
-                        active_location: locationName,
-                        active_mood_text: locationMood
-                    })
+                    body: JSON.stringify(payload)
                 }).then(() => console.log('[GM] Auto-pushed scene atmosphere linked to map.')).catch(errorObject => console.error(errorObject));
             }
         }

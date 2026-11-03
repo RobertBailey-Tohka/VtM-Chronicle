@@ -96,6 +96,12 @@ socket.on('dice:secret_rolled', secretRollData => {
 socket.on('gameboard:scene_updated', sceneState => {
   applySceneState(sceneState);
 });
+// Listen for episode updates broadcast by the server via Socket.IO
+socket.on('episode:updated', updatedEpisode => {
+  if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
+  if (typeof loadClueMatricesForWidget === 'function') loadClueMatricesForWidget();
+  if (typeof loadLoreMatricesForWidget === 'function') loadLoreMatricesForWidget();
+});
 // Listen for relationship map updates broadcast by the server via Socket.IO
 socket.on('gameboard:relationship_map_updated', relationshipMapData => {
   if (activeChronicleId && (String(relationshipMapData.chronicle_id) === String(activeChronicleId)) && relationshipMapData.map_state && typeof loadRmapState === 'function') {
@@ -853,7 +859,11 @@ function enterChronicle(campaignId, role, targetTab = 'gameboard') {
       const sessionTitleElement = document.getElementById('headerSessionTitle');
       if (sessionTitleElement) sessionTitleElement.innerText = chronicleRecord.title.toUpperCase();
       const actLabelElement = document.getElementById('headerActLabel');
-      if (actLabelElement) actLabelElement.innerText = 'ACT 1';
+      if (actLabelElement && (!window.liveGameboardSceneState || !window.liveGameboardSceneState.active_episode_title)) {
+        if (!actLabelElement.innerText || actLabelElement.innerText.trim() === '' || actLabelElement.innerText.trim() === 'ACT 1') {
+          actLabelElement.innerText = 'ACT 1';
+        }
+      }
     }
   }).catch(errorObject => console.error(errorObject));
   loadGameboardState();

@@ -554,6 +554,84 @@
     });
   }
 
+  function parseEpisodeMapsArray(mapsField) {
+    let parsed = mapsField;
+    while (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed || '[]');
+      } catch (e) {
+        parsed = [];
+        break;
+      }
+    }
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  function enrichGameboardSceneState(gs) {
+    if (!gs) return null;
+    const boardCopy = { ...gs };
+    if (boardCopy.active_episode_id && db && Array.isArray(db.episodes)) {
+      const ep = db.episodes.find((e) => Number(e.id) === Number(boardCopy.active_episode_id));
+      if (ep) {
+        const camp = (db.campaigns || []).find((c) => Number(c.id) === Number(ep.campaign_id));
+        boardCopy.active_episode_title = ep.title;
+        boardCopy.active_episode_number = ep.episode_number;
+        boardCopy.active_arc_title = camp ? camp.title : 'Main Campaign';
+        boardCopy.active_episode_maps = parseEpisodeMapsArray(ep.maps);
+      }
+    }
+    return boardCopy;
+  }
+
+  function broadcastSceneSyncPacket(gs, epRecord = null) {
+    if (!gs) return;
+    const enriched = enrichGameboardSceneState(gs);
+    const ep =
+      epRecord ||
+      (enriched.active_episode_id && db && Array.isArray(db.episodes)
+        ? db.episodes.find((e) => Number(e.id) === Number(enriched.active_episode_id))
+        : null);
+    const epMaps = ep ? parseEpisodeMapsArray(ep.maps) : enriched.active_episode_maps || [];
+    sendRawNtfyPacket({
+      senderId: CLIENT_ID,
+      ts: Date.now(),
+      type: 'scene_sync',
+      chronicle_id: enriched.chronicle_id || defaultChronicleId(),
+      scene: {
+        id: enriched.id,
+        chronicle_id: enriched.chronicle_id,
+        active_episode_id: enriched.active_episode_id,
+        active_episode_title: enriched.active_episode_title || (ep ? ep.title : ''),
+        active_episode_number: enriched.active_episode_number || (ep ? ep.episode_number : 1),
+        active_arc_title: enriched.active_arc_title || 'Main Campaign',
+        active_episode_maps: epMaps,
+        active_location: enriched.active_location || '',
+        active_mood_text: enriched.active_mood_text || '',
+        active_map_url: enriched.active_map_url || '',
+        active_scene_banner: enriched.active_scene_banner || '',
+        active_npc_persona: enriched.active_npc_persona || '',
+        active_npc_avatar: enriched.active_npc_avatar || '',
+        game_time: enriched.game_time || '',
+      },
+      episode: ep
+        ? {
+            id: ep.id,
+            chronicle_id: ep.chronicle_id,
+            campaign_id: ep.campaign_id,
+            episode_number: ep.episode_number,
+            title: ep.title,
+            location: ep.location || '',
+            hook: String(ep.hook || '').slice(0, 700),
+            fallout_notes: String(ep.fallout_notes || '').slice(0, 700),
+            concepts: String(ep.concepts || '').slice(0, 400),
+            revealed: ep.revealed ? 1 : 0,
+            status: ep.status || 'active',
+            maps: JSON.stringify(epMaps),
+          }
+        : null,
+    });
+  }
+
   function broadcastStorytellerAuthoritativeState() {
     if (!db || !Array.isArray(db.characters)) return;
     const authUser = extractValidAuthUser();
@@ -581,12 +659,77 @@
       type: 'st_authoritative_sync',
       characters: compactChars,
     });
+    const gs =
+      (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId()) ||
+      (db.gameboard_state || [])[0];
+    if (gs) {
+      broadcastSceneSyncPacket(gs);
+    }
   }
 
   function applyIncomingPacket(pkt, isReplay = false) {
     if (!pkt) return;
     if (!isReplay && pkt.senderId === CLIENT_ID) return;
     if (pkt.pktId && markRealtimeIdProcessed(pkt.pktId)) return;
+
+    if (pkt.type === 'scene_sync' && pkt.scene) {
+      if (db) {
+        if (pkt.episode && pkt.episode.id !== undefined) {
+          db.episodes = db.episodes || [];
+          const epIdx = db.episodes.findIndex((e) => Number(e.id) === Number(pkt.episode.id));
+          if (epIdx >= 0) {
+            db.episodes[epIdx] = { ...db.episodes[epIdx], ...pkt.episode };
+          } else {
+            db.episodes.push(pkt.episode);
+          }
+        }
+        db.gameboard_state = db.gameboard_state || [];
+        const targetChronId = Number(pkt.chronicle_id || pkt.scene.chronicle_id) || defaultChronicleId();
+        let gs =
+          db.gameboard_state.find((g) => Number(g.chronicle_id) === targetChronId) || db.gameboard_state[0];
+        if (!gs) {
+          gs = { id: 1, chronicle_id: targetChronId };
+          db.gameboard_state.push(gs);
+        }
+        if (pkt.scene.active_episode_id !== undefined && pkt.scene.active_episode_id !== null)
+          gs.active_episode_id = pkt.scene.active_episode_id;
+        if (pkt.scene.active_location !== undefined && pkt.scene.active_location !== '')
+          gs.active_location = pkt.scene.active_location;
+        if (pkt.scene.active_mood_text !== undefined && pkt.scene.active_mood_text !== '')
+          gs.active_mood_text = pkt.scene.active_mood_text;
+        if (pkt.scene.active_scene_banner) gs.active_scene_banner = pkt.scene.active_scene_banner;
+        if (pkt.scene.active_npc_persona) gs.active_npc_persona = pkt.scene.active_npc_persona;
+        if (pkt.scene.active_npc_avatar) gs.active_npc_avatar = pkt.scene.active_npc_avatar;
+        if (pkt.scene.game_time) gs.game_time = pkt.scene.game_time;
+        if (pkt.scene.active_map_url) {
+          gs.active_map_url = pkt.scene.active_map_url;
+          let cs = {};
+          try {
+            cs = typeof gs.canvas_state === 'string' ? JSON.parse(gs.canvas_state || '{}') : gs.canvas_state || {};
+          } catch (e) {}
+          cs.backdrop = pkt.scene.active_map_url;
+          gs.canvas_state = JSON.stringify(cs);
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+        const enriched = {
+          ...enrichGameboardSceneState(gs),
+          ...pkt.scene,
+        };
+        emitToLocalSockets('gameboard:scene_updated', enriched);
+        if (pkt.scene.active_map_url) {
+          emitToLocalSockets('gameboard:map_updated', {
+            chronicle_id: targetChronId,
+            active_map_url: pkt.scene.active_map_url,
+          });
+        }
+        if (pkt.episode) {
+          emitToLocalSockets('episode:updated', pkt.episode);
+        }
+      }
+      return;
+    }
 
     if (pkt.type === 'dice_roll' && pkt.roll) {
       const roll = pkt.roll;
@@ -1264,8 +1407,9 @@
       if (data.episode_id !== undefined && data.episode_id !== null) gs.active_episode_id = data.episode_id;
       gs.updated_at = new Date().toISOString();
       persistDb();
-      emitToLocalSockets('gameboard:scene_updated', gs);
-      publishRealtimeEvent('gameboard:scene_updated', gs, { table: 'gameboard_state', row: gs });
+      const enrichedGs = enrichGameboardSceneState(gs);
+      emitToLocalSockets('gameboard:scene_updated', enrichedGs);
+      broadcastSceneSyncPacket(enrichedGs);
       return;
     }
 
@@ -1600,21 +1744,7 @@
         (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === chronicleId) ||
         (db.gameboard_state || [])[0] ||
         null;
-      let boardCopy = gs ? { ...gs } : null;
-      if (boardCopy && boardCopy.active_episode_id) {
-        const ep = (db.episodes || []).find((e) => Number(e.id) === Number(boardCopy.active_episode_id));
-        if (ep) {
-          const camp = (db.campaigns || []).find((c) => Number(c.id) === Number(ep.campaign_id));
-          boardCopy.active_episode_title = ep.title;
-          boardCopy.active_arc_title = camp ? camp.title : 'Main Campaign';
-          try {
-            boardCopy.active_episode_maps =
-              typeof ep.maps === 'string' ? JSON.parse(ep.maps || '[]') : ep.maps || [];
-          } catch (e) {
-            boardCopy.active_episode_maps = [];
-          }
-        }
-      }
+      let boardCopy = enrichGameboardSceneState(gs);
 
       const matricesById = new Map((db.clue_matrices || []).map((m) => [Number(m.id), m]));
       const discoveredClues = (db.clues || [])
@@ -1663,16 +1793,16 @@
         cs.backdrop = mapUrl;
         gs.canvas_state = JSON.stringify(cs);
         persistDb();
+        emitToLocalSockets('gameboard:map_updated', {
+          chronicle_id: targetChronicleId,
+          active_map_url: mapUrl,
+        });
         emitToLocalSockets('gameboard:canvas_updated', {
           chronicle_id: targetChronicleId,
           campaign_id: targetChronicleId,
           canvas_state: cs,
         });
-        publishRealtimeEvent(
-          'gameboard:canvas_updated',
-          { chronicle_id: targetChronicleId, campaign_id: targetChronicleId, canvas_state: cs },
-          { table: 'gameboard_state', row: gs }
-        );
+        broadcastSceneSyncPacket(gs);
       }
       return jsonResponse({ success: true, map_url: mapUrl });
     }
@@ -1680,6 +1810,7 @@
     if (path === '/api/gameboard/scene' && method === 'POST') {
       const targetChronicleId = Number(body.chronicle_id) || defChronId;
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
+      let targetEp = null;
       if (gs) {
         if (body.active_scene_banner !== undefined && body.active_scene_banner !== null)
           gs.active_scene_banner = stripBasePathFromUrl(body.active_scene_banner);
@@ -1689,13 +1820,64 @@
         if (body.active_npc_avatar !== undefined && body.active_npc_avatar !== null)
           gs.active_npc_avatar = stripBasePathFromUrl(body.active_npc_avatar);
         if (body.active_mood_text !== undefined && body.active_mood_text !== null) gs.active_mood_text = body.active_mood_text;
-        if (body.active_episode_id !== undefined && body.active_episode_id !== null)
-          gs.active_episode_id = body.active_episode_id;
+        if (body.active_episode_id !== undefined && body.active_episode_id !== null) {
+          gs.active_episode_id = Number(body.active_episode_id);
+          targetEp = (db.episodes || []).find((e) => Number(e.id) === Number(body.active_episode_id)) || null;
+          if (targetEp) {
+            targetEp.revealed = 1;
+            if (!targetEp.status || targetEp.status === 'planned' || targetEp.status === 'planning') {
+              targetEp.status = 'active';
+            }
+            const epMaps = parseEpisodeMapsArray(targetEp.maps);
+            const firstMapObj =
+              epMaps.length > 0 ? (typeof epMaps[0] === 'string' ? { url: epMaps[0] } : epMaps[0]) : null;
+            if (!body.active_location) {
+              gs.active_location =
+                targetEp.location || (firstMapObj && firstMapObj.name) || targetEp.title || gs.active_location || '';
+            }
+            if (!body.active_mood_text) {
+              gs.active_mood_text =
+                targetEp.hook || (firstMapObj && firstMapObj.mood) || targetEp.concepts || gs.active_mood_text || '';
+            }
+            const pushedMapUrl = body.active_map_url || (firstMapObj && firstMapObj.url) || null;
+            if (pushedMapUrl) {
+              const cleanedMapUrl = stripBasePathFromUrl(pushedMapUrl);
+              gs.active_map_url = cleanedMapUrl;
+              let cs = {};
+              try {
+                cs = typeof gs.canvas_state === 'string' ? JSON.parse(gs.canvas_state || '{}') : gs.canvas_state || {};
+              } catch (e) {}
+              cs.backdrop = cleanedMapUrl;
+              gs.canvas_state = JSON.stringify(cs);
+            }
+          }
+        }
+        if (body.active_map_url && !targetEp) {
+          const cleanedMapUrl = stripBasePathFromUrl(body.active_map_url);
+          gs.active_map_url = cleanedMapUrl;
+          let cs = {};
+          try {
+            cs = typeof gs.canvas_state === 'string' ? JSON.parse(gs.canvas_state || '{}') : gs.canvas_state || {};
+          } catch (e) {}
+          cs.backdrop = cleanedMapUrl;
+          gs.canvas_state = JSON.stringify(cs);
+        }
         if (body.game_time !== undefined && body.game_time !== null) gs.game_time = body.game_time;
         gs.updated_at = new Date().toISOString();
         persistDb();
-        emitToLocalSockets('gameboard:scene_updated', gs);
-        publishRealtimeEvent('gameboard:scene_updated', gs, { table: 'gameboard_state', row: gs });
+        const enrichedGs = enrichGameboardSceneState(gs);
+        emitToLocalSockets('gameboard:scene_updated', enrichedGs);
+        if (enrichedGs.active_map_url) {
+          emitToLocalSockets('gameboard:map_updated', {
+            chronicle_id: targetChronicleId,
+            active_map_url: enrichedGs.active_map_url,
+          });
+        }
+        if (targetEp) {
+          emitToLocalSockets('episode:updated', targetEp);
+        }
+        broadcastSceneSyncPacket(enrichedGs, targetEp);
+        return jsonResponse({ success: true, state: enrichedGs });
       }
       return jsonResponse({ success: true, state: gs });
     }
@@ -2274,6 +2456,20 @@
         if (body.status !== undefined) ep.status = body.status;
         if (body.fallout_notes !== undefined) ep.fallout_notes = body.fallout_notes;
         persistDb({ table: 'episodes', row: ep });
+        emitToLocalSockets('episode:updated', ep);
+        const gs =
+          (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === Number(ep.chronicle_id || defChronId)) ||
+          (db.gameboard_state || [])[0];
+        if (gs && Number(gs.active_episode_id) === Number(ep.id)) {
+          if (body.location !== undefined && body.location) gs.active_location = body.location;
+          if (body.hook !== undefined && body.hook) gs.active_mood_text = body.hook;
+          persistDb();
+          const enrichedGs = enrichGameboardSceneState(gs);
+          emitToLocalSockets('gameboard:scene_updated', enrichedGs);
+          broadcastSceneSyncPacket(enrichedGs, ep);
+        } else if (gs) {
+          broadcastSceneSyncPacket(gs, ep);
+        }
         return jsonResponse({ success: true });
       }
     }
