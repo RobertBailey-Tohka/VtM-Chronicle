@@ -981,43 +981,51 @@ window.pushMapToPlayers = function() {
         saveCanvasStateImmediate();
         console.log('[GM] Pushed map to players:', targetMapUrl);
     }
+
+    // Determine the authoritative Scene Location and Scene Mood to push alongside the map
+    let currentDomLocation = document.getElementById('sceneLocation')?.innerText?.trim() || '';
+    let currentDomMood = document.getElementById('sceneMoodText')?.innerText?.trim() || '';
+    if (currentDomLocation === 'Blood On Highway 31W') currentDomLocation = '';
+
+    let episodeMapsArray = [];
+    if (Array.isArray(window.gameboardActiveEpisodeMapsCache) && window.gameboardActiveEpisodeMapsCache.length > 0) {
+        episodeMapsArray = window.gameboardActiveEpisodeMapsCache;
+    } else if (currentEpisodeData && Array.isArray(currentEpisodeData.maps)) {
+        episodeMapsArray = currentEpisodeData.maps;
+    }
+
+    let resolvedLocation = currentDomLocation || (window.liveGameboardSceneState && window.liveGameboardSceneState.active_location) || '';
+    let resolvedMood = currentDomMood || (window.liveGameboardSceneState && window.liveGameboardSceneState.active_mood_text) || '';
+
+    if (episodeMapsArray.length > 1) {
+        const targetNorm = normalizeCityMapUrl(targetMapUrl);
+        const matchingMapObject = episodeMapsArray.find(
+            mapEntry => normalizeCityMapUrl(typeof mapEntry === 'string' ? mapEntry : mapEntry.url) === targetNorm
+        );
+        if (matchingMapObject && typeof matchingMapObject === 'object') {
+            if (matchingMapObject.name) resolvedLocation = matchingMapObject.name;
+            if (matchingMapObject.mood) resolvedMood = matchingMapObject.mood;
+        }
+    }
+
+    // Sync to Omni-Drawer inputs and DOM if updated
+    const omniLocationInput = document.getElementById('omniLocation');
+    if (omniLocationInput && resolvedLocation) omniLocationInput.value = resolvedLocation;
+    const omniMoodInput = document.getElementById('omniMood');
+    if (omniMoodInput && resolvedMood) omniMoodInput.value = resolvedMood;
+
     if (activeChronicleId && targetMapUrl) {
+        const mapPayload = {
+            chronicle_id: activeChronicleId,
+            map_url: targetMapUrl
+        };
+        if (resolvedLocation) mapPayload.active_location = resolvedLocation;
+        if (resolvedMood) mapPayload.active_mood_text = resolvedMood;
         authFetch('/api/gameboard/map', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chronicle_id: activeChronicleId, map_url: targetMapUrl })
+            body: JSON.stringify(mapPayload)
         }).catch(() => {});
-    }
-    
-    // Auto-push the associated Scene Location and Scene Mood for this map
-    let episodeMapsArray = [];
-    if (currentEpisodeData && Array.isArray(currentEpisodeData.maps)) episodeMapsArray = currentEpisodeData.maps;
-    else if (window.gameboardActiveEpisodeMapsCache) episodeMapsArray = window.gameboardActiveEpisodeMapsCache;
-    
-    if (episodeMapsArray.length > 0) {
-        const matchingMapObject = episodeMapsArray.find(mapEntry => (typeof mapEntry === 'string' ? mapEntry : mapEntry.url) === targetMapUrl);
-        if (matchingMapObject && typeof matchingMapObject === 'object') {
-            const locationName = matchingMapObject.name || '';
-            const locationMood = matchingMapObject.mood || '';
-            
-            // Sync to Omni-Drawer inputs in the DOM just in case they open it
-            const omniLocationInput = document.getElementById('omniLocation');
-            if (omniLocationInput && locationName) omniLocationInput.value = locationName;
-            const omniMoodInput = document.getElementById('omniMood');
-            if (omniMoodInput && locationMood) omniMoodInput.value = locationMood;
-            
-            // Push via API only when non-empty so we don't wipe the episode's primary location/hook
-            if (activeChronicleId && (locationName || locationMood)) {
-                const payload = { chronicle_id: activeChronicleId };
-                if (locationName) payload.active_location = locationName;
-                if (locationMood) payload.active_mood_text = locationMood;
-                authFetch('/api/gameboard/scene', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }).then(() => console.log('[GM] Auto-pushed scene atmosphere linked to map.')).catch(errorObject => console.error(errorObject));
-            }
-        }
     }
 };
 

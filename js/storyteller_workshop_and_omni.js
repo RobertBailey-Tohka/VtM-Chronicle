@@ -42,7 +42,13 @@ async function loadCampaignsList() {
         activeSubCampaignId = targetCampaignRecord.id;
         renderEpisodesList(targetCampaignRecord.episodes || []);
         if (targetCampaignRecord.episodes && targetCampaignRecord.episodes.length > 0) {
-          const targetEpisodeRecord = targetCampaignRecord.episodes.find(episodeRecord => episodeRecord.id === activeEpisodeId) || targetCampaignRecord.episodes[0];
+          const preferredEpisodeId = (activeEpisodeId && activeEpisodeId !== 1)
+            ? activeEpisodeId
+            : (window.liveGameboardEpisodeId || 12);
+          const targetEpisodeRecord =
+            targetCampaignRecord.episodes.find(episodeRecord => Number(episodeRecord.id) === Number(preferredEpisodeId)) ||
+            targetCampaignRecord.episodes.find(episodeRecord => episodeRecord.status === 'active') ||
+            targetCampaignRecord.episodes[0];
           loadEpisodeDetails(targetEpisodeRecord.id);
         } else {
           // Look up the episode cards list container in the DOM and display an empty state message
@@ -2052,7 +2058,12 @@ window.pushEpisodeToGameboard = async function(targetEpisodeId = null) {
         await authFetch('/api/gameboard/map', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chronicle_id: activeChronicleId, map_url: primaryEpisodeMapUrl })
+          body: JSON.stringify({
+            chronicle_id: activeChronicleId,
+            map_url: primaryEpisodeMapUrl,
+            active_location: pushedLocation || undefined,
+            active_mood_text: pushedMood || undefined
+          })
         }).catch(() => {});
         if (typeof switchCityMap === 'function') switchCityMap(primaryEpisodeMapUrl);
       }

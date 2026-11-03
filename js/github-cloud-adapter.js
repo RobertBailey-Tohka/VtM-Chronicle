@@ -344,6 +344,37 @@
           }
         }
       }
+      // Heal legacy 1920s default scene in localStorage if present
+      if (Array.isArray(seed.episodes)) {
+        for (const ep of seed.episodes) {
+          if (Number(ep.id) >= 7 && Number(ep.id) <= 12) {
+            ep.revealed = 1;
+          }
+        }
+      }
+      if (Array.isArray(seed.gameboard_state) && seed.gameboard_state[0]) {
+        const gs0 = seed.gameboard_state[0];
+        if (
+          !gs0._syncTs &&
+          (gs0.active_location === 'Louisville circa 1920' ||
+            gs0.active_mood_text === 'Somewhere underground...' ||
+            Number(gs0.active_episode_id) === 7)
+        ) {
+          const ep12 = Array.isArray(seed.episodes) ? seed.episodes.find((e) => Number(e.id) === 12) : null;
+          gs0.active_episode_id = 12;
+          gs0.active_location = (ep12 && ep12.location) || '1950s Louisville Industrial Docks';
+          gs0.active_mood_text =
+            (ep12 && ep12.hook) ||
+            'Forced to repay their debt to the Anarch warlord Baroness "Jax", the coterie is ordered to investigate a heavily guarded Camarilla smuggling front at the 1950s Louisville industrial docks.';
+          gs0.active_map_url = '/uploads/1791828207401_9fdc032a_Louisville_1940.png';
+          let cs = {};
+          try {
+            cs = typeof gs0.canvas_state === 'string' ? JSON.parse(gs0.canvas_state || '{}') : gs0.canvas_state || {};
+          } catch (e) {}
+          cs.backdrop = gs0.active_map_url;
+          gs0.canvas_state = JSON.stringify(cs);
+        }
+      }
       db = seed;
 
       // Clear any legacy auto-injected token (.vtm_cloud_sig) so visitors are not auto-logged in as Storyteller
@@ -663,8 +694,15 @@
     });
   }
 
+  let lastSceneSyncTs = 0;
+  let lastPinsSyncTs = 0;
+  let lastStAuthSyncTs = 0;
+
   function broadcastSceneSyncPacket(gs, epRecord = null) {
     if (!gs) return;
+    const nowTs = Date.now();
+    gs._syncTs = nowTs;
+    lastSceneSyncTs = Math.max(lastSceneSyncTs, nowTs);
     const enriched = enrichGameboardSceneState(gs);
     const targetChronId = Number(enriched.chronicle_id) || defaultChronicleId();
     const ep =
@@ -673,13 +711,9 @@
         ? db.episodes.find((e) => Number(e.id) === Number(enriched.active_episode_id))
         : null);
     const epMaps = ep ? parseEpisodeMapsArray(ep.maps) : enriched.active_episode_maps || [];
-    const pins =
-      db && Array.isArray(db.gameboard_pins)
-        ? db.gameboard_pins.filter((p) => Number(p.chronicle_id) === targetChronId)
-        : [];
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
-      ts: Date.now(),
+      ts: nowTs,
       type: 'scene_sync',
       chronicle_id: targetChronId,
       scene: {
@@ -699,8 +733,6 @@
         game_time: enriched.game_time || '',
       },
       canvas_state: enriched.canvas_state || null,
-      relationship_map_state: enriched.relationship_map_state || null,
-      pins,
       episode: ep
         ? {
             id: ep.id,
@@ -709,9 +741,9 @@
             episode_number: ep.episode_number,
             title: ep.title,
             location: ep.location || '',
-            hook: String(ep.hook || '').slice(0, 700),
-            fallout_notes: String(ep.fallout_notes || '').slice(0, 700),
-            concepts: String(ep.concepts || '').slice(0, 400),
+            hook: String(ep.hook || '').slice(0, 350),
+            fallout_notes: String(ep.fallout_notes || '').slice(0, 350),
+            concepts: String(ep.concepts || '').slice(0, 250),
             revealed: ep.revealed ? 1 : 0,
             status: ep.status || 'active',
             maps: JSON.stringify(epMaps),
@@ -770,6 +802,7 @@
     if (gs) {
       broadcastSceneSyncPacket(gs);
     }
+    broadcastPinsSyncPacket(defaultChronicleId());
     const recentRolls = (db.dice_rolls || []).slice(-12);
     const recentChat = (db.chat_messages || []).slice(-12);
     if (recentRolls.length > 0 || recentChat.length > 0) {
@@ -799,22 +832,24 @@
     return true;
   }
 
-  function applyIncomingPacket(pkt, isReplay = false) {
+  async function applyIncomingPacket(pkt, isReplay = false) {
     if (!pkt) return;
     if (!isReplay && pkt.senderId === CLIENT_ID) return;
     const dedupKey = pkt.pktUid || pkt.pktId;
     if (dedupKey && markRealtimeIdProcessed(dedupKey)) return;
 
     if (pkt.type === 'overflow_pkt' && pkt.key) {
-      nativeFetch(`https://bytebin.lucko.me/${encodeURIComponent(pkt.key)}`)
-        .then((res) => (res && res.ok ? res.json() : null))
-        .then((unpacked) => {
+      try {
+        const res = await nativeFetch(`https://bytebin.lucko.me/${encodeURIComponent(pkt.key)}`);
+        if (res && res.ok) {
+          const unpacked = await res.json();
           if (unpacked && typeof unpacked === 'object' && unpacked.type !== 'overflow_pkt') {
             if (dedupKey && !unpacked.pktUid) unpacked.pktId = `${dedupKey}_unpacked`;
-            applyIncomingPacket(unpacked, isReplay);
+            if (pkt.ts && !unpacked.ts) unpacked.ts = pkt.ts;
+            await applyIncomingPacket(unpacked, isReplay);
           }
-        })
-        .catch(() => {});
+        }
+      } catch (e) {}
       return;
     }
 
@@ -852,6 +887,9 @@
     }
 
     if (pkt.type === 'pins_sync' && Array.isArray(pkt.pins) && db) {
+      const pktTs = Number(pkt.ts) || 0;
+      if (pktTs > 0 && lastPinsSyncTs > 0 && pktTs < lastPinsSyncTs) return;
+      if (pktTs > 0) lastPinsSyncTs = Math.max(lastPinsSyncTs, pktTs);
       const targetChronId = Number(pkt.chronicle_id) || defaultChronicleId();
       db.gameboard_pins = (db.gameboard_pins || [])
         .filter((p) => Number(p.chronicle_id) !== targetChronId)
@@ -867,6 +905,24 @@
 
     if (pkt.type === 'scene_sync' && pkt.scene) {
       if (db) {
+        db.gameboard_state = db.gameboard_state || [];
+        const targetChronId = Number(pkt.chronicle_id || pkt.scene.chronicle_id) || defaultChronicleId();
+        let gs =
+          db.gameboard_state.find((g) => Number(g.chronicle_id) === targetChronId) || db.gameboard_state[0];
+        if (!gs) {
+          gs = { id: 1, chronicle_id: targetChronId };
+          db.gameboard_state.push(gs);
+        }
+        const pktTs = Number(pkt.ts) || 0;
+        const currentGsTs = Math.max(Number(gs._syncTs) || 0, lastSceneSyncTs);
+        // Never allow an older scene_sync packet to overwrite a newer scene state
+        if (pktTs > 0 && currentGsTs > 0 && pktTs < currentGsTs) {
+          return;
+        }
+        if (pktTs > 0) {
+          gs._syncTs = pktTs;
+          lastSceneSyncTs = Math.max(lastSceneSyncTs, pktTs);
+        }
         if (pkt.episode && pkt.episode.id !== undefined) {
           db.episodes = db.episodes || [];
           const epIdx = db.episodes.findIndex((e) => Number(e.id) === Number(pkt.episode.id));
@@ -875,14 +931,6 @@
           } else {
             db.episodes.push(pkt.episode);
           }
-        }
-        db.gameboard_state = db.gameboard_state || [];
-        const targetChronId = Number(pkt.chronicle_id || pkt.scene.chronicle_id) || defaultChronicleId();
-        let gs =
-          db.gameboard_state.find((g) => Number(g.chronicle_id) === targetChronId) || db.gameboard_state[0];
-        if (!gs) {
-          gs = { id: 1, chronicle_id: targetChronId };
-          db.gameboard_state.push(gs);
         }
         if (pkt.scene.active_episode_id !== undefined && pkt.scene.active_episode_id !== null)
           gs.active_episode_id = pkt.scene.active_episode_id;
@@ -1027,6 +1075,9 @@
     }
 
     if (pkt.type === 'st_authoritative_sync' && Array.isArray(pkt.characters) && db && Array.isArray(db.characters)) {
+      const pktTs = Number(pkt.ts) || 0;
+      if (pktTs > 0 && lastStAuthSyncTs > 0 && pktTs < lastStAuthSyncTs) return;
+      if (pktTs > 0) lastStAuthSyncTs = Math.max(lastStAuthSyncTs, pktTs);
       let anyChanged = false;
       for (const sc of pkt.characters) {
         const cid = sc.i !== undefined ? sc.i : sc.id;
@@ -1371,6 +1422,7 @@
           nativeFetch(`${base}/${encodedTopic}/json?poll=1&since=${encodedSince}`)
         )
       );
+      const collectedPackets = [];
       for (const r of responses) {
         if (r.status !== 'fulfilled' || !r.value || !r.value.ok) continue;
         const text = await r.value.text();
@@ -1383,37 +1435,64 @@
               const pkt = JSON.parse(wrapper.message);
               if (!pkt) continue;
               if (wrapper.id && !pkt.pktId) pkt.pktId = wrapper.id;
-              if (
-                allowRecentDiceRollReplay &&
-                (pkt.type === 'dice_roll' || (pkt.type === 'socket_event' && pkt.event === 'dice:result')) &&
-                Date.now() - (pkt.ts || (wrapper.time ? wrapper.time * 1000 : 0)) < 20000
-              ) {
-                await applyIncomingPacket(pkt, false);
-                continue;
-              }
-              // Replay state-syncing packets, dice ledger history, and recent presence packets without re-popping old dice roll animations
-              if (
-                pkt.type === 'dice_roll' ||
-                pkt.type === 'ledger_sync' ||
-                pkt.type === 'xp_sync' ||
-                pkt.type === 'st_authoritative_sync' ||
-                pkt.type === 'char_delta' ||
-                pkt.type === 'scene_sync' ||
-                pkt.type === 'pins_sync' ||
-                pkt.type === 'socket_event' ||
-                pkt.type === 'overflow_pkt' ||
-                pkt.type === 'presence_update' ||
-                pkt.type === 'presence_leave' ||
-                pkt.type === 'db:patch' ||
-                pkt.type === 'cloud_snapshot' ||
-                pkt.type === 'cloud:snapshot'
-              ) {
-                if (pkt.type === 'presence_update') pkt.requestReply = false;
-                await applyIncomingPacket(pkt, !allowRecentDiceRollReplay);
-              }
+              if (!pkt.ts && wrapper.time) pkt.ts = wrapper.time * 1000;
+              collectedPackets.push(pkt);
             }
           } catch (e) {}
         }
+      }
+      // Sort chronologically ascending by timestamp
+      collectedPackets.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+
+      // Find the latest timestamp for full-state snapshot packet types so we never waste time or overwrite with stale snapshots
+      const latestSnapshotTs = {};
+      const snapshotTypes = new Set(['scene_sync', 'pins_sync', 'st_authoritative_sync']);
+      for (const pkt of collectedPackets) {
+        if (snapshotTypes.has(pkt.type)) {
+          const t = Number(pkt.ts) || 0;
+          if (!latestSnapshotTs[pkt.type] || t >= latestSnapshotTs[pkt.type]) {
+            latestSnapshotTs[pkt.type] = t;
+          }
+        }
+      }
+
+      for (const pkt of collectedPackets) {
+        try {
+          if (snapshotTypes.has(pkt.type)) {
+            const t = Number(pkt.ts) || 0;
+            if (latestSnapshotTs[pkt.type] && t < latestSnapshotTs[pkt.type]) {
+              continue;
+            }
+          }
+          if (
+            allowRecentDiceRollReplay &&
+            (pkt.type === 'dice_roll' || (pkt.type === 'socket_event' && pkt.event === 'dice:result')) &&
+            Date.now() - (Number(pkt.ts) || 0) < 20000
+          ) {
+            await applyIncomingPacket(pkt, false);
+            continue;
+          }
+          // Replay state-syncing packets, dice ledger history, and recent presence packets without re-popping old dice roll animations
+          if (
+            pkt.type === 'dice_roll' ||
+            pkt.type === 'ledger_sync' ||
+            pkt.type === 'xp_sync' ||
+            pkt.type === 'st_authoritative_sync' ||
+            pkt.type === 'char_delta' ||
+            pkt.type === 'scene_sync' ||
+            pkt.type === 'pins_sync' ||
+            pkt.type === 'socket_event' ||
+            pkt.type === 'overflow_pkt' ||
+            pkt.type === 'presence_update' ||
+            pkt.type === 'presence_leave' ||
+            pkt.type === 'db:patch' ||
+            pkt.type === 'cloud_snapshot' ||
+            pkt.type === 'cloud:snapshot'
+          ) {
+            if (pkt.type === 'presence_update') pkt.requestReply = false;
+            await applyIncomingPacket(pkt, !allowRecentDiceRollReplay);
+          }
+        } catch (e) {}
       }
       if (!allowRecentDiceRollReplay) {
         emitToLocalSockets('character:updated', {});
@@ -1830,10 +1909,11 @@
       if (data.mood !== undefined && data.mood !== null) gs.active_mood_text = data.mood;
       if (data.episode_id !== undefined && data.episode_id !== null) gs.active_episode_id = data.episode_id;
       gs.updated_at = new Date().toISOString();
+      gs._syncTs = Date.now();
       persistDb();
       const enrichedGs = enrichGameboardSceneState(gs);
       emitToLocalSockets('gameboard:scene_updated', enrichedGs);
-      broadcastSceneSyncPacket(enrichedGs);
+      broadcastSceneSyncPacket(gs);
       return;
     }
 
@@ -2210,13 +2290,23 @@
       let gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronicleId) || db.gameboard_state[0];
       if (gs) {
         gs.active_map_url = mapUrl;
+        if (body.active_location !== undefined && body.active_location !== null && body.active_location !== '') {
+          gs.active_location = body.active_location;
+        }
+        if (body.active_mood_text !== undefined && body.active_mood_text !== null && body.active_mood_text !== '') {
+          gs.active_mood_text = body.active_mood_text;
+        }
         let cs = {};
         try {
           cs = typeof gs.canvas_state === 'string' ? JSON.parse(gs.canvas_state || '{}') : gs.canvas_state || {};
         } catch (e) {}
         cs.backdrop = mapUrl;
         gs.canvas_state = JSON.stringify(cs);
+        gs.updated_at = new Date().toISOString();
+        gs._syncTs = Date.now();
         persistDb();
+        const enrichedGs = enrichGameboardSceneState(gs);
+        emitToLocalSockets('gameboard:scene_updated', enrichedGs);
         emitToLocalSockets('gameboard:map_updated', {
           chronicle_id: targetChronicleId,
           active_map_url: mapUrl,
@@ -2288,6 +2378,7 @@
         }
         if (body.game_time !== undefined && body.game_time !== null) gs.game_time = body.game_time;
         gs.updated_at = new Date().toISOString();
+        gs._syncTs = Date.now();
         persistDb();
         const enrichedGs = enrichGameboardSceneState(gs);
         emitToLocalSockets('gameboard:scene_updated', enrichedGs);
@@ -2300,7 +2391,7 @@
         if (targetEp) {
           emitToLocalSockets('episode:updated', targetEp);
         }
-        broadcastSceneSyncPacket(enrichedGs, targetEp);
+        broadcastSceneSyncPacket(gs, targetEp);
         return jsonResponse({ success: true, state: enrichedGs });
       }
       return jsonResponse({ success: true, state: gs });

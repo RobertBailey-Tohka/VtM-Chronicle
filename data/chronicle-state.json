@@ -4657,7 +4657,7 @@
       "created_at": "2026-11-02T23:00:00.000Z",
       "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
       "location": "Louisville Back Alleys (1926–1940s)",
-      "revealed": 0
+      "revealed": 1
     },
     {
       "id": 11,
@@ -4674,7 +4674,7 @@
       "created_at": "2026-11-02T23:01:00.000Z",
       "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
       "location": "Post-War Louisville (1950s)",
-      "revealed": 0
+      "revealed": 1
     },
     {
       "id": 12,
@@ -4687,11 +4687,11 @@
       "npc_agendas": "[{\"npc\":\"Baroness \\\"Jax\\\" (#31)\",\"agenda\":\"Desperately needs a win at the docks to stop her starving Anarch gang from mutinying; treats the coterie as expendable shock troops.\"},{\"npc\":\"\\\"Slick\\\", the Defector\",\"agenda\":\"Terrified of Camarilla retaliation; wants protection in exchange for the Warehouse Master Key and the truth about Jax's last team.\"}]",
       "scenes": "[{\"title\":\"Scene 1: The Anarch's Turf\",\"description\":\"Baroness \\\"Jax\\\" summons the coterie to her 1950s garage/roadhouse court and orders them to recon the Camarilla smuggling front at the Ohio River docks.\"},{\"title\":\"Scene 2: Approaching the Industrial Docks\",\"description\":\"Fog-choked 1950s river docks patrolled by armed Camarilla ghouls (Exceptional 6 / Standard 4 / Weakness 2).\"},{\"title\":\"Scene 3: The Harbor Master's Office (Info Holder 1)\",\"description\":\"Investigating The Dockmaster's Ledger for shipment schedules, Montgomery's secret weapons cache, and proof of the Camarilla blockade.\"},{\"title\":\"Scene 4: Cornering \\\"Slick\\\" the Defector (Info Holder 2)\",\"description\":\"Tracking down Slick near the rail cars to learn ghoul patrol blind spots, secure the Warehouse Master Key, and uncover the massacre of Jax's previous strike team.\"},{\"title\":\"Scene 5: Reporting Back & The Velvet Invitation\",\"description\":\"The coterie decides how much intel to hand over to Jax—just as their prowess catches the attention of Camarilla Seneschal Montgomery.\"}]",
       "fallout_notes": "STORYTELLER GAMEPLAN FOR EPISODE 6:\n1. Open in 1950s Louisville at Baroness Jax's roadhouse/garage. Chain-smoking, leather jacket with patches of fallen \"blood-kin.\"\n2. Send the coterie to the Ohio River Industrial Docks.\n3. Let them uncover Info Holder 1 (The Dockmaster's Ledger) and Info Holder 2 (\"Slick\", the Defector).\n4. Key Twist: Slick reveals Jax's last team was slaughtered here because of her bad intel, giving the coterie a reason to question their loyalty to Jax before Seneschal Montgomery approaches them in Episode 7.",
-      "status": "planning",
+      "status": "active",
       "created_at": "2026-11-02T23:02:00.000Z",
       "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
       "location": "1950s Louisville Industrial Docks",
-      "revealed": 0
+      "revealed": 1
     },
     {
       "id": 13,
@@ -4781,14 +4781,14 @@
       "id": 1,
       "chronicle_id": 6,
       "active_scene_banner": "/images/banner_1200x400.jpg",
-      "active_location": "Louisville circa 1920",
+      "active_location": "1950s Louisville Industrial Docks",
       "active_npc_persona": "Storyteller",
       "active_npc_avatar": "/images/banner_1200x400.jpg",
-      "active_mood_text": "Somewhere underground...",
-      "updated_at": "2026-10-26T23:40:12.000Z",
-      "canvas_state": "{\"backdrop\": \"/uploads/1791828207393_8e1367eb_Louisville_1921.png\", \"entities\": [], \"links\": []}",
-      "active_map_url": "/uploads/1791828207393_8e1367eb_Louisville_1921.png",
-      "active_episode_id": 9,
+      "active_mood_text": "Forced to repay their debt to the Anarch warlord Baroness \"Jax\", the coterie is ordered to investigate a heavily guarded Camarilla smuggling front at the 1950s Louisville industrial docks.",
+      "updated_at": "2026-11-03T03:58:21.574Z",
+      "canvas_state": "{\"backdrop\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"entities\":[],\"links\":[]}",
+      "active_map_url": "/uploads/1791828207401_9fdc032a_Louisville_1940.png",
+      "active_episode_id": 12,
       "game_time": "10:00pm",
       "relationship_map_state": "{\"nodes\":{\"node_1791833479682\":{\"id\":\"node_1791833479682\",\"x\":-410.9362989372917,\"y\":-504.7101954463193,\"text\":\"Sasha Steele\",\"w\":143,\"h\":15},\"node_1791833493269\":{\"id\":\"node_1791833493269\",\"x\":927.4506300991802,\"y\":-641.7355238952914,\"text\":\"September\",\"w\":100,\"h\":20},\"node_1793052405841\":{\"id\":\"node_1793052405841\",\"x\":-1106.9068008605193,\"y\":531.3433450508734,\"text\":\"Tom Sombadil\",\"w\":100,\"h\":20},\"node_1793052425894\":{\"id\":\"node_1793052425894\",\"x\":1977.0009133074002,\"y\":37.59144165707781,\"text\":\"Ophelia Vale\",\"w\":100,\"h\":20},\"node_1793052432148\":{\"id\":\"node_1793052432148\",\"x\":189.20181732308941,\"y\":1254.1765562352587,\"text\":\"Seraphina Nocturne\",\"w\":159,\"h\":21},\"node_1793052503928\":{\"id\":\"node_1793052503928\",\"x\":1884.8013497474053,\"y\":896.6580358350639,\"text\":\"Mathias\",\"w\":100,\"h\":20}},\"edges\":[{\"source\":\"node_1791833479682\",\"target\":\"node_1791833493269\",\"type\":\"one-way\",\"text\":\"Just met\\nOptop\"},{\"source\":\"node_1791833493269\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1793052405841\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"},{\"source\":\"node_1793052405841\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1791833479682\",\"type\":\"one-way\"},{\"source\":\"node_1793052432148\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052432148\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1793052425894\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"}]}"
     }
