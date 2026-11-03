@@ -732,13 +732,26 @@ function pushSceneToGameboard(encodedSceneJson) {
     location: sceneRecord.location,
     mood: sceneRecord.mood
   });
+  if (activeChronicleId) {
+    authFetch('/api/gameboard/scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chronicle_id: activeChronicleId,
+        active_scene_banner: sceneRecord.banner || '/images/banner_1200x400.jpg',
+        active_location: sceneRecord.location || '',
+        active_mood_text: sceneRecord.mood || '',
+        active_map_url: sceneRecord.map_url || undefined
+      })
+    }).catch(() => {});
+  }
   // Look up the atmosphere banner wrapper element in the DOM by ID
   const atmosphereBannerWrapperElement = document.getElementById('atmosphereBannerWrap');
   if (atmosphereBannerWrapperElement && atmosphereBannerWrapperElement.classList.contains('collapsed')) {
     toggleAtmosphereBanner();
   }
   if (sceneRecord.map_url) {
-    switchCityMap(sceneRecord.map_url);
+    switchCityMap(sceneRecord.map_url, true);
   }
   // Display a native browser alert confirming the scene was pushed live
   alert(`Scene "${sceneRecord.title}" has been pushed live to the Gameboard!`);
@@ -1093,19 +1106,21 @@ function updateWorkshopMinimap(explicitMapUrl) {
   loadCampaignPins();
 }
 
+let workshopMapPins = [];
+
 async function loadCampaignPins(explicitMapUrl) {
   if (!activeChronicleId) return;
   // Look up the workshop minimap image element in the DOM by ID
   const minimapImageElement = document.getElementById('workshopMinimapImg');
   let rawMapUrl = explicitMapUrl || (minimapImageElement ? minimapImageElement.getAttribute('src') : null) || '/images/concept_map.jpg';
-  // Use the browser URL API to extract the normalized pathname relative to the current origin
-  const normalizedMapPathname = new URL(rawMapUrl, window.location.origin).pathname;
+  const normalizedMapPathname = typeof normalizeCityMapUrl === 'function'
+    ? normalizeCityMapUrl(rawMapUrl)
+    : new URL(rawMapUrl, window.location.origin).pathname;
   try {
     // Perform an authenticated HTTP GET request to load map pins for the specified map URL
     const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/pins?mapUrl=${encodeURIComponent(normalizedMapPathname)}`);
     if (fetchResponse.ok) {
-      // Parse the JSON response into the global array of map pins
-      currentMapPins = await fetchResponse.json();
+      workshopMapPins = await fetchResponse.json();
       renderWorkshopPinsList();
       renderPinsOnGameboard();
     }
@@ -1122,7 +1137,8 @@ function renderWorkshopPinsList() {
   if (!minimapPinsContainerElement || !mapPinsListContainerElement) return;
   minimapPinsContainerElement.innerHTML = '';
   mapPinsListContainerElement.innerHTML = '';
-  currentMapPins.forEach((mapPinRecord, pinIndex) => {
+  const pinsToRender = Array.isArray(workshopMapPins) ? workshopMapPins : [];
+  pinsToRender.forEach((mapPinRecord, pinIndex) => {
     const horizontalPercentageX = mapPinRecord.x / 2800 * 100;
     const verticalPercentageY = mapPinRecord.y / 2000 * 100;
     minimapPinsContainerElement.innerHTML += `<div style="position:absolute; left:${horizontalPercentageX}%; top:${verticalPercentageY}%; transform:translate(-50%, -100%); display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="handlePinClick(event, ${mapPinRecord.id})" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', ${mapPinRecord.id});">
@@ -1147,7 +1163,7 @@ function renderWorkshopPinsList() {
 }
 
 async function updatePin(pinId, fieldName, newFieldValue) {
-  const targetPinRecord = currentMapPins.find(pinRecord => pinRecord.id === pinId);
+  const targetPinRecord = (workshopMapPins || []).find(pinRecord => pinRecord.id === pinId) || (currentMapPins || []).find(pinRecord => pinRecord.id === pinId);
   if (!targetPinRecord) return;
   targetPinRecord[fieldName] = newFieldValue;
   try {

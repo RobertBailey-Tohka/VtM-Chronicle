@@ -213,13 +213,11 @@ function applySceneState(sceneStateData) {
       }
     }
   }
-  if (sceneStateData.active_map_url) {
-    const gameboardDropdown = document.getElementById('episodeMapSelector');
-    if (gameboardDropdown) gameboardDropdown.value = sceneStateData.active_map_url;
-    switchCityMap(sceneStateData.active_map_url);
-  }
   if (sceneStateData.canvas_state) {
     loadCanvasFromState(sceneStateData.canvas_state, false);
+  }
+  if (sceneStateData.active_map_url) {
+    switchCityMap(sceneStateData.active_map_url);
   }
   if (sceneStateData.relationship_map_state && typeof loadRmapState === 'function') {
       const parsedRelationshipMapState = typeof sceneStateData.relationship_map_state === 'string' ? JSON.parse(sceneStateData.relationship_map_state) : sceneStateData.relationship_map_state;
@@ -288,7 +286,8 @@ function initCanvasEngine() {
   };
   viewportElement.onmousedown = mouseEvent => {
     if (mouseEvent.button !== 0) return;
-    if (mouseEvent.target.closest('.canvas-card') || mouseEvent.target.closest('button') || mouseEvent.target.closest('input') || mouseEvent.target.closest('select')) {
+    if (typeof mapPinMode !== 'undefined' && mapPinMode) return;
+    if (mouseEvent.target.closest('.canvas-card') || mouseEvent.target.closest('.map-pin-marker') || mouseEvent.target.closest('button') || mouseEvent.target.closest('input') || mouseEvent.target.closest('select')) {
       return;
     }
     mouseEvent.preventDefault();
@@ -412,14 +411,37 @@ function loadCanvasFromState(rawState, shouldPersist = false) {
   }
 }
 
+function normalizeCityMapUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  let pathname = rawUrl.trim();
+  try {
+    if (pathname.startsWith('http://') || pathname.startsWith('https://')) {
+      pathname = new URL(pathname).pathname;
+    } else {
+      pathname = new URL(pathname, window.location.origin).pathname;
+    }
+  } catch (e) {}
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch (e) {}
+  pathname = pathname.replace(/^\/VtM-Chronicle(?=\/)/i, '');
+  return pathname;
+}
+
+function getActiveCityMapUrl() {
+  const fromState = (typeof canvasState !== 'undefined' && canvasState && canvasState.backdrop) ? canvasState.backdrop : '';
+  const backdropAttr = document.getElementById('canvasBackdropImg')?.getAttribute('src') || '';
+  const fromSelect = document.getElementById('episodeMapSelector')?.value || '';
+  return fromState || backdropAttr || fromSelect || '/images/concept_map.jpg';
+}
+
 function renderCanvasEntities() {
   // Look up the canvas entities layer container in the DOM by its ID
   const entitiesContainerElement = document.getElementById('canvasEntitiesLayer');
   if (!entitiesContainerElement) return;
   
-  // Look up the current selected map URL from the episodeMapSelector dropdown in the DOM
-  let rawMapUrl = document.getElementById('episodeMapSelector')?.value || canvasState?.backdrop || '';
-  const currentMapUrl = rawMapUrl ? new URL(rawMapUrl, window.location.origin).pathname : '';
+  // Look up the current selected map URL in normalized form
+  const currentMapUrl = normalizeCityMapUrl(getActiveCityMapUrl());
   let needsSave = false;
   
   // Track valid IDs to remove orphans
@@ -430,7 +452,7 @@ function renderCanvasEntities() {
         canvasEntity.mapUrl = currentMapUrl;
         needsSave = true;
     }
-    if (canvasEntity.mapUrl && canvasEntity.mapUrl !== currentMapUrl) return;
+    if (canvasEntity.mapUrl && normalizeCityMapUrl(canvasEntity.mapUrl) !== currentMapUrl) return;
     
     validEntityDomIds.add(`canvas-entity-${canvasEntity.id}`);
     
@@ -910,14 +932,40 @@ function saveCanvasBackdropSubmit() {
   closeModal('canvasBackdropModal');
 }
 
-function switchCityMap(mapImageUrl) {
+function switchCityMap(mapImageUrl, syncIfGm = false) {
   if (!mapImageUrl) return;
+  if (typeof canvasState !== 'undefined' && canvasState) {
+    canvasState.backdrop = mapImageUrl;
+  }
   // Look up the canvas backdrop image element in the DOM by its ID
   const mapImageElement = document.getElementById('canvasBackdropImg');
   if (mapImageElement) mapImageElement.src = mapImageUrl;
+
+  const mapSelectorElement = document.getElementById('episodeMapSelector');
+  if (mapSelectorElement) {
+    const targetNorm = normalizeCityMapUrl(mapImageUrl);
+    let matchedOpt = Array.from(mapSelectorElement.options || []).find(
+      opt => normalizeCityMapUrl(opt.value) === targetNorm
+    );
+    if (!matchedOpt && mapImageUrl) {
+      matchedOpt = document.createElement('option');
+      matchedOpt.value = mapImageUrl;
+      matchedOpt.innerText = mapImageUrl.split('/').pop() || 'Active Map';
+      mapSelectorElement.appendChild(matchedOpt);
+    }
+    if (matchedOpt) {
+      mapSelectorElement.value = matchedOpt.value;
+    }
+  }
   
   if (typeof loadMapPins === 'function') loadMapPins();
   if (typeof renderCanvasEntities === 'function') renderCanvasEntities();
+
+  if (syncIfGm && (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller')) {
+    if (typeof window.pushMapToPlayers === 'function') {
+      window.pushMapToPlayers();
+    }
+  }
 }
 
 window.pushMapToPlayers = function() {
@@ -1310,10 +1358,9 @@ function toggleMapPinMode() {
 
 async function loadMapPins() {
   if (!activeChronicleId) return;
-  // Look up the episode map selector dropdown element in the DOM by its ID
-  let rawMapUrl = document.getElementById('episodeMapSelector')?.value || canvasState?.backdrop || '';
+  const rawMapUrl = getActiveCityMapUrl();
   if (!rawMapUrl) return;
-  const mapUrlPathname = new URL(rawMapUrl, window.location.origin).pathname;
+  const mapUrlPathname = normalizeCityMapUrl(rawMapUrl);
   try {
     // Perform an authenticated HTTP GET request to load all map pins for the active chronicle and map URL
     const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/pins?mapUrl=${encodeURIComponent(mapUrlPathname)}`);
@@ -1338,6 +1385,8 @@ function renderMapPins(mapPinsList) {
     markerElement.className = 'map-pin-marker';
     markerElement.style.left = mapPinRecord.x + 'px';
     markerElement.style.top = mapPinRecord.y + 'px';
+    markerElement.style.pointerEvents = 'auto';
+    markerElement.style.cursor = 'pointer';
     markerElement.style.transform = `scale(${1 / (typeof canvasTransform !== 'undefined' ? canvasTransform.zoom : 1)})`;
     markerElement.style.transformOrigin = 'bottom center';
     markerElement.innerHTML = '<i class="fa-solid fa-location-dot"></i>';
@@ -1350,6 +1399,7 @@ function renderMapPins(mapPinsList) {
     // Create tooltip container and heading elements in memory for the map pin
     const tooltipElement = document.createElement('div');
     tooltipElement.className = 'map-pin-tooltip';
+    tooltipElement.style.pointerEvents = 'auto';
     const headingElement = document.createElement('h4');
     headingElement.innerText = mapPinRecord.title || 'Unknown Location';
     tooltipElement.appendChild(headingElement);
@@ -1377,8 +1427,20 @@ function renderMapPins(mapPinsList) {
       routesParagraph.style.marginTop = '6px';
       tooltipElement.appendChild(routesParagraph);
     }
+    if (typeof activeChronicleRole !== 'undefined' && (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller')) {
+      const delPinBtn = document.createElement('button');
+      delPinBtn.type = 'button';
+      delPinBtn.className = 'btn-secondary';
+      delPinBtn.style.cssText = 'margin-top:8px;padding:3px 8px;font-size:10px;color:#ef4444;border-color:rgba(239,68,68,0.4);width:100%;cursor:pointer;';
+      delPinBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete Pin';
+      delPinBtn.onclick = async (ev) => {
+        ev.stopPropagation();
+        await authFetch(`/api/chronicles/${activeChronicleId}/pins/${mapPinRecord.id}`, { method: 'DELETE' });
+        loadMapPins();
+      };
+      tooltipElement.appendChild(delPinBtn);
+    }
 
-    
     markerElement.appendChild(tooltipElement);
     pinsLayerElement.appendChild(markerElement);
   });
@@ -1454,7 +1516,7 @@ async function createMapPinSubmit() {
   // Look up the workshop minimap image and coordinate input elements in the DOM by their IDs
   const minimapImageElement = document.getElementById('workshopMinimapImg');
   let rawMapUrl = minimapImageElement ? minimapImageElement.getAttribute('src') : '/images/concept_map.jpg';
-  const mapUrlPathname = new URL(rawMapUrl, window.location.origin).pathname;
+  const mapUrlPathname = normalizeCityMapUrl(rawMapUrl);
   const percentageX = parseFloat(document.getElementById('newPinX').value);
   const percentageY = parseFloat(document.getElementById('newPinY').value);
 
@@ -1480,6 +1542,7 @@ async function createMapPinSubmit() {
       });
       closeModal('newMapPinModal');
       loadCampaignPins(mapUrlPathname);
+      loadMapPins();
   } catch (errorObject) {
       console.error(errorObject);
   }

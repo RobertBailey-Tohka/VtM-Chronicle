@@ -84,6 +84,24 @@
     return url;
   }
 
+  function normalizeMapUrlKey(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    let p = rawUrl.trim();
+    try {
+      if (p.startsWith('http://') || p.startsWith('https://')) {
+        p = new URL(p).pathname;
+      } else {
+        p = new URL(p, window.location.origin).pathname;
+      }
+    } catch (e) {}
+    try {
+      p = decodeURIComponent(p);
+    } catch (e) {}
+    p = stripBasePathFromUrl(p);
+    p = p.replace(/^\/VtM-Chronicle(?=\/)/i, '');
+    return p;
+  }
+
   function rewritePayloadUrlsOut(obj) {
     if (!BASE_PATH || obj === null || obj === undefined) return obj;
     if (typeof obj === 'string') {
@@ -619,26 +637,54 @@
         boardCopy.active_episode_maps = parseEpisodeMapsArray(ep.maps);
       }
     }
+    if (boardCopy.active_map_url && boardCopy.canvas_state) {
+      try {
+        const cs =
+          typeof boardCopy.canvas_state === 'string'
+            ? JSON.parse(boardCopy.canvas_state || '{}')
+            : { ...boardCopy.canvas_state };
+        cs.backdrop = boardCopy.active_map_url;
+        boardCopy.canvas_state = JSON.stringify(cs);
+      } catch (e) {}
+    }
     return boardCopy;
+  }
+
+  function broadcastPinsSyncPacket(chronicleId) {
+    if (!db || !Array.isArray(db.gameboard_pins)) return;
+    const targetChronId = Number(chronicleId) || defaultChronicleId();
+    const pins = db.gameboard_pins.filter((p) => Number(p.chronicle_id) === targetChronId);
+    sendRawNtfyPacket({
+      senderId: CLIENT_ID,
+      ts: Date.now(),
+      type: 'pins_sync',
+      chronicle_id: targetChronId,
+      pins,
+    });
   }
 
   function broadcastSceneSyncPacket(gs, epRecord = null) {
     if (!gs) return;
     const enriched = enrichGameboardSceneState(gs);
+    const targetChronId = Number(enriched.chronicle_id) || defaultChronicleId();
     const ep =
       epRecord ||
       (enriched.active_episode_id && db && Array.isArray(db.episodes)
         ? db.episodes.find((e) => Number(e.id) === Number(enriched.active_episode_id))
         : null);
     const epMaps = ep ? parseEpisodeMapsArray(ep.maps) : enriched.active_episode_maps || [];
+    const pins =
+      db && Array.isArray(db.gameboard_pins)
+        ? db.gameboard_pins.filter((p) => Number(p.chronicle_id) === targetChronId)
+        : [];
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
       type: 'scene_sync',
-      chronicle_id: enriched.chronicle_id || defaultChronicleId(),
+      chronicle_id: targetChronId,
       scene: {
         id: enriched.id,
-        chronicle_id: enriched.chronicle_id,
+        chronicle_id: targetChronId,
         active_episode_id: enriched.active_episode_id,
         active_episode_title: enriched.active_episode_title || (ep ? ep.title : ''),
         active_episode_number: enriched.active_episode_number || (ep ? ep.episode_number : 1),
@@ -652,6 +698,9 @@
         active_npc_avatar: enriched.active_npc_avatar || '',
         game_time: enriched.game_time || '',
       },
+      canvas_state: enriched.canvas_state || null,
+      relationship_map_state: enriched.relationship_map_state || null,
+      pins,
       episode: ep
         ? {
             id: ep.id,
@@ -705,11 +754,15 @@
       }
       return rec;
     });
+    const discoveredClueIds = (db.clues || []).filter((c) => Number(c.discovered) === 1).map((c) => Number(c.id));
+    const discoveredLoreIds = (db.lore_entries || []).filter((l) => Number(l.discovered) === 1).map((l) => Number(l.id));
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
       type: 'st_authoritative_sync',
       characters: compactChars,
+      discovered_clue_ids: discoveredClueIds,
+      discovered_lore_ids: discoveredLoreIds,
     });
     const gs =
       (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId()) ||
@@ -798,6 +851,20 @@
       return;
     }
 
+    if (pkt.type === 'pins_sync' && Array.isArray(pkt.pins) && db) {
+      const targetChronId = Number(pkt.chronicle_id) || defaultChronicleId();
+      db.gameboard_pins = (db.gameboard_pins || [])
+        .filter((p) => Number(p.chronicle_id) !== targetChronId)
+        .concat(pkt.pins);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (e) {}
+      if (!isReplay) {
+        emitToLocalSockets('gameboard:pins_updated', { chronicle_id: targetChronId });
+      }
+      return;
+    }
+
     if (pkt.type === 'scene_sync' && pkt.scene) {
       if (db) {
         if (pkt.episode && pkt.episode.id !== undefined) {
@@ -827,6 +894,16 @@
         if (pkt.scene.active_npc_persona) gs.active_npc_persona = pkt.scene.active_npc_persona;
         if (pkt.scene.active_npc_avatar) gs.active_npc_avatar = pkt.scene.active_npc_avatar;
         if (pkt.scene.game_time) gs.game_time = pkt.scene.game_time;
+        if (pkt.canvas_state) {
+          gs.canvas_state =
+            typeof pkt.canvas_state === 'string' ? pkt.canvas_state : JSON.stringify(pkt.canvas_state);
+        }
+        if (pkt.relationship_map_state) {
+          gs.relationship_map_state =
+            typeof pkt.relationship_map_state === 'string'
+              ? pkt.relationship_map_state
+              : JSON.stringify(pkt.relationship_map_state);
+        }
         if (pkt.scene.active_map_url) {
           gs.active_map_url = pkt.scene.active_map_url;
           let cs = {};
@@ -835,6 +912,11 @@
           } catch (e) {}
           cs.backdrop = pkt.scene.active_map_url;
           gs.canvas_state = JSON.stringify(cs);
+        }
+        if (Array.isArray(pkt.pins)) {
+          db.gameboard_pins = (db.gameboard_pins || [])
+            .filter((p) => Number(p.chronicle_id) !== targetChronId)
+            .concat(pkt.pins);
         }
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
@@ -849,6 +931,11 @@
             emitToLocalSockets('gameboard:map_updated', {
               chronicle_id: targetChronId,
               active_map_url: pkt.scene.active_map_url,
+            });
+          }
+          if (Array.isArray(pkt.pins)) {
+            emitToLocalSockets('gameboard:pins_updated', {
+              chronicle_id: targetChronId,
             });
           }
           if (pkt.episode) {
@@ -1011,12 +1098,36 @@
         ch.sheet_data = JSON.stringify(sd);
         anyChanged = true;
       }
-      if (anyChanged) {
+      let clueOrLoreChanged = false;
+      if (Array.isArray(pkt.discovered_clue_ids) && Array.isArray(db.clues)) {
+        const set = new Set(pkt.discovered_clue_ids.map(Number));
+        for (const c of db.clues) {
+          const nextDisc = set.has(Number(c.id)) ? 1 : 0;
+          if (Number(c.discovered || 0) !== nextDisc) {
+            c.discovered = nextDisc;
+            clueOrLoreChanged = true;
+          }
+        }
+      }
+      if (Array.isArray(pkt.discovered_lore_ids) && Array.isArray(db.lore_entries)) {
+        const set = new Set(pkt.discovered_lore_ids.map(Number));
+        for (const l of db.lore_entries) {
+          const nextDisc = set.has(Number(l.id)) ? 1 : 0;
+          if (Number(l.discovered || 0) !== nextDisc) {
+            l.discovered = nextDisc;
+            clueOrLoreChanged = true;
+          }
+        }
+      }
+      if (anyChanged || clueOrLoreChanged) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
         } catch (e) {}
         if (!isReplay) {
           emitToLocalSockets('character:updated', {});
+          if (clueOrLoreChanged) {
+            emitToLocalSockets('episode:updated', {});
+          }
         }
       }
       return;
@@ -1153,16 +1264,30 @@
           id: row ? row.id : deleteId,
           deleted: deleteId !== undefined,
         });
-      } else if (table === 'episodes' || table === 'clues' || table === 'lore_entries' || table === 'scenes') {
+      } else if (
+        table === 'episodes' ||
+        table === 'clue_matrices' ||
+        table === 'clues' ||
+        table === 'lore_matrices' ||
+        table === 'lore_entries' ||
+        table === 'scenes'
+      ) {
         emitToLocalSockets('episode:updated', row || {});
-      } else if (table === 'map_pins') {
+      } else if (table === 'gameboard_pins' || table === 'map_pins') {
         emitToLocalSockets('gameboard:pins_updated', {
           chronicle_id: row ? row.chronicle_id : defaultChronicleId(),
         });
-      } else if (table === 'npc_categories') {
+      } else if (table === 'npc_categories' || table === 'clan_symbols') {
         emitToLocalSockets('character:updated', {});
-      } else if (table === 'custom_rules') {
+      } else if (table === 'rules_codex' || table === 'custom_rules') {
         emitToLocalSockets('rules:updated', {});
+      } else if (table === 'chat_messages') {
+        if (typeof window.loadChatMessages === 'function') window.loadChatMessages();
+      } else if (table === 'chronicles' && row && row.ui_settings) {
+        try {
+          const parsedUi = typeof row.ui_settings === 'string' ? JSON.parse(row.ui_settings) : row.ui_settings;
+          emitToLocalSockets('chronicle:ui_settings_updated', parsedUi);
+        } catch (e) {}
       }
     }
   }
@@ -1274,6 +1399,7 @@
                 pkt.type === 'st_authoritative_sync' ||
                 pkt.type === 'char_delta' ||
                 pkt.type === 'scene_sync' ||
+                pkt.type === 'pins_sync' ||
                 pkt.type === 'socket_event' ||
                 pkt.type === 'overflow_pkt' ||
                 pkt.type === 'presence_update' ||
@@ -1292,6 +1418,7 @@
       if (!allowRecentDiceRollReplay) {
         emitToLocalSockets('character:updated', {});
         emitToLocalSockets('episode:updated', {});
+        emitToLocalSockets('gameboard:pins_updated', { chronicle_id: defaultChronicleId() });
         if (typeof window.loadRecentRolls === 'function') window.loadRecentRolls();
         if (typeof window.loadChatMessages === 'function') window.loadChatMessages();
         const gs =
@@ -2262,9 +2389,9 @@
     if (pinsListMatch) {
       const chronId = Number(pinsListMatch[1]);
       if (method === 'GET') {
-        const mapUrl = stripBasePathFromUrl(q.get('mapUrl') || '');
+        const mapUrl = normalizeMapUrlKey(q.get('mapUrl') || '');
         const pins = (db.gameboard_pins || []).filter(
-          (p) => Number(p.chronicle_id) === chronId && (!mapUrl || stripBasePathFromUrl(p.map_url) === mapUrl)
+          (p) => Number(p.chronicle_id) === chronId && (!mapUrl || normalizeMapUrlKey(p.map_url) === mapUrl)
         );
         return jsonResponse(pins);
       }
@@ -2272,7 +2399,7 @@
         const pin = {
           id: nextId('gameboard_pins'),
           chronicle_id: chronId,
-          map_url: stripBasePathFromUrl(body.map_url || ''),
+          map_url: normalizeMapUrlKey(body.map_url || ''),
           x: Number(body.x) || 0,
           y: Number(body.y) || 0,
           title: body.title || 'New Pin',
@@ -2283,6 +2410,7 @@
         };
         db.gameboard_pins.push(pin);
         persistDb({ table: 'gameboard_pins', row: pin });
+        broadcastPinsSyncPacket(chronId);
         emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         return jsonResponse({ id: pin.id, pin });
       }
@@ -2302,6 +2430,7 @@
           if (body.x !== undefined) pin.x = Number(body.x);
           if (body.y !== undefined) pin.y = Number(body.y);
           persistDb({ table: 'gameboard_pins', row: pin });
+          broadcastPinsSyncPacket(chronId);
           emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         }
         return jsonResponse({ success: true });
@@ -2310,6 +2439,7 @@
         db.gameboard_pins = (db.gameboard_pins || []).filter((p) => Number(p.id) !== pinId);
         recordDelete('gameboard_pins', pinId);
         persistDb({ table: 'gameboard_pins', deleteId: pinId });
+        broadcastPinsSyncPacket(chronId);
         emitToLocalSockets('gameboard:pins_updated', { chronicle_id: chronId });
         return jsonResponse({ success: true });
       }

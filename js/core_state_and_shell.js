@@ -98,6 +98,7 @@ socket.on('gameboard:scene_updated', sceneState => {
 });
 // Listen for episode updates broadcast by the server via Socket.IO
 socket.on('episode:updated', updatedEpisode => {
+  if (activeChronicleId && typeof loadGameboardState === 'function') loadGameboardState();
   if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
   if (typeof loadClueMatricesForWidget === 'function') loadClueMatricesForWidget();
   if (typeof loadLoreMatricesForWidget === 'function') loadLoreMatricesForWidget();
@@ -148,7 +149,7 @@ socket.on('gameboard:lore_hidden', hiddenLoreData => {
 });
 // Listen for chronicle UI setting updates broadcast by the server via Socket.IO
 socket.on('chronicle:ui_settings_updated', (uiSettingsData) => {
-    chronicleUiSettings = uiSettingsData;
+    chronicleUiSettings = (uiSettingsData && uiSettingsData.ui_settings) ? uiSettingsData.ui_settings : uiSettingsData;
     if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId) {
         renderWidgetClueCards(activeWidgetMatrixId);
     }
@@ -160,9 +161,9 @@ socket.on('character:updated', updatedCharacterRecord => {
     loadGameboardState();
     loadCharacters();
     if (
-      updatedCharacterRecord &&
       typeof currentLoadedCharacterId !== 'undefined' &&
-      Number(updatedCharacterRecord.id) === Number(currentLoadedCharacterId)
+      currentLoadedCharacterId &&
+      (!updatedCharacterRecord || !updatedCharacterRecord.id || Number(updatedCharacterRecord.id) === Number(currentLoadedCharacterId))
     ) {
       // Query the DOM for the embedded character sheet iframe element by ID
       const sheetIframeElement = document.getElementById('sheetFrame');
@@ -170,7 +171,7 @@ socket.on('character:updated', updatedCharacterRecord => {
         // Send a cross-document message to the open character sheet iframe so it syncs Storyteller base stat unlock/lock and XP changes live
         sheetIframeElement.contentWindow.postMessage({
           type: 'vtm:remote_character_updated',
-          charId: Number(updatedCharacterRecord.id)
+          charId: Number(currentLoadedCharacterId)
         }, '*');
       }
     }
@@ -483,9 +484,13 @@ const originalToggleWidget = toggleWidget;
     }
     // Prompt the user via a browser dialog to enter an optional description for the map location pin
     const pinLocationDescription = prompt("Enter location description (optional):") || "";
-    // Query the DOM for the episode map selector dropdown value
-    let rawUrl = document.getElementById('episodeMapSelector')?.value || canvasState?.backdrop || '';
-    const mapUrl = new URL(rawUrl, window.location.origin).pathname;
+    // Query the active city map URL in normalized form
+    const rawUrl = typeof getActiveCityMapUrl === 'function'
+      ? getActiveCityMapUrl()
+      : (canvasState?.backdrop || document.getElementById('episodeMapSelector')?.value || '');
+    const mapUrl = typeof normalizeCityMapUrl === 'function'
+      ? normalizeCityMapUrl(rawUrl)
+      : new URL(rawUrl, window.location.origin).pathname;
     try {
       // Send an authenticated HTTP POST request to save the new map pin to the server
       const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/pins`, {
@@ -512,7 +517,9 @@ const originalToggleWidget = toggleWidget;
   // Listen for map pin updates broadcast by the server via Socket.IO
   socket.on('gameboard:pins_updated', () => {
     if (typeof loadMapPins === 'function') loadMapPins();
-    if (typeof loadCampaignPins === 'function') loadCampaignPins();
+    if (typeof loadCampaignPins === 'function' && (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller')) {
+      loadCampaignPins();
+    }
   });
   window.editingNpcCategoryId = null;
   let vtmPromptResolve = null;
