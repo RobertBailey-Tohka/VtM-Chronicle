@@ -858,6 +858,11 @@ function enterChronicle(campaignId, role, targetTab = 'gameboard') {
   }).catch(errorObject => console.error(errorObject));
   loadGameboardState();
   loadCharacters();
+  authFetch(`/api/chronicles/${campaignId}/members`).then(res => res.ok ? res.json() : []).then(members => {
+    if (Array.isArray(members)) {
+      chronicleMembersList = members;
+    }
+  }).catch(() => {});
   loadRecentRolls();
   loadClueMatricesForWidget();
   loadLoreMatricesForWidget();

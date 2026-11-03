@@ -548,17 +548,17 @@
       try {
         sd = typeof c.sheet_data === 'string' ? JSON.parse(c.sheet_data || '{}') : c.sheet_data || {};
       } catch (e) {}
-      return {
-        id: c.id,
-        user_id: c.user_id,
-        player_name: c.player_name,
-        category: c.category,
-        authorized_user_ids: c.authorized_user_ids,
-        hidden_from_user_ids: c.hidden_from_user_ids,
-        concealed_fields: c.concealed_fields,
-        total_experience: sd.total_experience ?? sd.total ?? '0',
-        player_base_edit_unlocked: Boolean(sd.player_base_edit_unlocked),
+      const rec = {
+        i: c.id,
+        u: c.user_id,
+        x: sd.total_experience ?? sd.total ?? '0',
       };
+      const h = parseNullableHiddenIds(c.hidden_from_user_ids);
+      if (h && h.length > 0) rec.h = h;
+      const cf = safeParseJsonArray(c.concealed_fields);
+      if (cf.length > 0) rec.c = cf;
+      if (sd.player_base_edit_unlocked) rec.b = 1;
+      return rec;
     });
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
@@ -639,24 +639,34 @@
     if (pkt.type === 'st_authoritative_sync' && Array.isArray(pkt.characters) && db && Array.isArray(db.characters)) {
       let anyChanged = false;
       for (const sc of pkt.characters) {
-        const ch = db.characters.find((c) => Number(c.id) === Number(sc.id));
+        const cid = sc.i !== undefined ? sc.i : sc.id;
+        const ch = db.characters.find((c) => Number(c.id) === Number(cid));
         if (!ch) continue;
-        if (sc.user_id !== undefined) ch.user_id = sc.user_id;
+        const uid = sc.u !== undefined ? sc.u : sc.user_id;
+        if (uid !== undefined) ch.user_id = uid;
         if (sc.player_name !== undefined) ch.player_name = sc.player_name;
         if (sc.category !== undefined) ch.category = sc.category;
         if (sc.authorized_user_ids !== undefined) ch.authorized_user_ids = sc.authorized_user_ids;
-        if (sc.hidden_from_user_ids !== undefined) ch.hidden_from_user_ids = sc.hidden_from_user_ids;
-        if (sc.concealed_fields !== undefined) ch.concealed_fields = sc.concealed_fields;
+        if (sc.i !== undefined) {
+          ch.hidden_from_user_ids = Array.isArray(sc.h) && sc.h.length > 0 ? JSON.stringify(sc.h) : null;
+          ch.concealed_fields = Array.isArray(sc.c) && sc.c.length > 0 ? JSON.stringify(sc.c) : '[]';
+        } else {
+          if (sc.hidden_from_user_ids !== undefined) ch.hidden_from_user_ids = sc.hidden_from_user_ids;
+          if (sc.concealed_fields !== undefined) ch.concealed_fields = sc.concealed_fields;
+        }
         let sd = {};
         try {
           sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
         } catch (e) {}
-        if (sc.total_experience !== undefined && String(sd.total_experience) !== String(sc.total_experience)) {
-          sd.total_experience = String(sc.total_experience);
-          sd.total = String(sc.total_experience);
+        const totXp = sc.x !== undefined ? sc.x : sc.total_experience;
+        if (totXp !== undefined && String(sd.total_experience) !== String(totXp)) {
+          sd.total_experience = String(totXp);
+          sd.total = String(totXp);
           anyChanged = true;
         }
-        if (sc.player_base_edit_unlocked !== undefined) {
+        if (sc.i !== undefined) {
+          sd.player_base_edit_unlocked = Boolean(sc.b);
+        } else if (sc.player_base_edit_unlocked !== undefined) {
           sd.player_base_edit_unlocked = Boolean(sc.player_base_edit_unlocked);
         }
         ch.sheet_data = JSON.stringify(sd);
@@ -1092,7 +1102,7 @@
       };
       sock.presence = presence;
       localPresenceRecord = presence;
-      activePresencesByUserId.set(String(presence.userId), { ...presence, lastSeen: Date.now() });
+      activePresencesByUserId.set(Number(presence.userId), { ...presence, lastSeen: Date.now() });
       emitCombinedPresences();
       broadcastLocalPresence(true);
       if (uRole === 'gm' || Number(uid) === 11) {
@@ -1122,7 +1132,7 @@
       };
       sock.presence = presence;
       localPresenceRecord = presence;
-      activePresencesByUserId.set(String(presence.userId), { ...presence, lastSeen: Date.now() });
+      activePresencesByUserId.set(Number(presence.userId), { ...presence, lastSeen: Date.now() });
       emitCombinedPresences();
       broadcastLocalPresence(false);
       return;

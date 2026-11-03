@@ -1460,6 +1460,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (remoteSheetData.xp_upgrades && typeof remoteSheetData.xp_upgrades === 'object') {
                         currentSheetData.xp_upgrades = remoteSheetData.xp_upgrades;
                     }
+                    if (remoteCharPayload.concealed_fields !== undefined) {
+                        try {
+                            const parsedConcealed = typeof remoteCharPayload.concealed_fields === 'string'
+                                ? JSON.parse(remoteCharPayload.concealed_fields || '[]')
+                                : remoteCharPayload.concealed_fields;
+                            if (Array.isArray(parsedConcealed)) {
+                                concealedFields = parsedConcealed;
+                            }
+                        } catch (e) {}
+                    }
+                    if (remoteCharPayload.hidden_from_user_ids !== undefined) {
+                        try {
+                            const parsedHidden = typeof remoteCharPayload.hidden_from_user_ids === 'string'
+                                ? JSON.parse(remoteCharPayload.hidden_from_user_ids || '[]')
+                                : remoteCharPayload.hidden_from_user_ids;
+                            window.vtmHiddenFromUserIds = Array.isArray(parsedHidden) ? parsedHidden : [];
+                        } catch (e) {
+                            window.vtmHiddenFromUserIds = [];
+                        }
+                    }
+                    applyRedaction();
+                    if (window.vtmCurrentSheetTabMode === 'privacy' && typeof renderUnifiedPrivacyModeBar === 'function') {
+                        renderUnifiedPrivacyModeBar();
+                    }
                     refreshAllXpVisuals();
                     if (prevUnlocked !== nextUnlocked) {
                         showSaveState(

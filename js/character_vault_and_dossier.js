@@ -2537,26 +2537,46 @@ async function fetchCurrentVisibilityFields(characterId) {
 }
 
 async function updateVisibilitySettings() {
-    // Retrieve the user's authentication token from browser localStorage
-    const authenticationToken = localStorage.getItem('vtm_auth_token');
     if (!privacyWidgetTargetCharId) return;
     try {
-        // Send an HTTP PUT request using the browser Fetch API to update which users this character is hidden from
-        await fetch('/api/characters/' + privacyWidgetTargetCharId, {
+        // Send an authenticated HTTP PUT request to update which users this character is hidden from
+        const putRes = await authFetch('/api/characters/' + privacyWidgetTargetCharId, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authenticationToken ? 'Bearer ' + authenticationToken : ''
+                'Content-Type': 'application/json'
             },
             // Serialize the hidden user IDs array into a JSON string payload
             body: JSON.stringify({ hidden_from_user_ids: currentHiddenFromFields })
         });
-        const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === privacyWidgetTargetCharId);
+        if (putRes.ok) {
+            try {
+                const putJson = await putRes.json();
+                if (putJson && putJson.hidden_from_user_ids !== undefined) {
+                    currentHiddenFromFields = putJson.hidden_from_user_ids;
+                }
+            } catch (e) {}
+        }
+        const characterRecord = chronicleCharactersList.find(candidateCharacter => Number(candidateCharacter.id) === Number(privacyWidgetTargetCharId));
         if (characterRecord) characterRecord.hidden_from_user_ids = currentHiddenFromFields;
         
         // Reload widgets to show badge
         if (typeof renderCharacterVaultCards === "function") renderCharacterVaultCards();
         if (typeof renderCharacterCastWidget === 'function') renderCharacterCastWidget();
+        if (Number(currentLoadedCharacterId) === Number(privacyWidgetTargetCharId)) {
+            const nowHidden = isCharacterHiddenFromPlayers(characterRecord);
+            const dossierQuickVisibilityButton = document.getElementById('dossierQuickVisibilityBtn');
+            if (dossierQuickVisibilityButton) {
+                const visibilityIconClass = nowHidden ? 'fa-eye-slash' : 'fa-eye';
+                const visibilityIconColor = nowHidden ? '#ef4444' : '#9ca3af';
+                dossierQuickVisibilityButton.innerHTML = `<i class="fa-solid ${visibilityIconClass}" style="color:${visibilityIconColor};"></i>`;
+            }
+            const modalQuickVisibilityButton = document.getElementById('btnModalQuickVisibility');
+            if (modalQuickVisibilityButton) {
+                const visibilityIconClass = nowHidden ? 'fa-eye-slash' : 'fa-eye';
+                const visibilityIconColor = nowHidden ? '#ef4444' : '#9ca3af';
+                modalQuickVisibilityButton.innerHTML = `<i class="fa-solid ${visibilityIconClass}" style="color:${visibilityIconColor};"></i> Toggle All`;
+            }
+        }
     } catch(errorObject) {
         // Log any error updating visibility settings to the developer console
         console.error(errorObject);
@@ -2965,6 +2985,9 @@ async function quickToggleVisibility(clickEventObject, characterId, isCurrentlyH
             currentHiddenFromFields = updatedHiddenUserIdsList;
             populateParentPrivacyWidget();
         }
+        if (Number(currentLoadedCharacterId) === Number(characterId) && currentSheetModalSidebarTab === 'privacy') {
+            switchSheetModalTab('privacy');
+        }
         if (typeof renderInlineSettingsPrivacyAndVisibility === 'function') {
             renderInlineSettingsPrivacyAndVisibility(characterId);
         }
@@ -3328,18 +3351,33 @@ function switchSheetModalTab(targetTabName) {
         let hiddenFromUserIdsForPrivacy = [];
         if (currentSheetModalSidebarTab === 'privacy' && currentLoadedCharacterId) {
             privacyWidgetTargetCharId = currentLoadedCharacterId;
+            if ((!Array.isArray(chronicleMembersList) || chronicleMembersList.length === 0) && activeChronicleId) {
+                authFetch(`/api/chronicles/${activeChronicleId}/members`)
+                    .then(res => res.ok ? res.json() : [])
+                    .then(members => {
+                        if (Array.isArray(members) && members.length > 0) {
+                            chronicleMembersList = members;
+                            if (currentSheetModalSidebarTab === 'privacy') {
+                                switchSheetModalTab('privacy');
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
             const activeMembersList = Array.isArray(chronicleMembersList)
-                ? chronicleMembersList.filter(memberRecord => memberRecord.status === 'active')
+                ? chronicleMembersList.filter(memberRecord => memberRecord.status === 'active' || !memberRecord.status)
                 : [];
             const characterRecord = chronicleCharactersList.find(
                 candidateCharacter => Number(candidateCharacter.id) === Number(currentLoadedCharacterId)
             );
-            const characterOwnerUserId = characterRecord ? characterRecord.user_id : null;
+            const characterOwnerUserId = characterRecord ? Number(characterRecord.user_id) : null;
             eligiblePlayersForPrivacy = activeMembersList.filter(memberRecord => {
-                const isMemberOwner = memberRecord.id === characterOwnerUserId;
+                const memberId = Number(memberRecord.id || memberRecord.user_id);
+                const isMemberOwner = characterOwnerUserId !== null && memberId === characterOwnerUserId;
                 const isMemberStoryteller =
                     memberRecord.role === 'storyteller' ||
-                    (currentChronicleData && memberRecord.id === currentChronicleData.gm_id);
+                    memberRecord.role === 'gm' ||
+                    (currentChronicleData && memberId === Number(currentChronicleData.gm_id));
                 return !isMemberOwner && !isMemberStoryteller;
             });
             if (characterRecord && characterRecord.hidden_from_user_ids) {
