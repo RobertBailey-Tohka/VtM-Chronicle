@@ -165,6 +165,9 @@ function applySceneState(sceneStateData) {
   };
   if (sceneStateData.active_episode_id) {
     window.liveGameboardEpisodeId = Number(sceneStateData.active_episode_id);
+    if (typeof activeEpisodeId === 'undefined' || !activeEpisodeId || activeEpisodeId === 1) {
+      activeEpisodeId = Number(sceneStateData.active_episode_id);
+    }
   }
   if (sceneStateData.active_scene_banner) {
     // Look up the scene banner image element in the DOM by its ID

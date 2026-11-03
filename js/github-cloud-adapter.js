@@ -711,6 +711,10 @@
         ? db.episodes.find((e) => Number(e.id) === Number(enriched.active_episode_id))
         : null);
     const epMaps = ep ? parseEpisodeMapsArray(ep.maps) : enriched.active_episode_maps || [];
+    const pins =
+      db && Array.isArray(db.gameboard_pins)
+        ? db.gameboard_pins.filter((p) => Number(p.chronicle_id) === targetChronId)
+        : [];
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: nowTs,
@@ -733,6 +737,7 @@
         game_time: enriched.game_time || '',
       },
       canvas_state: enriched.canvas_state || null,
+      pins: pins.length <= 20 ? pins : undefined,
       episode: ep
         ? {
             id: ep.id,
@@ -796,24 +801,36 @@
       discovered_clue_ids: discoveredClueIds,
       discovered_lore_ids: discoveredLoreIds,
     });
-    const gs =
-      (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId()) ||
-      (db.gameboard_state || [])[0];
-    if (gs) {
-      broadcastSceneSyncPacket(gs);
-    }
-    broadcastPinsSyncPacket(defaultChronicleId());
-    const recentRolls = (db.dice_rolls || []).slice(-12);
-    const recentChat = (db.chat_messages || []).slice(-12);
-    if (recentRolls.length > 0 || recentChat.length > 0) {
-      sendRawNtfyPacket({
-        senderId: CLIENT_ID,
-        ts: Date.now(),
-        type: 'ledger_sync',
-        rolls: recentRolls,
-        chat: recentChat,
-      });
-    }
+    setTimeout(() => {
+      if (!db) return;
+      const gs =
+        (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId()) ||
+        (db.gameboard_state || [])[0];
+      if (gs) {
+        broadcastSceneSyncPacket(gs);
+      }
+      const pinsCount = (db.gameboard_pins || []).filter((p) => Number(p.chronicle_id) === defaultChronicleId()).length;
+      if (pinsCount > 20) {
+        broadcastPinsSyncPacket(defaultChronicleId());
+      }
+    }, 160);
+    setTimeout(() => {
+      if (!db) return;
+      const recentRolls = (db.dice_rolls || []).slice(-6);
+      const recentChat = (db.chat_messages || []).slice(-6).map((m) => ({
+        ...m,
+        message: String(m.message || '').slice(0, 300),
+      }));
+      if (recentRolls.length > 0 || recentChat.length > 0) {
+        sendRawNtfyPacket({
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'ledger_sync',
+          rolls: recentRolls,
+          chat: recentChat,
+        });
+      }
+    }, 320);
   }
 
   function upsertDiceRollIntoDb(roll) {
@@ -1921,6 +1938,11 @@
       emitToLocalSockets(event, data);
       publishRealtimeEvent(event, data);
     }
+
+    if (event === 'character:update' || event === 'character:updated') {
+      emitToLocalSockets('character:updated', data);
+      publishRealtimeEvent('character:updated', data);
+    }
   }
 
   // Always provide or wrap window.io so app.js `const socket = io();` works cleanly
@@ -2216,7 +2238,7 @@
         updated_at: now,
       };
       db.personal_notes.push(note);
-      persistDb({ table: 'personal_notes', row: note });
+      persistDb();
       return jsonResponse(note);
     }
 
@@ -2229,14 +2251,14 @@
           if (body.title !== undefined) note.title = body.title;
           if (body.content !== undefined) note.content = body.content;
           note.updated_at = new Date().toISOString();
-          persistDb({ table: 'personal_notes', row: note });
+          persistDb();
         }
         return jsonResponse({ success: true });
       }
       if (method === 'DELETE') {
         db.personal_notes = (db.personal_notes || []).filter((n) => Number(n.id) !== noteId);
         recordDelete('personal_notes', noteId);
-        persistDb({ table: 'personal_notes', deleteId: noteId });
+        persistDb();
         return jsonResponse({ success: true });
       }
     }
@@ -2814,6 +2836,11 @@
         mem.status = action === 'request-join' ? mem.status || 'pending' : 'active';
       }
       persistDb({ table: 'chronicle_members', row: mem });
+      if (action === 'request-join') {
+        publishRealtimeEvent('coterie:request_received', { chronicleId: cId, userId: targetUserId });
+      } else {
+        publishRealtimeEvent('coterie:request_approved', { chronicleId: cId, userId: targetUserId });
+      }
       return jsonResponse({ success: true, status: mem.status, message: 'Updated membership.' });
     }
 
@@ -2965,7 +2992,28 @@
           ep.maps = typeof body.maps === 'string' ? body.maps : JSON.stringify(body.maps);
         if (body.status !== undefined) ep.status = body.status;
         if (body.fallout_notes !== undefined) ep.fallout_notes = body.fallout_notes;
-        persistDb({ table: 'episodes', row: ep });
+        if (body._skipBroadcast) {
+          persistDb();
+          emitToLocalSockets('episode:updated', ep);
+          return jsonResponse({ success: true });
+        }
+        persistDb({
+          table: 'episodes',
+          row: {
+            id: ep.id,
+            chronicle_id: ep.chronicle_id,
+            campaign_id: ep.campaign_id,
+            episode_number: ep.episode_number,
+            title: ep.title,
+            location: ep.location,
+            revealed: ep.revealed,
+            status: ep.status,
+            hook: String(ep.hook || '').slice(0, 400),
+            concepts: String(ep.concepts || '').slice(0, 300),
+            fallout_notes: String(ep.fallout_notes || '').slice(0, 400),
+            maps: ep.maps,
+          },
+        });
         emitToLocalSockets('episode:updated', ep);
         const gs =
           (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === Number(ep.chronicle_id || defChronId)) ||
@@ -2973,12 +3021,11 @@
         if (gs && Number(gs.active_episode_id) === Number(ep.id)) {
           if (body.location !== undefined && body.location) gs.active_location = body.location;
           if (body.hook !== undefined && body.hook) gs.active_mood_text = body.hook;
+          gs._syncTs = Date.now();
           persistDb();
           const enrichedGs = enrichGameboardSceneState(gs);
           emitToLocalSockets('gameboard:scene_updated', enrichedGs);
           broadcastSceneSyncPacket(enrichedGs, ep);
-        } else if (gs) {
-          broadcastSceneSyncPacket(gs, ep);
         }
         return jsonResponse({ success: true });
       }
@@ -3090,8 +3137,9 @@
     if (path === '/api/lore_matrices') {
       if (method === 'GET') {
         const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
+        const epId = q.get('episode_id') ? Number(q.get('episode_id')) : null;
         const rows = (db.lore_matrices || [])
-          .filter((lm) => Number(lm.chronicle_id) === cId)
+          .filter((lm) => Number(lm.chronicle_id) === cId && (!epId || Number(lm.episode_id) === epId || !lm.episode_id))
           .map((lm) => ({
             ...lm,
             entries: (db.lore_entries || []).filter((le) => Number(le.matrix_id) === Number(lm.id)),
@@ -3263,12 +3311,26 @@
           ? JSON.stringify(body.authorized_user_ids)
           : body.authorized_user_ids;
       }
-      persistDb({ table: 'characters', row: char });
+      char.updated_at = new Date().toISOString();
+      persistDb();
       emitToLocalSockets('vtm:sheet_updated', {
         characterId: charId,
         user_id: char.user_id,
         authorized_user_ids: safeParseJsonArray(char.authorized_user_ids),
         player_name: char.player_name,
+      });
+      emitToLocalSockets('character:updated', { id: charId });
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'char_delta',
+        id: charId,
+        rowPatch: {
+          user_id: char.user_id,
+          player_name: char.player_name,
+          authorized_user_ids: char.authorized_user_ids,
+        },
+        sheetPatch: {},
       });
       return jsonResponse({ success: true, message: 'Character controllers updated successfully.' });
     }
@@ -3291,7 +3353,16 @@
       if (body.field && allowedFields.includes(body.field)) {
         char[body.field] = body.value || '';
         char.updated_at = new Date().toISOString();
-        persistDb({ table: 'characters', row: char });
+        persistDb();
+        emitToLocalSockets('character:updated', { id: charId });
+        sendRawNtfyPacket({
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'char_delta',
+          id: charId,
+          rowPatch: { [body.field]: char[body.field] },
+          sheetPatch: {},
+        });
       }
       return jsonResponse({ success: true, field: body.field, value: body.value });
     }
@@ -3303,7 +3374,20 @@
       if (!char) return jsonResponse({ error: 'Character not found' }, 404);
       if (body.avatar_url) char.avatar_url = stripBasePathFromUrl(body.avatar_url);
       if (body.vault_url) char.vault_url = stripBasePathFromUrl(body.vault_url);
-      persistDb({ table: 'characters', row: char });
+      char.updated_at = new Date().toISOString();
+      persistDb();
+      emitToLocalSockets('character:updated', { id: charId });
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'char_delta',
+        id: charId,
+        rowPatch: {
+          avatar_url: char.avatar_url,
+          vault_url: char.vault_url,
+        },
+        sheetPatch: {},
+      });
       return jsonResponse({ success: true, avatar_url: char.avatar_url });
     }
 
@@ -3464,7 +3548,17 @@
       const char = (db.characters || []).find((c) => Number(c.id) === charId);
       if (!char) return jsonResponse({ error: 'Character not found' }, 404);
       char.category = body.category || 'Uncategorized';
-      persistDb({ table: 'characters', row: char });
+      char.updated_at = new Date().toISOString();
+      persistDb();
+      emitToLocalSockets('character:updated', { id: charId });
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'char_delta',
+        id: charId,
+        rowPatch: { category: char.category },
+        sheetPatch: {},
+      });
       return jsonResponse({ success: true, category: char.category });
     }
 

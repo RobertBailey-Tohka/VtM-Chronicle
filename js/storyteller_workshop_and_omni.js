@@ -771,13 +771,14 @@ async function loadOmniUnrevealedClues() {
   const widgetScrollContainerElement = unrevealedCluesListElement ? unrevealedCluesListElement.closest('.widget-body') : null;
   const savedScrollTopPosition = widgetScrollContainerElement ? widgetScrollContainerElement.scrollTop : 0;
   if (!unrevealedCluesListElement) return;
-  if (!activeEpisodeId) {
+  const targetClueEpId = window.liveGameboardEpisodeId || activeEpisodeId || 12;
+  if (!targetClueEpId) {
       unrevealedCluesListElement.innerHTML = '<div style="color:#9ca3af;font-size:11px;font-style:italic;">Please load an episode first.</div>';
       return;
   }
   try {
     // Perform an authenticated HTTP GET request to fetch clue matrices for the active episode
-    const fetchResponse = await authFetch(`/api/matrices?episode_id=${activeEpisodeId}&campaign_id=${activeChronicleId}`);
+    const fetchResponse = await authFetch(`/api/matrices?episode_id=${targetClueEpId}&campaign_id=${activeChronicleId}`);
     // Parse the JSON response into an array of clue matrix objects
     const clueMatricesList = await fetchResponse.json();
     unrevealedCluesListElement.innerHTML = '';
@@ -824,13 +825,14 @@ async function loadOmniUnrevealedLore() {
   const widgetScrollContainerElement = unrevealedLoreListElement ? unrevealedLoreListElement.closest('.widget-body') : null;
   const savedScrollTopPosition = widgetScrollContainerElement ? widgetScrollContainerElement.scrollTop : 0;
   if (!unrevealedLoreListElement) return;
-  if (!activeEpisodeId) {
+  const targetLoreEpId = window.liveGameboardEpisodeId || activeEpisodeId || 12;
+  if (!targetLoreEpId) {
       unrevealedLoreListElement.innerHTML = '<div style="color:#9ca3af;font-size:11px;font-style:italic;">Please load an episode first.</div>';
       return;
   }
   try {
     // Perform an authenticated HTTP GET request to fetch lore matrices for the active episode
-    const fetchResponse = await authFetch(`/api/lore_matrices?episode_id=${activeEpisodeId}&campaign_id=${activeChronicleId}`);
+    const fetchResponse = await authFetch(`/api/lore_matrices?episode_id=${targetLoreEpId}&campaign_id=${activeChronicleId}`);
     // Parse the JSON response into an array of lore matrix objects
     const loreMatricesList = await fetchResponse.json();
     unrevealedLoreListElement.innerHTML = '';
@@ -850,8 +852,8 @@ async function loadOmniUnrevealedLore() {
           const toggleLoreButtonHtml = loreEntryRecord.discovered ? `<button class="btn-action-conceal" onclick="toggleLore(${loreEntryRecord.id})"><i class="fa-solid fa-eye-slash"></i> Hide Lore</button>` : `<button class="btn-action-reveal" onclick="toggleLore(${loreEntryRecord.id})"><i class="fa-solid fa-book-open"></i> Reveal Lore</button>`;
           loreItemElement.innerHTML = `
                         <div style="font-size:12px;font-weight:700;color:#f3f4f6;">${loreEntryRecord.title}</div>
-                        <div style="font-size:10px;color:#fca5a5;margin-bottom:4px;">Learned via: ${loreEntryRecord.revelation_vector}</div>\n                        ${loreEntryRecord.content ? `<div style="font-size:11px;color:#d1d5db;margin-bottom:6px;line-height:1.3;">${escapeHtml(loreEntryRecord.content)}</div>` : ''} 
-                        ${loreEntryRecord.content ? '<div style="font-size:11px;color:#d1d5db;margin-bottom:6px;line-height:1.3;">' + escapeHtml(loreEntryRecord.content) + '</div>' : ''}
+                        <div style="font-size:10px;color:#fca5a5;margin-bottom:4px;">Learned via: ${loreEntryRecord.revelation_vector}</div>
+                        ${loreEntryRecord.content ? `<div style="font-size:11px;color:#d1d5db;margin-bottom:6px;line-height:1.3;">${escapeHtml(loreEntryRecord.content)}</div>` : ''}
                         ${toggleLoreButtonHtml}
                     `;
           // Append the lore item element into the matrix group container
@@ -1979,7 +1981,8 @@ window.pushEpisodeToGameboard = async function(targetEpisodeId = null) {
           concepts: editedConcepts,
           fallout_notes: editedSummary,
           location: editedLocation,
-          maps: editedMaps
+          maps: editedMaps,
+          _skipBroadcast: true
         })
       });
 
@@ -1997,7 +2000,7 @@ window.pushEpisodeToGameboard = async function(targetEpisodeId = null) {
       await authFetch(`/api/episodes/${epId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revealed: true, status: 'active' })
+        body: JSON.stringify({ revealed: true, status: 'active', _skipBroadcast: true })
       });
     }
 
@@ -2053,19 +2056,8 @@ window.pushEpisodeToGameboard = async function(targetEpisodeId = null) {
       if (responsePayload.state) {
         window.liveGameboardSceneState = responsePayload.state;
       }
-
-      if (primaryEpisodeMapUrl) {
-        await authFetch('/api/gameboard/map', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chronicle_id: activeChronicleId,
-            map_url: primaryEpisodeMapUrl,
-            active_location: pushedLocation || undefined,
-            active_mood_text: pushedMood || undefined
-          })
-        }).catch(() => {});
-        if (typeof switchCityMap === 'function') switchCityMap(primaryEpisodeMapUrl);
+      if (primaryEpisodeMapUrl && typeof switchCityMap === 'function') {
+        switchCityMap(primaryEpisodeMapUrl);
       }
 
       // Sync Omni inputs immediately if present

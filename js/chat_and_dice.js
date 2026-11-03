@@ -461,7 +461,8 @@ async function loadChatMessages() {
     // Query the DOM for the chat message stream container by its ID
     const chatStreamElement = document.getElementById('chatMessagesStream');
     if (!chatStreamElement) return;
-    chatStreamElement.innerHTML = '';
+    // Remove only non-roll chat messages so dice roll history cards (.channel-rolls) in the stream are preserved
+    chatStreamElement.querySelectorAll('.chat-msg-entry:not(.channel-rolls)').forEach(el => el.remove());
     chatMessages.forEach(messageData => appendChatMessage(messageData, false));
     chatStreamElement.scrollTop = chatStreamElement.scrollHeight;
   } catch (errorObject) {

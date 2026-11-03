@@ -780,8 +780,12 @@ async function loadClueMatricesForWidget() {
         matrixSelectElement.appendChild(optionElement);
       });
       if (collectedMatricesList.length > 0) {
+        const liveEpId = Number(window.liveGameboardEpisodeId || activeEpisodeId || 0);
+        const liveEpMatrix = liveEpId
+          ? collectedMatricesList.find(clueMatrixRecord => Number(clueMatrixRecord.episode_id) === liveEpId)
+          : null;
         if (!activeWidgetMatrixId || !collectedMatricesList.some(clueMatrixRecord => clueMatrixRecord.id === activeWidgetMatrixId)) {
-          activeWidgetMatrixId = collectedMatricesList[0].id;
+          activeWidgetMatrixId = (liveEpMatrix || collectedMatricesList[0]).id;
         }
         matrixSelectElement.value = String(activeWidgetMatrixId);
         renderWidgetClueCards(activeWidgetMatrixId);
@@ -1029,12 +1033,17 @@ async function openClueMatrixWidget(matrixId) {
   // Display a browser alert if no active chronicle is selected
   if (!activeChronicleId) return alert('Please enter a chronicle first.');
   try {
-    // Perform an authenticated HTTP GET request to fetch the active episode's matrices
-    const fetchResponse = await authFetch(`/api/episodes/${activeEpisodeId || 1}`);
-    if (!fetchResponse.ok) return;
-    const episodeData = await fetchResponse.json();
-    const matricesList = episodeData.matrices || [];
-    const targetMatrixRecord = matricesList.find(clueMatrixRecord => clueMatrixRecord.id == matrixId) || matricesList[0];
+    let targetMatrixRecord = (allChronicleClueMatrices || []).find(clueMatrixRecord => clueMatrixRecord.id == matrixId);
+    if (!targetMatrixRecord) {
+      // Perform an authenticated HTTP GET request to fetch the active episode's matrices
+      const targetEpId = window.liveGameboardEpisodeId || activeEpisodeId || 12;
+      const fetchResponse = await authFetch(`/api/episodes/${targetEpId}`);
+      if (fetchResponse.ok) {
+        const episodeData = await fetchResponse.json();
+        const matricesList = episodeData.matrices || [];
+        targetMatrixRecord = matricesList.find(clueMatrixRecord => clueMatrixRecord.id == matrixId) || matricesList[0];
+      }
+    }
     // Display a browser alert if the requested clue matrix was not found
     if (!targetMatrixRecord) return alert('Clue matrix not found.');
     switchTab('gameboard');

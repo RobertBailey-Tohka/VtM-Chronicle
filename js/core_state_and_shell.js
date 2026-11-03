@@ -59,7 +59,7 @@ let currentUser = null;
 let activeChronicleRole = null;
 let currentAuthMode = 'login';
 let activeChronicleId = null;
-let activeEpisodeId = 1;
+let activeEpisodeId = 12;
 let currentLoadedCharacterId = null;
 let activeControlledCharacterId = null;
 let chronicleCharactersList = [];
@@ -155,32 +155,48 @@ socket.on('chronicle:ui_settings_updated', (uiSettingsData) => {
     }
 });
 
+// Helper to notify any open character sheet iframes (Vault modal + floating widgets) when a character updates
+function notifyOpenCharacterSheetFrames(updatedCharId) {
+  const targetId = updatedCharId ? Number(updatedCharId) : null;
+  if (
+    typeof currentLoadedCharacterId !== 'undefined' &&
+    currentLoadedCharacterId &&
+    (!targetId || targetId === Number(currentLoadedCharacterId))
+  ) {
+    const sheetIframeElement = document.getElementById('sheetFrame');
+    if (sheetIframeElement && sheetIframeElement.contentWindow) {
+      sheetIframeElement.contentWindow.postMessage({
+        type: 'vtm:remote_character_updated',
+        charId: Number(currentLoadedCharacterId)
+      }, '*');
+    }
+  }
+  document.querySelectorAll('iframe[src*="V5-Character-Sheet"]').forEach(frame => {
+    if (frame.id === 'sheetFrame' || !frame.contentWindow) return;
+    const match = (frame.src || '').match(/[?&]id=(\d+)/);
+    const frameCharId = match ? Number(match[1]) : null;
+    if (!targetId || !frameCharId || targetId === frameCharId) {
+      frame.contentWindow.postMessage({
+        type: 'vtm:remote_character_updated',
+        charId: frameCharId || targetId
+      }, '*');
+    }
+  });
+}
+
 // Listen for character sheet updates broadcast by the server via Socket.IO
 socket.on('character:updated', updatedCharacterRecord => {
   if (activeChronicleId) {
     loadGameboardState();
     loadCharacters();
-    if (
-      typeof currentLoadedCharacterId !== 'undefined' &&
-      currentLoadedCharacterId &&
-      (!updatedCharacterRecord || !updatedCharacterRecord.id || Number(updatedCharacterRecord.id) === Number(currentLoadedCharacterId))
-    ) {
-      // Query the DOM for the embedded character sheet iframe element by ID
-      const sheetIframeElement = document.getElementById('sheetFrame');
-      if (sheetIframeElement && sheetIframeElement.contentWindow) {
-        // Send a cross-document message to the open character sheet iframe so it syncs Storyteller base stat unlock/lock and XP changes live
-        sheetIframeElement.contentWindow.postMessage({
-          type: 'vtm:remote_character_updated',
-          charId: Number(currentLoadedCharacterId)
-        }, '*');
-      }
-    }
+    notifyOpenCharacterSheetFrames(updatedCharacterRecord && (updatedCharacterRecord.id || updatedCharacterRecord.character_id));
   }
 });
 // Listen for character vitals updates broadcast by the server via Socket.IO
 socket.on('character:vitals_updated', vitalsUpdateData => {
   if (activeChronicleId) {
     loadCharacters();
+    notifyOpenCharacterSheetFrames(vitalsUpdateData && (vitalsUpdateData.id || vitalsUpdateData.character_id));
   }
 });
 // Listen for active city map URL changes broadcast by the server via Socket.IO
