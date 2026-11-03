@@ -985,13 +985,195 @@ function restoreWidget(widgetId) {
   }
 }
 
+let highestFloatingOverlayZIndex = 9550;
+
+function bringCharacterSheetWindowToFront() {
+  const sheetModal = document.getElementById('characterSheetModal');
+  if (!sheetModal) return;
+  highestFloatingOverlayZIndex++;
+  sheetModal.style.setProperty('z-index', String(highestFloatingOverlayZIndex), 'important');
+}
+
 function bringDesktopWidgetToFront(widgetElement) {
   if (!widgetElement) return;
-  // If the widget has been assigned a modal-piercing z-index, do not overwrite it
-  if (widgetElement.style.getPropertyPriority('z-index') === 'important') return;
-  
+  const sheetModal = document.getElementById('characterSheetModal');
+  const isSheetOpen = sheetModal && sheetModal.classList.contains('active');
+  const activeTab = document.querySelector('.tab-view.active');
+  const isOutsideGameboard = activeTab && activeTab.id !== 'tab-gameboard';
+  if (
+    isSheetOpen ||
+    isOutsideGameboard ||
+    widgetElement.parentElement === document.body ||
+    widgetElement.style.getPropertyPriority('z-index') === 'important'
+  ) {
+    highestFloatingOverlayZIndex++;
+    widgetElement.style.setProperty('z-index', String(highestFloatingOverlayZIndex), 'important');
+    return;
+  }
+
   highestDesktopWidgetZIndex++;
   widgetElement.style.zIndex = highestDesktopWidgetZIndex;
+}
+
+function attachMultiDirectionResizeHandles(containerElement, minWidth = 320, minHeight = 220) {
+  if (!containerElement) return;
+  const handles = containerElement.querySelectorAll('.sheet-window-resize-handle, .widget-resize-handle');
+  handles.forEach((handleEl) => {
+    handleEl.onmousedown = (mouseEvent) => {
+      mouseEvent.preventDefault();
+      mouseEvent.stopPropagation();
+      if (containerElement.id === 'characterSheetWindow') {
+        bringCharacterSheetWindowToFront();
+      } else {
+        bringDesktopWidgetToFront(containerElement);
+      }
+      const rect = containerElement.getBoundingClientRect();
+      containerElement.style.left = `${rect.left}px`;
+      containerElement.style.top = `${rect.top}px`;
+      containerElement.style.width = `${rect.width}px`;
+      containerElement.style.height = `${rect.height}px`;
+      containerElement.dataset.isMaximized = 'false';
+      document.body.classList.add('vtm-dragging-or-resizing');
+      activeWidgetResize = {
+        widget: containerElement,
+        dir: handleEl.dataset.resizeDir || 'se',
+        startX: mouseEvent.clientX,
+        startY: mouseEvent.clientY,
+        initialLeft: rect.left,
+        initialTop: rect.top,
+        initialWidth: rect.width,
+        initialHeight: rect.height,
+        minWidth,
+        minHeight,
+      };
+    };
+  });
+}
+
+function initCharacterSheetWindowDragAndResize() {
+  const sheetWin = document.getElementById('characterSheetWindow');
+  if (!sheetWin) return;
+  const dragBar = document.getElementById('sheetWindowDragBar');
+  const sidebarIdentity = document.getElementById('sheetSidebarIdentityDragArea');
+
+  const startSheetDrag = (mouseEvent) => {
+    if (mouseEvent.target.closest('button, input, select, a, textarea')) return;
+    mouseEvent.preventDefault();
+    bringCharacterSheetWindowToFront();
+    const rect = sheetWin.getBoundingClientRect();
+    sheetWin.style.left = `${rect.left}px`;
+    sheetWin.style.top = `${rect.top}px`;
+    sheetWin.style.width = `${rect.width}px`;
+    sheetWin.style.height = `${rect.height}px`;
+    sheetWin.dataset.isMaximized = 'false';
+    document.body.classList.add('vtm-dragging-or-resizing');
+    activeWidgetDrag = {
+      widget: sheetWin,
+      startX: mouseEvent.clientX,
+      startY: mouseEvent.clientY,
+      initialLeft: rect.left,
+      initialTop: rect.top,
+    };
+  };
+
+  if (dragBar) dragBar.onmousedown = startSheetDrag;
+  if (sidebarIdentity) {
+    sidebarIdentity.style.cursor = 'move';
+    sidebarIdentity.onmousedown = startSheetDrag;
+  }
+  attachMultiDirectionResizeHandles(sheetWin, 520, 360);
+}
+
+function toggleMaximizeCharacterSheetWindow() {
+  const sheetWin = document.getElementById('characterSheetWindow');
+  const maxBtn = document.getElementById('btnSheetWindowMaximize');
+  if (!sheetWin) return;
+  bringCharacterSheetWindowToFront();
+  if (sheetWin.dataset.isMaximized === 'true') {
+    sheetWin.style.left = sheetWin.dataset.prevLeft || 'calc(50vw - min(560px, 45vw))';
+    sheetWin.style.top = sheetWin.dataset.prevTop || '56px';
+    sheetWin.style.width = sheetWin.dataset.prevWidth || 'min(1120px, 90vw)';
+    sheetWin.style.height = sheetWin.dataset.prevHeight || 'min(820px, 86vh)';
+    sheetWin.dataset.isMaximized = 'false';
+    if (maxBtn) maxBtn.innerHTML = '<i class="fa-solid fa-expand"></i>';
+  } else {
+    const rect = sheetWin.getBoundingClientRect();
+    sheetWin.dataset.prevLeft = `${rect.left}px`;
+    sheetWin.dataset.prevTop = `${rect.top}px`;
+    sheetWin.dataset.prevWidth = `${rect.width}px`;
+    sheetWin.dataset.prevHeight = `${rect.height}px`;
+    sheetWin.style.left = '12px';
+    sheetWin.style.top = '52px';
+    sheetWin.style.width = `${window.innerWidth - 24}px`;
+    sheetWin.style.height = `${window.innerHeight - 64}px`;
+    sheetWin.dataset.isMaximized = 'true';
+    if (maxBtn) maxBtn.innerHTML = '<i class="fa-solid fa-compress"></i>';
+  }
+}
+
+function openFloatingRulebookCodex() {
+  const rulesWidget = document.getElementById('widget-quick-rules');
+  if (!rulesWidget) return;
+  const isHidden = window.getComputedStyle(rulesWidget).display === 'none';
+  if (isHidden) {
+    toggleWidget('widget-quick-rules');
+  }
+  rulesWidget.style.position = 'fixed';
+  if (rulesWidget.parentElement !== document.body) {
+    document.body.appendChild(rulesWidget);
+  }
+  initDesktopWidgetsDragAndResize();
+  bringDesktopWidgetToFront(rulesWidget);
+
+  // Auto-populate Rules Widget if needed
+  if (typeof allRules !== 'undefined' && allRules.length > 0) {
+    if (typeof renderWidgetRulebookHierarchy === 'function') {
+      renderWidgetRulebookHierarchy(allRules);
+    }
+  } else if (typeof loadRulesCodex === 'function') {
+    loadRulesCodex().then(() => {
+      if (typeof renderWidgetRulebookHierarchy === 'function') {
+        renderWidgetRulebookHierarchy(allRules);
+      }
+    });
+  }
+}
+
+function tileSheetAndRulebookSideBySide() {
+  openFloatingRulebookCodex();
+  const sheetModal = document.getElementById('characterSheetModal');
+  const sheetWin = document.getElementById('characterSheetWindow');
+  const rulesWidget = document.getElementById('widget-quick-rules');
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const topY = 54;
+  const usableH = Math.max(420, vh - topY - 14);
+
+  if (sheetModal && sheetModal.classList.contains('active') && sheetWin) {
+    const leftW = Math.max(540, Math.floor((vw - 30) * 0.57));
+    const rightW = Math.max(380, vw - leftW - 30);
+    sheetWin.style.left = '10px';
+    sheetWin.style.top = `${topY}px`;
+    sheetWin.style.width = `${leftW}px`;
+    sheetWin.style.height = `${usableH}px`;
+    sheetWin.dataset.isMaximized = 'false';
+
+    if (rulesWidget) {
+      rulesWidget.style.position = 'fixed';
+      rulesWidget.style.left = `${10 + leftW + 10}px`;
+      rulesWidget.style.top = `${topY}px`;
+      rulesWidget.style.width = `${rightW}px`;
+      rulesWidget.style.height = `${usableH}px`;
+      bringDesktopWidgetToFront(rulesWidget);
+    }
+  } else if (rulesWidget) {
+    rulesWidget.style.position = 'fixed';
+    rulesWidget.style.left = `${Math.max(20, Math.floor(vw * 0.45))}px`;
+    rulesWidget.style.top = `${topY}px`;
+    rulesWidget.style.width = `${Math.max(420, Math.floor(vw * 0.52))}px`;
+    rulesWidget.style.height = `${usableH}px`;
+    bringDesktopWidgetToFront(rulesWidget);
+  }
 }
 
 function initDesktopWidgetsDragAndResize() {
@@ -999,30 +1181,33 @@ function initDesktopWidgetsDragAndResize() {
   let desktopContainerElement = document.getElementById('elysiumDesktop');
   if (!desktopContainerElement) desktopContainerElement = document.body;
   
-  // Move generic popups into the desktop so they can be dragged!
-  // Query the DOM for floating popup widgets to ensure they are parented inside the desktop container
+  initCharacterSheetWindowDragAndResize();
+
+  // Move generic popups into the desktop when on gameboard so they can be dragged!
+  const activeTab = document.querySelector('.tab-view.active');
+  const isOnGameboard = !activeTab || activeTab.id === 'tab-gameboard';
   const clueDetailWidget = document.getElementById('widget-clue-detail');
-  if (clueDetailWidget && clueDetailWidget.parentElement !== desktopContainerElement) {
+  if (clueDetailWidget && isOnGameboard && clueDetailWidget.parentElement !== desktopContainerElement) {
       desktopContainerElement.appendChild(clueDetailWidget);
   }
   const storyWidget = document.getElementById('widget-chronicle-timeline');
-  if (storyWidget && storyWidget.parentElement !== desktopContainerElement) {
+  if (storyWidget && isOnGameboard && storyWidget.parentElement !== desktopContainerElement) {
       desktopContainerElement.appendChild(storyWidget);
   }
   const notesWidget = document.getElementById('widget-personal-notes');
-  if (notesWidget && notesWidget.parentElement !== desktopContainerElement) {
+  if (notesWidget && isOnGameboard && notesWidget.parentElement !== desktopContainerElement) {
       desktopContainerElement.appendChild(notesWidget);
   }
   const rulesWidget = document.getElementById('widget-quick-rules');
-  if (rulesWidget && rulesWidget.parentElement !== desktopContainerElement) {
+  if (rulesWidget && isOnGameboard && rulesWidget.parentElement !== desktopContainerElement && rulesWidget.style.position !== 'fixed') {
       desktopContainerElement.appendChild(rulesWidget);
   }
   const pdfWidget = document.getElementById('widget-pdf');
-  if (pdfWidget && pdfWidget.parentElement !== desktopContainerElement) {
+  if (pdfWidget && isOnGameboard && pdfWidget.parentElement !== desktopContainerElement) {
       desktopContainerElement.appendChild(pdfWidget);
   }
-  // Query all Elysium widget elements within the desktop container
-  const widgetElements = desktopContainerElement.querySelectorAll('.elysium-widget');
+  // Query all Elysium widget elements across the entire document (including floating widgets on document.body)
+  const widgetElements = document.querySelectorAll('.elysium-widget');
   widgetElements.forEach(widgetElement => {
     // If it's the paper popup, map dragging to the ENTIRE widget body!
     if (widgetElement.id === 'widget-clue-detail') {
@@ -1030,6 +1215,7 @@ function initDesktopWidgetsDragAndResize() {
             if (mouseEvent.target.closest('button, input, select, a, textarea, [contenteditable="true"]')) return;
             mouseEvent.preventDefault();
             bringDesktopWidgetToFront(widgetElement);
+            document.body.classList.add('vtm-dragging-or-resizing');
             activeWidgetDrag = {
               widget: widgetElement,
               startX: mouseEvent.clientX,
@@ -1049,6 +1235,7 @@ function initDesktopWidgetsDragAndResize() {
             if (mouseEvent.target.closest('button, input, select, a, textarea')) return;
             mouseEvent.preventDefault();
             bringDesktopWidgetToFront(widgetElement);
+            document.body.classList.add('vtm-dragging-or-resizing');
             activeWidgetDrag = {
               widget: widgetElement,
               startX: mouseEvent.clientX,
@@ -1059,22 +1246,7 @@ function initDesktopWidgetsDragAndResize() {
           };
         }
     }
-    // Query the widget element for its bottom-right resize handle
-    const resizeHandleElement = widgetElement.querySelector('.widget-resize-handle');
-    if (resizeHandleElement) {
-      resizeHandleElement.onmousedown = mouseEvent => {
-        mouseEvent.preventDefault();
-        mouseEvent.stopPropagation();
-        bringDesktopWidgetToFront(widgetElement);
-        activeWidgetResize = {
-          widget: widgetElement,
-          startX: mouseEvent.clientX,
-          startY: mouseEvent.clientY,
-          initialWidth: widgetElement.offsetWidth,
-          initialHeight: widgetElement.offsetHeight
-        };
-      };
-    }
+    attachMultiDirectionResizeHandles(widgetElement, 260, 180);
     if (!desktopListenersAttached) {
       desktopListenersAttached = true;
       // Attach a global mousemove listener to the window to handle active widget dragging and resizing
@@ -1090,12 +1262,34 @@ function initDesktopWidgetsDragAndResize() {
             renderClueCords();
           }
         } else if (activeWidgetResize) {
+          const dir = activeWidgetResize.dir || 'se';
           const deltaWidth = mouseEvent.clientX - activeWidgetResize.startX;
           const deltaHeight = mouseEvent.clientY - activeWidgetResize.startY;
-          const newWidth = Math.max(220, activeWidgetResize.initialWidth + deltaWidth);
-          const newHeight = Math.max(140, activeWidgetResize.initialHeight + deltaHeight);
-          activeWidgetResize.widget.style.width = `${newWidth}px`;
-          activeWidgetResize.widget.style.height = `${newHeight}px`;
+          const minW = activeWidgetResize.minWidth || 220;
+          const minH = activeWidgetResize.minHeight || 140;
+
+          if (dir.includes('e')) {
+            const newWidth = Math.max(minW, activeWidgetResize.initialWidth + deltaWidth);
+            activeWidgetResize.widget.style.width = `${newWidth}px`;
+          }
+          if (dir.includes('s')) {
+            const newHeight = Math.max(minH, activeWidgetResize.initialHeight + deltaHeight);
+            activeWidgetResize.widget.style.height = `${newHeight}px`;
+          }
+          if (dir.includes('w')) {
+            const proposedWidth = activeWidgetResize.initialWidth - deltaWidth;
+            if (proposedWidth >= minW) {
+              activeWidgetResize.widget.style.width = `${proposedWidth}px`;
+              activeWidgetResize.widget.style.left = `${Math.max(0, activeWidgetResize.initialLeft + deltaWidth)}px`;
+            }
+          }
+          if (dir.includes('n')) {
+            const proposedHeight = activeWidgetResize.initialHeight - deltaHeight;
+            if (proposedHeight >= minH) {
+              activeWidgetResize.widget.style.height = `${proposedHeight}px`;
+              activeWidgetResize.widget.style.top = `${Math.max(42, activeWidgetResize.initialTop + deltaHeight)}px`;
+            }
+          }
           if (activeWidgetResize.widget.id === 'widget-clue-board' || activeWidgetResize.widget.classList.contains('widget-matrix-popup')) {
             renderClueCords();
           }
@@ -1103,6 +1297,7 @@ function initDesktopWidgetsDragAndResize() {
       });
       // Attach a global mouseup listener to the window to end active widget dragging or resizing
       window.addEventListener('mouseup', () => {
+        document.body.classList.remove('vtm-dragging-or-resizing');
         if (activeWidgetDrag) {
           activeWidgetDrag = null;
         }
@@ -1339,17 +1534,20 @@ function toggleWidget(widgetId) {
     let targetContainer = document.body;
     // Query the DOM for the currently active tab view element
     const activeTab = document.querySelector('.tab-view.active');
-    if (activeTab && activeTab.id === 'tab-gameboard') {
+    const sheetModal = document.getElementById('characterSheetModal');
+    const isSheetOpen = sheetModal && sheetModal.classList.contains('active');
+    if (activeTab && activeTab.id === 'tab-gameboard' && !isSheetOpen && widgetId !== 'widget-quick-rules') {
         // Query the DOM for the Elysium desktop container element by its ID
         targetContainer = document.getElementById('elysiumDesktop') || document.body;
-        // Remove any residual massive z-index from a previous non-gameboard spawn
         widgetElement.style.removeProperty('z-index');
+        widgetElement.style.position = 'absolute';
     } else {
-        widgetElement.style.setProperty('z-index', '99999999', 'important');
+        widgetElement.style.position = 'fixed';
     }
     if (widgetElement.parentElement !== targetContainer) {
         targetContainer.appendChild(widgetElement);
     }
+    initDesktopWidgetsDragAndResize();
     
     // Auto-populate Rules Widget
     if (widgetId === 'widget-quick-rules') {

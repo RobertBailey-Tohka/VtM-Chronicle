@@ -1322,11 +1322,11 @@ function openPdfViewer(pdfFileUrl) {
         }
         
         targetContainerElement.appendChild(pdfWidgetElement);
-        if (activeTabElement && activeTabElement.id === 'tab-gameboard') {
-            if (typeof bringDesktopWidgetToFront === 'function') bringDesktopWidgetToFront(pdfWidgetElement);
+        pdfWidgetElement.style.position = 'fixed';
+        if (typeof bringDesktopWidgetToFront === 'function') {
+            bringDesktopWidgetToFront(pdfWidgetElement);
         } else {
-            // When spawning over a modal in the Character Vault, we need a massive z-index to pierce the overlay
-            pdfWidgetElement.style.setProperty('z-index', '999999999', 'important');
+            pdfWidgetElement.style.setProperty('z-index', '9700', 'important');
         }
         
         // Attach drag listener specifically to this new widget's header element

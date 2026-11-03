@@ -742,10 +742,16 @@ function openCharacterSheet(characterId, characterName, characterClan, ownerUser
   currentLoadedCharacterId = characterId;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === characterId);
   // Look up the modal character name, clan, and avatar image elements in the DOM by ID
+  const resolvedCharTitle = characterName || (characterRecord ? characterRecord.name : 'Character Dossier');
+  const resolvedClanTitle = characterClan || (characterRecord ? characterRecord.clan : 'Vampire: The Masquerade V5');
   const modalCharacterNameElement = document.getElementById('modalCharName');
-  if (modalCharacterNameElement) modalCharacterNameElement.innerText = characterName || (characterRecord ? characterRecord.name : 'Character Dossier');
+  if (modalCharacterNameElement) modalCharacterNameElement.innerText = resolvedCharTitle;
   const modalCharacterClanElement = document.getElementById('modalCharClan');
-  if (modalCharacterClanElement) modalCharacterClanElement.innerText = characterClan || (characterRecord ? characterRecord.clan : 'Vampire: The Masquerade V5');
+  if (modalCharacterClanElement) modalCharacterClanElement.innerText = resolvedClanTitle;
+  const sheetWindowHeaderTitleElement = document.getElementById('sheetWindowHeaderTitle');
+  if (sheetWindowHeaderTitleElement) {
+    sheetWindowHeaderTitleElement.innerText = `${resolvedCharTitle.toUpperCase()} — ${resolvedClanTitle.toUpperCase()}`;
+  }
   const modalAvatarImageElement = document.getElementById('modalCharAvatarImg');
   const resolvedAvatarImageUrl = characterRecord && characterRecord.avatar_url && !characterRecord.avatar_url.includes('bg_page_1.png') ? characterRecord.avatar_url : '/images/caine_portrait.jpg?v=2';
   if (modalAvatarImageElement) modalAvatarImageElement.src = resolvedAvatarImageUrl;
@@ -995,6 +1001,12 @@ function openCharacterSheet(characterId, characterName, characterClan, ownerUser
   // Look up the character sheet modal element in the DOM by ID and display it
   const characterSheetModalElement = document.getElementById('characterSheetModal');
   if (characterSheetModalElement) characterSheetModalElement.classList.add('active');
+  if (typeof initCharacterSheetWindowDragAndResize === 'function') {
+    initCharacterSheetWindowDragAndResize();
+  }
+  if (typeof bringCharacterSheetWindowToFront === 'function') {
+    bringCharacterSheetWindowToFront();
+  }
 }
 
 function assumeActiveControlFromModal() {

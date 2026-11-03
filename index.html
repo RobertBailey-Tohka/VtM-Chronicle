@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <script src="js/github-cloud-adapter.js?v=20261102_v7"></script>
+    <script src="js/github-cloud-adapter.js?v=20261102_v8"></script>
 
     <script>
     
@@ -28,7 +28,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vampire: The Masquerade — Elysium Virtual Tabletop</title>
     <link rel="stylesheet" href="css/all.min.css">
-    <link rel="stylesheet" href="css/app.css?v=20261102_v3">
+    <link rel="stylesheet" href="css/app.css?v=20261102_v8">
 
     <!-- Cropper.js -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
@@ -875,6 +875,9 @@
                         <button class="btn-action gm-only-control" onclick="openChronicleXpManagerModal()" style="margin-right: 10px; background: #b45309; border-color: #d97706;">
                             <i class="fa-solid fa-star"></i> Award / Manage XP
                         </button>
+                        <button class="btn-action-outline" onclick="openFloatingRulebookCodex()" style="margin-right: 10px; border-color: #a855f7; color: #e9d5ff;" title="Open the movable Rulebook Codex alongside your character sheets">
+                            <i class="fa-solid fa-book-journal-whills"></i> Rulebook Codex
+                        </button>
                         <button class="btn-action" id="btn-guided-creator" onclick="openCharacterCreatorModal()" style="margin-right: 10px; background: #6b21a8;"><i class="fa-solid fa-wand-magic-sparkles"></i> Guided Creator</button>
                         <button class="btn-action-outline" onclick="openNewCharacterModal()"><i class="fa-solid fa-plus"></i> Blank Sheet</button>
                         <button class="btn-action-outline" onclick="switchTab('gameboard')" style="margin-left: 10px;"><i class="fa-solid fa-arrow-left"></i> Return to Gameboard</button>
@@ -1529,15 +1532,38 @@
         </div>
     </div>
 
-    <!-- FULL CHARACTER SHEET POPUP MODAL (OPTION B: CLEAN LEFT SIDEBAR NAVIGATION) -->
-    <div class="modal-overlay" id="characterSheetModal">
-        <div class="modal-container sheet-modal-container sheet-modal-sidebar-layout">
-            
+    <!-- FULL CHARACTER SHEET FLOATING WIDGET WINDOW (MOVEABLE & RESIZABLE, CLEAR BACKGROUND) -->
+    <div class="modal-overlay sheet-floating-overlay" id="characterSheetModal">
+        <div class="modal-container sheet-modal-container sheet-modal-sidebar-layout" id="characterSheetWindow" onmousedown="bringCharacterSheetWindowToFront()">
+            <!-- TOP WINDOW DRAG BAR -->
+            <div class="sheet-window-drag-bar" id="sheetWindowDragBar">
+                <div class="sheet-window-drag-title">
+                    <i class="fa-solid fa-up-down-left-right" style="color:#ef4444; font-size:12px;"></i>
+                    <span id="sheetWindowHeaderTitle">CHARACTER WORKSHEET</span>
+                    <span class="sheet-window-drag-hint">Drag bar to move • Drag any edge or corner to resize</span>
+                </div>
+                <div class="sheet-window-drag-actions">
+                    <button type="button" class="sheet-window-ctrl-btn sheet-window-codex-btn" onclick="openFloatingRulebookCodex()" title="Open Rulebook Codex alongside this Character Sheet">
+                        <i class="fa-solid fa-book-journal-whills"></i> Rulebook Codex
+                    </button>
+                    <button type="button" class="sheet-window-ctrl-btn" onclick="tileSheetAndRulebookSideBySide()" title="Snap Character Sheet and Rulebook Codex Side-by-Side">
+                        <i class="fa-solid fa-table-columns"></i> Side-by-Side
+                    </button>
+                    <button type="button" class="sheet-window-ctrl-btn" id="btnSheetWindowMaximize" onclick="toggleMaximizeCharacterSheetWindow()" title="Maximize / Restore Window Size">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                    <button type="button" class="sheet-window-ctrl-btn sheet-window-close-top-btn" onclick="closeSheetModal()" title="Close Character Sheet">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sheet-window-body-row">
             <!-- LEFT SIDEBAR NAVIGATION -->
             <aside class="sheet-left-sidebar" id="sheetLeftSidebar">
                 <div class="sheet-sidebar-top">
                     <!-- Character Identity Block -->
-                    <div class="sheet-sidebar-identity">
+                    <div class="sheet-sidebar-identity" id="sheetSidebarIdentityDragArea">
                         <div class="sheet-modal-avatar-box sheet-sidebar-avatar-box" title="Change Character Portrait">
                             <img src="/images/caine_portrait.jpg" id="modalCharAvatarImg" alt="Portrait" class="modal-avatar-thumb sheet-sidebar-avatar-img">
                             <button type="button" class="btn-avatar-camera-overlay" onclick="triggerModalAvatarUpload()" title="Upload Custom Portrait">
@@ -1556,7 +1582,7 @@
                         </div>
                     </div>
 
-                    <!-- 5 Clean Vertical Navigation Tabs -->
+                    <!-- Clean Vertical Navigation Tabs -->
                     <nav class="sheet-sidebar-nav" id="sheetSidebarNav">
                         <button type="button" class="sheet-sidebar-tab active" id="sheetNavTabSheet" onclick="switchSheetModalTab('sheet')">
                             <i class="fa-regular fa-file-lines sheet-sidebar-tab-icon"></i>
@@ -1595,6 +1621,14 @@
                             <div class="sheet-sidebar-tab-text">
                                 <span class="sheet-sidebar-tab-title" id="sheetNavSettingsTitle">Storyteller &amp; Settings</span>
                                 <span class="sheet-sidebar-tab-sub" id="sheetNavSettingsSub">Layout, Rules &amp; Tools</span>
+                            </div>
+                        </button>
+
+                        <button type="button" class="sheet-sidebar-tab" id="sheetNavTabRulebook" onclick="openFloatingRulebookCodex()" style="border-top:1px solid rgba(255,255,255,0.06); margin-top:4px; padding-top:12px;">
+                            <i class="fa-solid fa-book-journal-whills sheet-sidebar-tab-icon" style="color:#c084fc;"></i>
+                            <div class="sheet-sidebar-tab-text">
+                                <span class="sheet-sidebar-tab-title" style="color:#e9d5ff;">Rulebook Codex</span>
+                                <span class="sheet-sidebar-tab-sub" style="color:#a855f7;">Open Rules Alongside Sheet</span>
                             </div>
                         </button>
                     </nav>
@@ -1836,7 +1870,17 @@
                     </div>
                 </div>
             </div>
+            </div>
 
+            <!-- 8-Direction Resize Handles for Moveable & Resizable Character Sheet Window -->
+            <div class="sheet-window-resize-handle sheet-resize-n" data-resize-dir="n"></div>
+            <div class="sheet-window-resize-handle sheet-resize-s" data-resize-dir="s"></div>
+            <div class="sheet-window-resize-handle sheet-resize-e" data-resize-dir="e"></div>
+            <div class="sheet-window-resize-handle sheet-resize-w" data-resize-dir="w"></div>
+            <div class="sheet-window-resize-handle sheet-resize-ne" data-resize-dir="ne"></div>
+            <div class="sheet-window-resize-handle sheet-resize-nw" data-resize-dir="nw"></div>
+            <div class="sheet-window-resize-handle sheet-resize-sw" data-resize-dir="sw"></div>
+            <div class="sheet-window-resize-handle sheet-resize-se" data-resize-dir="se" title="Drag to Resize Character Sheet"></div>
         </div>
     </div>
 
@@ -2582,10 +2626,13 @@
     </div>
 
     <!-- RULES WIDGET -->
-    <div class="elysium-widget widget-quick-rules" id="widget-quick-rules" style="top: 150px; left: 450px; width: 800px; height: 600px; z-index: 55; display: none; flex-direction: row; background: #0c080a; border: 1px solid #3f3f46; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); overflow: hidden; resize: both;">
-        <div class="widget-header" id="dragHeader-quick-rules" style="position:absolute; top:0; left:0; right:0; z-index: 10; cursor: move; padding: 10px; background: #1a1a24; border-bottom: 1px solid #3f3f46; display: flex; justify-content: space-between; align-items: center;">
-            <span class="widget-title" style="font-weight: bold; font-size: 13px; letter-spacing: 1px;"><i class="fa-solid fa-scale-balanced" style="color:#d946ef;margin-right:6px;"></i> QUICK RULES REFERENCE</span>
-            <div class="widget-actions">
+    <div class="elysium-widget widget-quick-rules" id="widget-quick-rules" onmousedown="bringDesktopWidgetToFront(this)" style="top: 80px; left: 420px; width: 820px; height: 640px; z-index: 9550; display: none; flex-direction: row; background: #0c080a; border: 1px solid #4c1d95; border-radius: 8px; box-shadow: 0 18px 45px rgba(0,0,0,0.88), 0 0 20px rgba(168,85,247,0.2); overflow: hidden;">
+        <div class="widget-header" id="dragHeader-quick-rules" style="position:absolute; top:0; left:0; right:0; z-index: 10; cursor: move; padding: 8px 12px; background: #161020; border-bottom: 1px solid #3b235a; display: flex; justify-content: space-between; align-items: center;">
+            <span class="widget-title" style="font-weight: bold; font-size: 13px; letter-spacing: 1px; color:#f3e8ff;"><i class="fa-solid fa-book-journal-whills" style="color:#d946ef;margin-right:6px;"></i> RULEBOOK CODEX <span style="font-size:10px; font-weight:normal; color:#9ca3af; margin-left:6px;">(Drag to Move • Resize Corners)</span></span>
+            <div class="widget-actions" style="display:flex; align-items:center; gap:6px;">
+                <button type="button" class="sheet-window-ctrl-btn" onclick="tileSheetAndRulebookSideBySide()" title="Snap Character Sheet and Rulebook Codex Side-by-Side" style="font-size:11px; padding:3px 8px;">
+                    <i class="fa-solid fa-table-columns"></i> Side-by-Side
+                </button>
                 <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-quick-rules')" style="background:none; border:none; color:#9ca3af; cursor:pointer;"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
             </div>
         </div>
@@ -2608,6 +2655,14 @@
             </div>
         </div>
         <div class="widget-resize-handle"></div>
+        <div class="sheet-window-resize-handle sheet-resize-n" data-resize-dir="n"></div>
+        <div class="sheet-window-resize-handle sheet-resize-s" data-resize-dir="s"></div>
+        <div class="sheet-window-resize-handle sheet-resize-e" data-resize-dir="e"></div>
+        <div class="sheet-window-resize-handle sheet-resize-w" data-resize-dir="w"></div>
+        <div class="sheet-window-resize-handle sheet-resize-ne" data-resize-dir="ne"></div>
+        <div class="sheet-window-resize-handle sheet-resize-nw" data-resize-dir="nw"></div>
+        <div class="sheet-window-resize-handle sheet-resize-sw" data-resize-dir="sw"></div>
+        <div class="sheet-window-resize-handle sheet-resize-se" data-resize-dir="se" title="Drag to Resize Rulebook Codex"></div>
     </div>
 
     <!-- STORY WIDGET -->
@@ -2844,18 +2899,18 @@
     </div>
 
     <script src="socket.io/socket.io.js" onerror="console.log('[VtM] Using Serverless Socket.IO Engine')"></script>
-    <script src="js/v5_data.js?v=20261102_v7"></script>
-    <script src="js/character_wizard.js?v=20261102_v7"></script>
-    <script src="js/relationship_map.js?v=20261102_v7"></script>
-    <script src="js/dice_animations.js?v=20261102_v7"></script>
-    <script src="js/core_state_and_shell.js?v=20261102_v7"></script>
-    <script src="js/chronicle_hub_and_coterie.js?v=20261102_v7"></script>
-    <script src="js/chat_and_dice.js?v=20261102_v7"></script>
-    <script src="js/city_map.js?v=20261102_v7"></script>
-    <script src="js/character_vault_and_dossier.js?v=20261102_v7"></script>
-    <script src="js/storyteller_workshop_and_omni.js?v=20261102_v7"></script>
-    <script src="js/clues_and_lore.js?v=20261102_v7"></script>
-    <script src="js/rulebook_and_notes.js?v=20261102_v7"></script>
-    <script src="js/asset_library.js?v=20261102_v7"></script>
+    <script src="js/v5_data.js?v=20261102_v8"></script>
+    <script src="js/character_wizard.js?v=20261102_v8"></script>
+    <script src="js/relationship_map.js?v=20261102_v8"></script>
+    <script src="js/dice_animations.js?v=20261102_v8"></script>
+    <script src="js/core_state_and_shell.js?v=20261102_v8"></script>
+    <script src="js/chronicle_hub_and_coterie.js?v=20261102_v8"></script>
+    <script src="js/chat_and_dice.js?v=20261102_v8"></script>
+    <script src="js/city_map.js?v=20261102_v8"></script>
+    <script src="js/character_vault_and_dossier.js?v=20261102_v8"></script>
+    <script src="js/storyteller_workshop_and_omni.js?v=20261102_v8"></script>
+    <script src="js/clues_and_lore.js?v=20261102_v8"></script>
+    <script src="js/rulebook_and_notes.js?v=20261102_v8"></script>
+    <script src="js/asset_library.js?v=20261102_v8"></script>
 </body>
 </html>
