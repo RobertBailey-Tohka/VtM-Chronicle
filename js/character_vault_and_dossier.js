@@ -100,12 +100,54 @@ function assumeActiveControl(characterId) {
   }
 }
 
+function isCharacterHiddenFromPlayers(characterRecord) {
+  if (!characterRecord) return false;
+  const rawHidden = characterRecord.hidden_from_user_ids;
+  if (rawHidden === null || rawHidden === undefined || rawHidden === 'null' || rawHidden === '' || rawHidden === '[]') {
+    return false;
+  }
+  if (Array.isArray(rawHidden)) {
+    return rawHidden.length > 0;
+  }
+  if (typeof rawHidden === 'string') {
+    try {
+      const parsed = JSON.parse(rawHidden);
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isCharacterHiddenFromCurrentUser(characterRecord) {
+  if (!characterRecord) return false;
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (isStoryteller) return false;
+  if (!currentUser) return false;
+  if (Number(characterRecord.user_id) === Number(currentUser.id)) return false;
+  let hiddenList = characterRecord.hidden_from_user_ids;
+  if (typeof hiddenList === 'string') {
+    try {
+      hiddenList = JSON.parse(hiddenList);
+    } catch (e) {
+      hiddenList = null;
+    }
+  }
+  if (Array.isArray(hiddenList) && hiddenList.map(Number).includes(Number(currentUser.id))) {
+    return true;
+  }
+  return false;
+}
+
 function renderCharacterCastWidget() {
   // Look up the NPC cast list container element in the DOM by ID
   const npcCastListContainerElement = document.getElementById('npcCastListContainer');
   if (!npcCastListContainerElement) return;
   npcCastListContainerElement.innerHTML = '';
-  let castCharactersList = chronicleCharactersList;
+  let castCharactersList = (Array.isArray(chronicleCharactersList) ? chronicleCharactersList : []).filter(
+    characterRecord => !isCharacterHiddenFromCurrentUser(characterRecord)
+  );
   // Removed aggressive filter: players can see all unhidden characters in the Cast Widget
   // Look up the default Storyteller persona entry element in the DOM by ID
   const defaultStorytellerEntryElement = document.getElementById('npcEntry-default');
@@ -190,7 +232,7 @@ function renderCharacterCastWidget() {
             </div>
             <div class="npc-right-actions">
                 ${(activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') ? (() => {
-                    const isHiddenFromPlayers = characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null';
+                    const isHiddenFromPlayers = isCharacterHiddenFromPlayers(characterRecord);
                     const visibilityIconClass = isHiddenFromPlayers ? 'fa-eye-slash' : 'fa-eye';
                     const visibilityIconColor = isHiddenFromPlayers ? '#ef4444' : '#9ca3af';
                     return `<button type="button" class="btn-npc-peek" onclick="quickToggleVisibility(event, ${characterRecord.id}, ${isHiddenFromPlayers})" title="Toggle Visibility" style="color:${visibilityIconColor};"><i class="fa-solid ${visibilityIconClass}"></i></button>`;
@@ -340,15 +382,19 @@ async function loadCharacters() {
                 // Parse the query string parameters from the iframe's src URL using the URLSearchParams Web API
                 const iframeUrlSearchParams = new URLSearchParams(iframeElement.src.split('?')[1]);
                 const iframeCharacterId = parseInt(iframeUrlSearchParams.get('char_id'), 10);
-                const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === iframeCharacterId);
+                const characterRecord = chronicleCharactersList.find(candidateCharacter => Number(candidateCharacter.id) === iframeCharacterId);
                 if (characterRecord) {
                     let concealedFieldsList = [];
                     try { concealedFieldsList = typeof characterRecord.concealed_fields === 'string' ? JSON.parse(characterRecord.concealed_fields) : (characterRecord.concealed_fields || []); } catch(jsonParseError){}
                     if (!Array.isArray(concealedFieldsList)) concealedFieldsList = [];
                     // Send a cross-document message to the embedded character sheet iframe window to apply field redaction
                     iframeElement.contentWindow.postMessage({ type: 'APPLY_REDACTION', concealedFields: concealedFieldsList }, '*');
-                    // Send a cross-document message to the embedded character sheet iframe window to synchronize updated XP and sheet data
-                    iframeElement.contentWindow.postMessage({ type: 'vtm:sync_sheet' }, '*');
+                    // Send cross-document messages to synchronize updated XP and sheet data live
+                    iframeElement.contentWindow.postMessage({ type: 'vtm:remote_character_updated', charId: iframeCharacterId }, '*');
+                    const parsedSheetData = typeof characterRecord.sheet_data === 'string'
+                        ? JSON.parse(characterRecord.sheet_data || '{}')
+                        : (characterRecord.sheet_data || {});
+                    iframeElement.contentWindow.postMessage({ type: 'vtm:sync_sheet', sheet_data: parsedSheetData }, '*');
                 }
             } catch(iframeSyncError) {}
         }
@@ -416,7 +462,10 @@ function renderCharacterVaultCards() {
   const carouselsContainerElement = document.getElementById('dynamicCharacterCarousels');
   if (!carouselsContainerElement) return;
   let carouselsHtml = '';
-  const playerCharactersList = chronicleCharactersList.filter(characterRecord => String(characterRecord.category).trim().toLowerCase() === 'pc');
+  const visibleVaultCharactersList = (Array.isArray(chronicleCharactersList) ? chronicleCharactersList : []).filter(
+    characterRecord => !isCharacterHiddenFromCurrentUser(characterRecord)
+  );
+  const playerCharactersList = visibleVaultCharactersList.filter(characterRecord => String(characterRecord.category).trim().toLowerCase() === 'pc');
   if (playerCharactersList.length > 0) {
     carouselsHtml += `
             <div class="carousel-section" ondragenter="dragEnterSection(event)" ondragleave="dragLeaveSection(event)" ondragover="allowDropCharacter(event)" ondrop="dropCharacter(event, 'pc')">
@@ -438,8 +487,9 @@ function renderCharacterVaultCards() {
     npcCategoriesList.forEach(npcCategoryRecord => {
       if (!npcCategoryRecord || !npcCategoryRecord.name) return;
       validCustomCategoryNames.push(npcCategoryRecord.name);
-      const categoryCharactersList = chronicleCharactersList.filter(characterRecord => characterRecord.category === npcCategoryRecord.name);
-      if (true) {
+      const categoryCharactersList = visibleVaultCharactersList.filter(characterRecord => characterRecord.category === npcCategoryRecord.name);
+      const isStorytellerUser = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+      if (categoryCharactersList.length > 0 || isStorytellerUser) {
         carouselsHtml += `
                     <div class="carousel-section" ondragenter="dragEnterSection(event)" ondragleave="dragLeaveSection(event)" ondragover="allowDropCharacter(event)" ondrop="dropCharacter(event, '${escapeHtml(npcCategoryRecord.name).replace(/'/g, "\'")}')">
                         <div class="c1-category-header">
@@ -458,7 +508,7 @@ function renderCharacterVaultCards() {
     });
   }
   const knownCategoryNamesLower = ['pc', ...validCustomCategoryNames].map(categoryName => String(categoryName).toLowerCase());
-  const uncategorizedCharactersList = chronicleCharactersList.filter(characterRecord => !knownCategoryNamesLower.includes(String(characterRecord.category || '').toLowerCase()));
+  const uncategorizedCharactersList = visibleVaultCharactersList.filter(characterRecord => !knownCategoryNamesLower.includes(String(characterRecord.category || '').toLowerCase()));
   if (uncategorizedCharactersList.length > 0) {
     carouselsHtml += `
             <div class="carousel-section" ondragenter="dragEnterSection(event)" ondragleave="dragLeaveSection(event)" ondragover="allowDropCharacter(event)" ondrop="dropCharacter(event, 'Uncategorized')">
@@ -488,7 +538,7 @@ function generateCharacterCardHtml(characterRecord) {
   let cardClickActionAttribute = `onclick="openCharacterSheet(${characterRecord.id}, '${escapeHtml(characterRecord.name).replace(/'/g, "\'")}', '${escapeHtml(characterRecord.clan).replace(/'/g, "\'")}')"`;
   let resolvedAvatarImageUrl = '/images/caine_portrait.jpg?v=2';
   let restrictedVisibilityBadgeHtml = '';
-  if (characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null') {
+  if (isCharacterHiddenFromPlayers(characterRecord)) {
       restrictedVisibilityBadgeHtml = '<i class="fa-solid fa-eye-slash" style="color:#ef4444; position:absolute; top:8px; right:8px; font-size:14px; text-shadow:0 0 4px #000;" title="Restricted Visibility"></i>';
   }
   if (characterRecord.vault_url && !characterRecord.vault_url.includes('bg_page_1.png')) {
@@ -522,7 +572,7 @@ function generateCharacterCardHtml(characterRecord) {
             
             ${(() => {
     if (isStoryteller) {
-      const isHiddenFromPlayers = characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null';
+      const isHiddenFromPlayers = isCharacterHiddenFromPlayers(characterRecord);
       const visibilityIconClass = isHiddenFromPlayers ? 'fa-eye-slash' : 'fa-eye';
       const visibilityIconColor = isHiddenFromPlayers ? '#ef4444' : '#9ca3af';
       return `<div class="vault-delete-btn" onclick="promptDeleteCharacter(event, ${characterRecord.id}, '${escapeHtml(characterRecord.name).replace(/'/g, "\\'")}')" title="Delete Character"><i class="fa-solid fa-trash-can"></i></div>
@@ -701,10 +751,11 @@ function openCharacterSheet(characterId, characterName, characterClan, ownerUser
   if (modalAvatarImageElement) modalAvatarImageElement.src = resolvedAvatarImageUrl;
   
   const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
-  const isCharacterOwner = currentUser && currentUser.id === (ownerUserId || (characterRecord ? characterRecord.user_id : null));
+  const targetOwnerUserId = ownerUserId || (characterRecord ? characterRecord.user_id : null);
+  const isCharacterOwner = Boolean(currentUser && targetOwnerUserId !== null && Number(currentUser.id) === Number(targetOwnerUserId));
   const authorizedUserIdsList = characterRecord && Array.isArray(characterRecord.authorized_user_ids) ? characterRecord.authorized_user_ids : [];
   
-  const isAuthorizedPilot = currentUser && authorizedUserIdsList.includes(currentUser.id);
+  const isAuthorizedPilot = Boolean(currentUser && authorizedUserIdsList.map(Number).includes(Number(currentUser.id)));
   const canPilotCharacter = isStoryteller || isCharacterOwner || isAuthorizedPilot;
   const canEditCharacter = isStoryteller || isCharacterOwner || isAuthorizedPilot;
 
@@ -733,7 +784,7 @@ function openCharacterSheet(characterId, characterName, characterClan, ownerUser
   if (dossierQuickVisibilityButton) {
       if (isStoryteller) {
           dossierQuickVisibilityButton.style.display = 'inline-block';
-          const isHiddenFromPlayers = characterRecord && characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null';
+          const isHiddenFromPlayers = isCharacterHiddenFromPlayers(characterRecord);
           dossierQuickVisibilityButton.innerHTML = '<i class="fa-solid ' + (isHiddenFromPlayers ? 'fa-eye-slash' : 'fa-eye') + '" style="color:' + (isHiddenFromPlayers ? '#ef4444' : '#9ca3af') + ';"></i>';
       } else {
           dossierQuickVisibilityButton.style.display = 'none';
@@ -2838,60 +2889,79 @@ async function quickToggleVisibility(clickEventObject, characterId, isCurrentlyH
         clickEventObject.stopPropagation();
         clickEventObject.preventDefault();
     }
-    // Retrieve the user's authentication token from browser localStorage
-    const authenticationToken = localStorage.getItem('vtm_auth_token');
-    
+    const characterRecord = chronicleCharactersList.find(candidateCharacter => Number(candidateCharacter.id) === Number(characterId));
+    const effectiveIsCurrentlyHidden = isCurrentlyHidden !== undefined ? Boolean(isCurrentlyHidden) : isCharacterHiddenFromPlayers(characterRecord);
+
     let updatedHiddenUserIdsList = null;
-    if (!isCurrentlyHidden) {
-        const activeChronicleMembersList = chronicleMembersList.filter(memberRecord => memberRecord.status === 'active');
-        const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === characterId);
-        const characterOwnerUserId = characterRecord ? characterRecord.user_id : null;
-        
+    if (!effectiveIsCurrentlyHidden) {
+        if ((!Array.isArray(chronicleMembersList) || chronicleMembersList.length === 0) && activeChronicleId) {
+            try {
+                const membersRes = await authFetch(`/api/chronicles/${activeChronicleId}/members`);
+                if (membersRes.ok) {
+                    chronicleMembersList = await membersRes.json();
+                }
+            } catch (e) {}
+        }
+        const activeChronicleMembersList = (Array.isArray(chronicleMembersList) ? chronicleMembersList : []).filter(
+            memberRecord => memberRecord.status === 'active' || !memberRecord.status
+        );
+        const characterOwnerUserId = characterRecord ? Number(characterRecord.user_id) : null;
+
         updatedHiddenUserIdsList = [];
         activeChronicleMembersList.forEach(memberRecord => {
-            const isMemberCharacterOwner = memberRecord.id === characterOwnerUserId;
-            const isMemberStoryteller = memberRecord.role === 'storyteller' || (currentChronicleData && memberRecord.id === currentChronicleData.gm_id);
-            if (!isMemberCharacterOwner && !isMemberStoryteller) {
-                updatedHiddenUserIdsList.push(memberRecord.id);
+            const memberUserId = Number(memberRecord.id || memberRecord.user_id);
+            const isMemberCharacterOwner = characterOwnerUserId !== null && memberUserId === characterOwnerUserId;
+            const isMemberStoryteller =
+                memberRecord.role === 'storyteller' ||
+                memberRecord.role === 'gm' ||
+                (currentChronicleData && memberUserId === Number(currentChronicleData.gm_id));
+            if (!isMemberCharacterOwner && !isMemberStoryteller && !isNaN(memberUserId)) {
+                updatedHiddenUserIdsList.push(memberUserId);
             }
         });
-        // Removed the null force so that empty arrays correctly trigger 'hidden' logic globally
     }
-    
+
     try {
-        // Send an HTTP PUT request using the browser Fetch API to update the character's visibility restriction list
-        await fetch('/api/characters/' + characterId, {
+        // Send an authenticated HTTP PUT request to update the character's visibility restriction list
+        const putRes = await authFetch('/api/characters/' + characterId, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authenticationToken ? 'Bearer ' + authenticationToken : ''
+                'Content-Type': 'application/json'
             },
             // Serialize the updated hidden user IDs list into a JSON string payload
             body: JSON.stringify({ hidden_from_user_ids: updatedHiddenUserIdsList })
         });
-        const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === characterId);
+        if (putRes.ok) {
+            try {
+                const putJson = await putRes.json();
+                if (putJson && putJson.hidden_from_user_ids !== undefined) {
+                    updatedHiddenUserIdsList = putJson.hidden_from_user_ids;
+                }
+            } catch (e) {}
+        }
         if (characterRecord) characterRecord.hidden_from_user_ids = updatedHiddenUserIdsList;
         
         if (typeof renderCharacterVaultCards === "function") renderCharacterVaultCards();
         if (typeof renderCharacterCastWidget === 'function') renderCharacterCastWidget();
-        if (currentLoadedCharacterId === characterId) {
+        if (Number(currentLoadedCharacterId) === Number(characterId)) {
+            const nowHidden = isCharacterHiddenFromPlayers(characterRecord);
             // Look up and update the Dossier quick visibility button in the DOM by ID
             const dossierQuickVisibilityButton = document.getElementById('dossierQuickVisibilityBtn');
             if (dossierQuickVisibilityButton) {
-                const visibilityIconClass = updatedHiddenUserIdsList !== null ? 'fa-eye-slash' : 'fa-eye';
-                const visibilityIconColor = updatedHiddenUserIdsList !== null ? '#ef4444' : '#9ca3af';
+                const visibilityIconClass = nowHidden ? 'fa-eye-slash' : 'fa-eye';
+                const visibilityIconColor = nowHidden ? '#ef4444' : '#9ca3af';
                 dossierQuickVisibilityButton.innerHTML = `<i class="fa-solid ${visibilityIconClass}" style="color:${visibilityIconColor};"></i>`;
             }
             // Look up and update the Modal quick visibility button in the DOM by ID
             const modalQuickVisibilityButton = document.getElementById('btnModalQuickVisibility');
             if (modalQuickVisibilityButton) {
-                const visibilityIconClass = updatedHiddenUserIdsList !== null ? 'fa-eye-slash' : 'fa-eye';
-                const visibilityIconColor = updatedHiddenUserIdsList !== null ? '#ef4444' : '#9ca3af';
+                const visibilityIconClass = nowHidden ? 'fa-eye-slash' : 'fa-eye';
+                const visibilityIconColor = nowHidden ? '#ef4444' : '#9ca3af';
                 modalQuickVisibilityButton.innerHTML = `<i class="fa-solid ${visibilityIconClass}" style="color:${visibilityIconColor};"></i> Toggle All`;
             }
         }
         
-        if (privacyWidgetTargetCharId === characterId) {
+        if (Number(privacyWidgetTargetCharId) === Number(characterId)) {
             currentHiddenFromFields = updatedHiddenUserIdsList;
             populateParentPrivacyWidget();
         }
@@ -2906,17 +2976,17 @@ async function quickToggleVisibility(clickEventObject, characterId, isCurrentlyH
 
 async function quickToggleVisibilityDossier() {
     if (!currentLoadedCharacterId) return;
-    const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
+    const characterRecord = chronicleCharactersList.find(candidateCharacter => Number(candidateCharacter.id) === Number(currentLoadedCharacterId));
     if (!characterRecord) return;
-    const isCurrentlyHidden = characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null';
+    const isCurrentlyHidden = isCharacterHiddenFromPlayers(characterRecord);
     await quickToggleVisibility(null, currentLoadedCharacterId, isCurrentlyHidden);
 }
 
 async function quickToggleVisibilityModal() {
     if (!currentLoadedCharacterId) return;
-    const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
+    const characterRecord = chronicleCharactersList.find(candidateCharacter => Number(candidateCharacter.id) === Number(currentLoadedCharacterId));
     if (!characterRecord) return;
-    const isCurrentlyHidden = characterRecord.hidden_from_user_ids !== null && characterRecord.hidden_from_user_ids !== undefined && characterRecord.hidden_from_user_ids !== 'null';
+    const isCurrentlyHidden = isCharacterHiddenFromPlayers(characterRecord);
     await quickToggleVisibility(null, currentLoadedCharacterId, isCurrentlyHidden);
 }
 
@@ -3553,9 +3623,11 @@ window.addEventListener('message', (messageEventObject) => {
 
     if (messageEventObject.data.type === 'vtm:set_hidden_from_users') {
         const targetCharId = Number(messageEventObject.data.charId || currentLoadedCharacterId);
-        const updatedHiddenIds = Array.isArray(messageEventObject.data.hiddenFromUserIds)
-            ? messageEventObject.data.hiddenFromUserIds
-            : [];
+        const updatedHiddenIds =
+            Array.isArray(messageEventObject.data.hiddenFromUserIds) &&
+            messageEventObject.data.hiddenFromUserIds.length > 0
+                ? messageEventObject.data.hiddenFromUserIds
+                : null;
         if (targetCharId) {
             privacyWidgetTargetCharId = targetCharId;
             currentHiddenFromFields = updatedHiddenIds;

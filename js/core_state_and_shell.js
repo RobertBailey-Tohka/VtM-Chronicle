@@ -408,8 +408,13 @@ window.addEventListener('message', messageEvent => {
        // Query the DOM for the character sheet iframe element by its ID
        const sheetIframeElement = document.getElementById('sheetFrame');
        if (sheetIframeElement) {
-           const canEdit = characterRecord && ((currentUser && characterRecord.user_id === currentUser.id) || activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller');
-           sheetIframeElement.src = `/sheets/${newTemplate}?char_id=${characterId}&readonly=${!canEdit}&_t=${Date.now()}`;
+           const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+           const authList = characterRecord && Array.isArray(characterRecord.authorized_user_ids) ? characterRecord.authorized_user_ids.map(Number) : [];
+           const canEdit = Boolean(
+             isStoryteller ||
+             (characterRecord && currentUser && (Number(characterRecord.user_id) === Number(currentUser.id) || authList.includes(Number(currentUser.id))))
+           );
+           sheetIframeElement.src = `/sheets/${newTemplate}?char_id=${characterId}&readonly=${!canEdit}&is_gm=${isStoryteller}&_t=${Date.now()}`;
        }
     } else {
        // Otherwise, assume it's the floating widget version

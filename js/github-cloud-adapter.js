@@ -306,6 +306,26 @@
       }
 
       seed._deleted = seed._deleted || {};
+      // Normalize legacy hidden_from_user_ids values ('[]' -> null, and old '[12,13]' -> all active player IDs)
+      if (Array.isArray(seed.characters)) {
+        const allPlayerUserIds = (seed.chronicle_members || [])
+          .filter((cm) => cm.role !== 'storyteller' && cm.role !== 'gm' && Number(cm.user_id) !== 11)
+          .map((cm) => Number(cm.user_id));
+        for (const ch of seed.characters) {
+          if (ch.hidden_from_user_ids === '[]' || (Array.isArray(ch.hidden_from_user_ids) && ch.hidden_from_user_ids.length === 0)) {
+            ch.hidden_from_user_ids = null;
+          } else if (
+            ch.category !== 'pc' &&
+            (ch.hidden_from_user_ids === '[12,13]' ||
+              (Array.isArray(ch.hidden_from_user_ids) &&
+                ch.hidden_from_user_ids.length === 2 &&
+                ch.hidden_from_user_ids.includes(12) &&
+                ch.hidden_from_user_ids.includes(13)))
+          ) {
+            ch.hidden_from_user_ids = JSON.stringify(allPlayerUserIds);
+          }
+        }
+      }
       db = seed;
 
       // Clear any legacy auto-injected token (.vtm_cloud_sig) so visitors are not auto-logged in as Storyteller
@@ -423,6 +443,11 @@
 
   // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + ntfy.sh SSE) ----------------
   let sseSource = null;
+  let currentCloudStatusLabel = 'CLOUD VTT';
+  const activePresencesByUserId = new Map();
+  let localPresenceRecord = null;
+  let presenceReplyTimer = null;
+  let stSyncTimer = null;
 
   function emitToLocalSockets(event, payload) {
     const outPayload = rewritePayloadUrlsOut(payload);
@@ -431,16 +456,261 @@
     }
   }
 
-  function applyIncomingPacket(pkt) {
-    if (!pkt || pkt.senderId === CLIENT_ID) return;
+  function emitCombinedPresences() {
+    const now = Date.now();
+    for (const [uid, pres] of activePresencesByUserId.entries()) {
+      if (localPresenceRecord && Number(uid) === Number(localPresenceRecord.userId)) continue;
+      if (pres.lastSeen && now - pres.lastSeen > 240000) {
+        activePresencesByUserId.delete(uid);
+      }
+    }
+    if (localPresenceRecord && localPresenceRecord.userId) {
+      localPresenceRecord.lastSeen = now;
+      activePresencesByUserId.set(Number(localPresenceRecord.userId), localPresenceRecord);
+    }
+    const list = Array.from(activePresencesByUserId.values());
+    if (list.length > 0) {
+      emitToLocalSockets('presence:sync', list);
+    }
+  }
+
+  function sendRawNtfyPacket(pkt) {
+    if (localBus) {
+      try {
+        localBus.postMessage(pkt);
+      } catch (e) {}
+    }
+    const cfg = getCloudConfig();
+    if (cfg.syncEnabled && cfg.topic && navigator.onLine) {
+      const bodyStr = JSON.stringify(pkt);
+      if (bodyStr.length < 3900) {
+        nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
+          method: 'POST',
+          body: bodyStr,
+        }).catch(() => {});
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function broadcastLocalPresence(isJoin = false, isReply = false) {
+    if (!localPresenceRecord) {
+      const authUser = extractValidAuthUser();
+      if (authUser && authUser.id) {
+        const defChronId = defaultChronicleId();
+        const isGm = isChronicleGM(defChronId, authUser.id);
+        const ownedPc = !isGm
+          ? (db && db.characters ? db.characters : []).find(
+              (c) =>
+                Number(c.chronicle_id) === defChronId &&
+                String(c.category || '').toLowerCase() === 'pc' &&
+                Number(c.user_id) === Number(authUser.id)
+            )
+          : null;
+        localPresenceRecord = {
+          socketId: CLIENT_ID,
+          userId: authUser.id,
+          username: authUser.username,
+          displayName: authUser.displayName || authUser.username,
+          role: isGm ? 'gm' : 'player',
+          avatar: authUser.avatar_url || authUser.avatar || null,
+          isSpectator: !ownedPc,
+          characterId: ownedPc ? ownedPc.id : null,
+          characterName: ownedPc ? ownedPc.name : null,
+          characterClan: ownedPc ? ownedPc.clan : null,
+          avatarUrl: ownedPc ? ownedPc.avatar_url : null,
+          hunger: ownedPc ? Number(ownedPc.hunger || 1) : 0,
+          lastSeen: Date.now(),
+        };
+      }
+    }
+    if (!localPresenceRecord || !localPresenceRecord.userId) return;
+    localPresenceRecord.lastSeen = Date.now();
+    activePresencesByUserId.set(Number(localPresenceRecord.userId), localPresenceRecord);
+    emitCombinedPresences();
+    sendRawNtfyPacket({
+      senderId: CLIENT_ID,
+      ts: Date.now(),
+      type: 'presence_update',
+      isJoin: Boolean(isJoin),
+      isReply: Boolean(isReply),
+      presence: localPresenceRecord,
+    });
+  }
+
+  function broadcastStorytellerAuthoritativeState() {
+    if (!db || !Array.isArray(db.characters)) return;
+    const authUser = extractValidAuthUser();
+    if (!authUser || !isChronicleGM(defaultChronicleId(), authUser.id)) return;
+    const compactChars = db.characters.map((c) => {
+      let sd = {};
+      try {
+        sd = typeof c.sheet_data === 'string' ? JSON.parse(c.sheet_data || '{}') : c.sheet_data || {};
+      } catch (e) {}
+      return {
+        id: c.id,
+        user_id: c.user_id,
+        player_name: c.player_name,
+        category: c.category,
+        authorized_user_ids: c.authorized_user_ids,
+        hidden_from_user_ids: c.hidden_from_user_ids,
+        concealed_fields: c.concealed_fields,
+        total_experience: sd.total_experience ?? sd.total ?? '0',
+        player_base_edit_unlocked: Boolean(sd.player_base_edit_unlocked),
+      };
+    });
+    sendRawNtfyPacket({
+      senderId: CLIENT_ID,
+      ts: Date.now(),
+      type: 'st_authoritative_sync',
+      characters: compactChars,
+    });
+  }
+
+  function applyIncomingPacket(pkt, isReplay = false) {
+    if (!pkt) return;
+    if (!isReplay && pkt.senderId === CLIENT_ID) return;
+
+    if (pkt.type === 'presence_update' && pkt.presence && pkt.presence.userId) {
+      if (!isReplay || Date.now() - (pkt.ts || 0) < 240000) {
+        activePresencesByUserId.set(Number(pkt.presence.userId), {
+          ...pkt.presence,
+          lastSeen: pkt.ts || Date.now(),
+        });
+        if (!isReplay) emitCombinedPresences();
+      }
+      if (!isReplay && pkt.isJoin && !pkt.isReply) {
+        if (presenceReplyTimer) clearTimeout(presenceReplyTimer);
+        presenceReplyTimer = setTimeout(() => {
+          broadcastLocalPresence(false, true);
+        }, 400);
+        const authUser = extractValidAuthUser();
+        if (authUser && isChronicleGM(defaultChronicleId(), authUser.id)) {
+          if (stSyncTimer) clearTimeout(stSyncTimer);
+          stSyncTimer = setTimeout(() => {
+            broadcastStorytellerAuthoritativeState();
+          }, 700);
+        }
+      }
+      return;
+    }
+
+    if (pkt.type === 'presence_leave' && pkt.userId) {
+      if (!localPresenceRecord || Number(pkt.userId) !== Number(localPresenceRecord.userId)) {
+        activePresencesByUserId.delete(Number(pkt.userId));
+        if (!isReplay) emitCombinedPresences();
+      }
+      return;
+    }
+
+    if (pkt.type === 'xp_sync' && Array.isArray(pkt.updates) && db && Array.isArray(db.characters)) {
+      for (const u of pkt.updates) {
+        const ch = db.characters.find((c) => Number(c.id) === Number(u.id));
+        if (!ch) continue;
+        let sd = {};
+        try {
+          sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+        } catch (e) {}
+        sd.total_experience = String(u.total_experience);
+        sd.total = String(u.total_experience);
+        if (u.spent_experience !== undefined) {
+          sd.spent_experience = String(u.spent_experience);
+          sd.spent = String(u.spent_experience);
+        }
+        if (u.xp_log_entry) {
+          if (!Array.isArray(sd.xp_log)) sd.xp_log = [];
+          if (!sd.xp_log.some((e) => e && e.id === u.xp_log_entry.id)) {
+            sd.xp_log.unshift(u.xp_log_entry);
+          }
+        }
+        ch.sheet_data = JSON.stringify(sd);
+        ch.updated_at = new Date(pkt.ts || Date.now()).toISOString();
+        if (!isReplay) {
+          emitToLocalSockets('character:updated', { id: ch.id });
+        }
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      } catch (e) {}
+      return;
+    }
+
+    if (pkt.type === 'st_authoritative_sync' && Array.isArray(pkt.characters) && db && Array.isArray(db.characters)) {
+      let anyChanged = false;
+      for (const sc of pkt.characters) {
+        const ch = db.characters.find((c) => Number(c.id) === Number(sc.id));
+        if (!ch) continue;
+        if (sc.user_id !== undefined) ch.user_id = sc.user_id;
+        if (sc.player_name !== undefined) ch.player_name = sc.player_name;
+        if (sc.category !== undefined) ch.category = sc.category;
+        if (sc.authorized_user_ids !== undefined) ch.authorized_user_ids = sc.authorized_user_ids;
+        if (sc.hidden_from_user_ids !== undefined) ch.hidden_from_user_ids = sc.hidden_from_user_ids;
+        if (sc.concealed_fields !== undefined) ch.concealed_fields = sc.concealed_fields;
+        let sd = {};
+        try {
+          sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+        } catch (e) {}
+        if (sc.total_experience !== undefined && String(sd.total_experience) !== String(sc.total_experience)) {
+          sd.total_experience = String(sc.total_experience);
+          sd.total = String(sc.total_experience);
+          anyChanged = true;
+        }
+        if (sc.player_base_edit_unlocked !== undefined) {
+          sd.player_base_edit_unlocked = Boolean(sc.player_base_edit_unlocked);
+        }
+        ch.sheet_data = JSON.stringify(sd);
+        anyChanged = true;
+      }
+      if (anyChanged) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+        if (!isReplay) {
+          emitToLocalSockets('character:updated', {});
+        }
+      }
+      return;
+    }
+
+    if (pkt.type === 'char_delta' && pkt.id && db && Array.isArray(db.characters)) {
+      const ch = db.characters.find((c) => Number(c.id) === Number(pkt.id));
+      if (ch) {
+        if (pkt.rowPatch && typeof pkt.rowPatch === 'object') {
+          Object.assign(ch, pkt.rowPatch);
+        }
+        if (pkt.sheetPatch && typeof pkt.sheetPatch === 'object') {
+          let sd = {};
+          try {
+            sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+          } catch (e) {}
+          const { xp_upgrades: incomingXpUpgrades, ...restPatch } = pkt.sheetPatch;
+          Object.assign(sd, restPatch);
+          if (incomingXpUpgrades && typeof incomingXpUpgrades === 'object') {
+            sd.xp_upgrades = { ...(sd.xp_upgrades || {}), ...incomingXpUpgrades };
+          }
+          ch.sheet_data = JSON.stringify(sd);
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+        if (!isReplay) {
+          emitToLocalSockets('character:updated', { id: ch.id });
+        }
+      }
+      return;
+    }
+
     if (pkt.type === 'socket_event') {
       if (pkt.dbPatch && db) {
         applyDbPatch(pkt.dbPatch);
       }
-      emitToLocalSockets(pkt.event, pkt.data);
+      if (!isReplay) {
+        emitToLocalSockets(pkt.event, pkt.data);
+      }
     } else if (pkt.type === 'db:patch' && db) {
       applyDbPatch(pkt.data);
-    } else if (pkt.type === 'cloud_snapshot' && pkt.key) {
+    } else if (pkt.type === 'cloud_snapshot' && pkt.key && !isReplay) {
       pullCloudSnapshot(pkt.key);
     }
   }
@@ -471,22 +741,15 @@
       data,
       dbPatch,
     };
-    if (localBus) {
-      try {
-        localBus.postMessage(pkt);
-      } catch (e) {}
-    }
-    const cfg = getCloudConfig();
-    if (cfg.syncEnabled && cfg.topic && navigator.onLine) {
-      const bodyStr = JSON.stringify(pkt);
-      if (bodyStr.length < 3800) {
-        nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
-          method: 'POST',
-          body: bodyStr,
-        }).catch(() => {});
-      } else {
-        pushCloudSnapshot(false);
-      }
+    if (!sendRawNtfyPacket(pkt) && dbPatch) {
+      // Fallback if packet exceeds 3900 bytes: send event without full row so listeners still fire
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'socket_event',
+        event,
+        data,
+      });
     }
   }
 
@@ -553,6 +816,42 @@
     }
   }
 
+  async function pollRecentNtfyHistory(topic) {
+    try {
+      await ensureDbLoaded();
+      const res = await nativeFetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=12h`);
+      if (!res || !res.ok) return;
+      const text = await res.text();
+      if (!text) return;
+      const lines = text.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        try {
+          const wrapper = JSON.parse(line);
+          if (wrapper && wrapper.event === 'message' && wrapper.message) {
+            const pkt = JSON.parse(wrapper.message);
+            // Replay state-syncing packets and recent presence packets without re-popping old dice roll animations
+            if (
+              pkt &&
+              (pkt.type === 'xp_sync' ||
+                pkt.type === 'st_authoritative_sync' ||
+                pkt.type === 'char_delta' ||
+                pkt.type === 'presence_update' ||
+                pkt.type === 'presence_leave' ||
+                pkt.type === 'db:patch' ||
+                pkt.type === 'cloud:snapshot')
+            ) {
+              // Suppress reply storm while replaying historical presence packets
+              if (pkt.type === 'presence_update') pkt.requestReply = false;
+              await applyIncomingPacket(pkt);
+            }
+          }
+        } catch (e) {}
+      }
+      emitToLocalSockets('character:updated', {});
+      emitCombinedPresences();
+    } catch (e) {}
+  }
+
   function startRealtimeListeners() {
     if (localBus) {
       localBus.onmessage = (ev) => applyIncomingPacket(ev.data);
@@ -569,9 +868,14 @@
     const cfg = getCloudConfig();
     if (!cfg.syncEnabled || !cfg.topic || typeof EventSource === 'undefined') return;
     try {
+      pollRecentNtfyHistory(cfg.topic);
       if (sseSource) sseSource.close();
       sseSource = new EventSource(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}/sse`);
-      sseSource.onopen = () => updateCloudBadgeStatus('CLOUD LIVE');
+      sseSource.onopen = () => {
+        updateCloudBadgeStatus('CLOUD LIVE');
+        broadcastLocalPresence(true);
+        broadcastStorytellerAuthoritativeState();
+      };
       sseSource.onmessage = (ev) => {
         try {
           const wrapper = JSON.parse(ev.data);
@@ -582,6 +886,21 @@
         } catch (e) {}
       };
       sseSource.onerror = () => updateCloudBadgeStatus('LOCAL / OFFLINE');
+
+      setInterval(() => {
+        broadcastLocalPresence(false, true);
+      }, 30000);
+
+      window.addEventListener('beforeunload', () => {
+        if (localPresenceRecord && localPresenceRecord.userId) {
+          sendRawNtfyPacket({
+            senderId: CLIENT_ID,
+            ts: Date.now(),
+            type: 'presence_leave',
+            userId: localPresenceRecord.userId,
+          });
+        }
+      });
     } catch (e) {}
   }
 
@@ -730,7 +1049,8 @@
 
   async function handleSocketClientEmit(sock, event, data) {
     await ensureDbLoaded();
-    const user = parseAuthUser();
+    const validUser = extractValidAuthUser();
+    const user = validUser || parseAuthUser();
     const defChronId = defaultChronicleId();
 
     if (event === 'room:join') {
@@ -739,16 +1059,30 @@
           ? Number(data.chronicleId || data.campaignId) || defChronId
           : Number(data) || defChronId;
       sock.chronicleId = campId;
+      const uid = Number((data && data.userId) || (validUser && validUser.id) || user.id);
+      const uRole = (data && data.role) || (validUser && validUser.role) || user.role || 'player';
       let charData = null;
       if (data && data.characterId) {
         charData = (db.characters || []).find((c) => Number(c.id) === Number(data.characterId)) || null;
+      } else if (uRole !== 'gm' && uid) {
+        charData =
+          (db.characters || []).find(
+            (c) =>
+              Number(c.chronicle_id) === campId &&
+              String(c.category || '').toLowerCase() === 'pc' &&
+              Number(c.user_id) === uid
+          ) || null;
       }
       const presence = {
         socketId: sock.id,
-        userId: (data && data.userId) || user.id,
-        username: (data && data.username) || user.username,
-        displayName: (data && data.displayName) || user.displayName || user.username,
-        role: (data && data.role) || user.role || 'gm',
+        userId: uid,
+        username: (data && data.username) || (validUser && validUser.username) || user.username,
+        displayName:
+          (data && data.displayName) ||
+          (validUser && (validUser.displayName || validUser.username)) ||
+          user.displayName ||
+          user.username,
+        role: uRole,
         isSpectator: !charData,
         characterId: charData ? charData.id : null,
         characterName: charData ? charData.name : null,
@@ -757,20 +1091,27 @@
         hunger: charData ? Number(charData.hunger || 1) : 0,
       };
       sock.presence = presence;
-      emitToLocalSockets('presence:sync', [presence]);
+      localPresenceRecord = presence;
+      activePresencesByUserId.set(String(presence.userId), { ...presence, lastSeen: Date.now() });
+      emitCombinedPresences();
+      broadcastLocalPresence(true);
+      if (uRole === 'gm' || Number(uid) === 11) {
+        broadcastStorytellerAuthoritativeState();
+      }
       return;
     }
 
     if (event === 'presence:set_character') {
       const { characterId, isSpectator } = data || {};
       const c = characterId ? (db.characters || []).find((x) => Number(x.id) === Number(characterId)) : null;
+      const baseUser = validUser || user;
       const presence = {
         ...(sock.presence || {
           socketId: sock.id,
-          userId: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          role: user.role || 'gm',
+          userId: baseUser.id,
+          username: baseUser.username,
+          displayName: baseUser.displayName || baseUser.username,
+          role: baseUser.role || 'player',
         }),
         isSpectator: Boolean(isSpectator || !c),
         characterId: c ? c.id : null,
@@ -780,7 +1121,10 @@
         hunger: c ? Number(c.hunger || 1) : 0,
       };
       sock.presence = presence;
-      emitToLocalSockets('presence:sync', [presence]);
+      localPresenceRecord = presence;
+      activePresencesByUserId.set(String(presence.userId), { ...presence, lastSeen: Date.now() });
+      emitCombinedPresences();
+      broadcastLocalPresence(false);
       return;
     }
 
@@ -865,10 +1209,28 @@
     return [];
   }
 
+  function parseNullableHiddenIds(val) {
+    if (val === null || val === undefined || val === 'null' || val === '' || val === '[]') return null;
+    if (Array.isArray(val)) {
+      const nums = val.map(Number).filter((n) => !Number.isNaN(n) && n > 0);
+      return nums.length > 0 ? nums : null;
+    }
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) {
+          const nums = parsed.map(Number).filter((n) => !Number.isNaN(n) && n > 0);
+          return nums.length > 0 ? nums : null;
+        }
+      } catch (e) {}
+    }
+    return null;
+  }
+
   function formatCharacterForApi(r) {
     const authIds = safeParseJsonArray(r.authorized_user_ids);
     const concealedFields = safeParseJsonArray(r.concealed_fields);
-    const hiddenFromIds = safeParseJsonArray(r.hidden_from_user_ids);
+    const hiddenFromIds = parseNullableHiddenIds(r.hidden_from_user_ids);
 
     let sheetData = {};
     try {
@@ -1523,9 +1885,23 @@
         });
         emitToLocalSockets('character:updated', { id: char.id });
         emitToLocalSockets('vtm:xp_updated', { character_id: char.id, total_experience: newTotal, spent_experience: currentSpent, xp_log: sd.xp_log });
-        publishRealtimeEvent('character:updated', { id: char.id }, { table: 'characters', row: char });
       }
       persistDb();
+      if (updatedChars.length > 0) {
+        sendRawNtfyPacket({
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'xp_sync',
+          chronicle_id: cId,
+          updates: updatedChars.map((u) => ({
+            id: u.id,
+            total_experience: u.total_experience,
+            spent_experience: u.spent_experience,
+            xp_log: Array.isArray(u.sheet_data && u.sheet_data.xp_log) ? u.sheet_data.xp_log.slice(0, 15) : [],
+          })),
+        });
+        broadcastStorytellerAuthoritativeState();
+      }
       return jsonResponse({ success: true, updated_count: updatedChars.length, characters: updatedChars });
     }
 
@@ -2003,20 +2379,36 @@
     const chronCharsMatch = path.match(/^\/api\/chronicles\/(\d+)\/characters$/);
     if (chronCharsMatch && method === 'GET') {
       const cId = Number(chronCharsMatch[1]);
+      const isGm = isChronicleGM(cId, user.id);
       const list = (db.characters || [])
         .filter((c) => Number(c.chronicle_id) === cId)
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        .map(formatCharacterForApi);
+        .map(formatCharacterForApi)
+        .filter((c) => {
+          if (isGm || Number(c.user_id) === Number(user.id)) return true;
+          if (Array.isArray(c.hidden_from_user_ids) && c.hidden_from_user_ids.map(Number).includes(Number(user.id))) {
+            return false;
+          }
+          return true;
+        });
       return jsonResponse(list);
     }
 
     if (path === '/api/characters' && method === 'GET') {
       const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
       const cat = q.get('category');
+      const isGm = isChronicleGM(cId, user.id);
       const list = (db.characters || [])
         .filter((c) => Number(c.chronicle_id) === cId && (!cat || c.category === cat))
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        .map(formatCharacterForApi);
+        .map(formatCharacterForApi)
+        .filter((c) => {
+          if (isGm || Number(c.user_id) === Number(user.id)) return true;
+          if (Array.isArray(c.hidden_from_user_ids) && c.hidden_from_user_ids.map(Number).includes(Number(user.id))) {
+            return false;
+          }
+          return true;
+        });
       return jsonResponse(list);
     }
 
@@ -2042,7 +2434,7 @@
         humanity: 7,
         authorized_user_ids: '[]',
         concealed_fields: '[]',
-        hidden_from_user_ids: '[]',
+        hidden_from_user_ids: null,
         sheet_data: typeof body.sheet_data === 'object' ? JSON.stringify(body.sheet_data) : body.sheet_data || '{}',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -2221,54 +2613,122 @@
             typeof char.sheet_data === 'string' ? JSON.parse(char.sheet_data || '{}') : char.sheet_data || {};
         } catch (e) {}
 
+        const sheetPatch = {};
+        const rowPatch = {};
+
         if (body.sheet_data && typeof body.sheet_data === 'object') {
           const sd = body.sheet_data;
-          if (sd.name) char.name = sd.name;
-          if (sd.clan) char.clan = sd.clan;
-          if (sd.concept) char.concept = sd.concept;
+          for (const k of Object.keys(sd)) {
+            if (JSON.stringify(existingSheet[k]) !== JSON.stringify(sd[k])) {
+              sheetPatch[k] = sd[k];
+            }
+          }
+          if (sd.name) {
+            char.name = sd.name;
+            rowPatch.name = sd.name;
+          }
+          if (sd.clan) {
+            char.clan = sd.clan;
+            rowPatch.clan = sd.clan;
+          }
+          if (sd.concept) {
+            char.concept = sd.concept;
+            rowPatch.concept = sd.concept;
+          }
           if (Array.isArray(sd.hunger)) {
             char.hunger = sd.hunger.filter((s) => s === 'filled').length;
+            rowPatch.hunger = char.hunger;
           }
           if (Array.isArray(sd.humanity_states)) {
             char.humanity = sd.humanity_states.filter((s) => s === 'filled').length;
             sd.stains = sd.humanity_states.filter((s) => s === 'superficial').length;
+            rowPatch.humanity = char.humanity;
           } else if (Array.isArray(sd.humanity)) {
             char.humanity = sd.humanity.filter((s) => s === 'filled').length;
+            rowPatch.humanity = char.humanity;
           }
           if (Array.isArray(sd.health_states)) {
             char.health_superficial = sd.health_states.filter((s) => s === 'superficial').length;
             char.health_aggravated = sd.health_states.filter((s) => s === 'aggravated').length;
+            rowPatch.health_superficial = char.health_superficial;
+            rowPatch.health_aggravated = char.health_aggravated;
           }
           if (Array.isArray(sd.willpower_states)) {
             char.willpower_superficial = sd.willpower_states.filter((s) => s === 'superficial').length;
             char.willpower_aggravated = sd.willpower_states.filter((s) => s === 'aggravated').length;
+            rowPatch.willpower_superficial = char.willpower_superficial;
+            rowPatch.willpower_aggravated = char.willpower_aggravated;
           }
           existingSheet = { ...existingSheet, ...sd };
           char.sheet_data = JSON.stringify(existingSheet);
         }
 
-        if (body.name !== undefined) char.name = body.name;
-        if (body.short_name !== undefined) char.short_name = body.short_name;
-        if (body.clan !== undefined) char.clan = body.clan;
-        if (body.concept !== undefined) char.concept = body.concept;
-        if (body.hunger !== undefined) char.hunger = Number(body.hunger);
-        if (body.humanity !== undefined) char.humanity = Number(body.humanity);
-        if (body.avatar_url !== undefined) char.avatar_url = stripBasePathFromUrl(body.avatar_url);
-        if (body.vault_url !== undefined) char.vault_url = stripBasePathFromUrl(body.vault_url);
+        if (body.name !== undefined) {
+          char.name = body.name;
+          rowPatch.name = char.name;
+        }
+        if (body.short_name !== undefined) {
+          char.short_name = body.short_name;
+          rowPatch.short_name = char.short_name;
+        }
+        if (body.clan !== undefined) {
+          char.clan = body.clan;
+          rowPatch.clan = char.clan;
+        }
+        if (body.concept !== undefined) {
+          char.concept = body.concept;
+          rowPatch.concept = char.concept;
+        }
+        if (body.hunger !== undefined) {
+          char.hunger = Number(body.hunger);
+          rowPatch.hunger = char.hunger;
+        }
+        if (body.humanity !== undefined) {
+          char.humanity = Number(body.humanity);
+          rowPatch.humanity = char.humanity;
+        }
+        if (body.avatar_url !== undefined) {
+          char.avatar_url = stripBasePathFromUrl(body.avatar_url);
+          rowPatch.avatar_url = char.avatar_url;
+        }
+        if (body.vault_url !== undefined) {
+          char.vault_url = stripBasePathFromUrl(body.vault_url);
+          rowPatch.vault_url = char.vault_url;
+        }
         if (body.authorized_user_ids !== undefined) {
           char.authorized_user_ids = Array.isArray(body.authorized_user_ids)
             ? JSON.stringify(body.authorized_user_ids)
             : body.authorized_user_ids;
+          rowPatch.authorized_user_ids = char.authorized_user_ids;
         }
         if (body.concealed_fields !== undefined) {
           char.concealed_fields = Array.isArray(body.concealed_fields)
             ? JSON.stringify(body.concealed_fields)
             : body.concealed_fields;
+          rowPatch.concealed_fields = char.concealed_fields;
         }
         if (body.hidden_from_user_ids !== undefined) {
-          char.hidden_from_user_ids = Array.isArray(body.hidden_from_user_ids)
-            ? JSON.stringify(body.hidden_from_user_ids)
-            : body.hidden_from_user_ids;
+          if (body.hidden_from_user_ids === null || body.hidden_from_user_ids === 'null') {
+            char.hidden_from_user_ids = null;
+          } else if (Array.isArray(body.hidden_from_user_ids)) {
+            let hideIds = body.hidden_from_user_ids.map(Number).filter((n) => !Number.isNaN(n) && n > 0);
+            if (hideIds.length === 0) {
+              // Caller sent [] to hide from all players when chronicleMembersList wasn't loaded
+              hideIds = (db.chronicle_members || [])
+                .filter(
+                  (m) =>
+                    Number(m.chronicle_id) === Number(char.chronicle_id) &&
+                    m.role !== 'gm' &&
+                    Number(m.user_id) !== Number(char.user_id)
+                )
+                .map((m) => Number(m.user_id));
+            }
+            char.hidden_from_user_ids = hideIds.length > 0 ? JSON.stringify(hideIds) : null;
+          } else {
+            const parsed = parseNullableHiddenIds(body.hidden_from_user_ids);
+            char.hidden_from_user_ids = parsed ? JSON.stringify(parsed) : null;
+          }
+          rowPatch.hidden_from_user_ids = char.hidden_from_user_ids;
         }
         char.updated_at = new Date().toISOString();
         persistDb();
@@ -2284,8 +2744,65 @@
           humanity: char.humanity,
           sheet_data: existingSheet,
         });
-        publishRealtimeEvent('character:updated', { id: char.id }, { table: 'characters', row: char });
-        return jsonResponse({ success: true });
+        // Send compact delta packet directly over ntfy so cross-browser sheet edits, XP spends, redactions, and visibility toggles arrive immediately
+        const deltaPkt = {
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'char_delta',
+          id: char.id,
+          rowPatch,
+          sheetPatch,
+        };
+        const deltaStr = JSON.stringify(deltaPkt);
+        if (deltaStr.length < 3600) {
+          sendRawNtfyPacket(deltaPkt);
+        } else {
+          // If sheetPatch is large (e.g. full sheet save), send essential fields in char_delta so XP, vitals, template, and privacy always sync
+          const compactSheetPatch = {};
+          const essentialKeys = [
+            'total_experience',
+            'total',
+            'spent_experience',
+            'spent',
+            'xp_locked_ baselines',
+            'xp_locked_baselines',
+            'sheet_template',
+            'name',
+            'clan',
+            'concept',
+            'predator',
+            'ambition',
+            'desire',
+            'hunger',
+            'health_states',
+            'willpower_states',
+            'humanity_states',
+            'blood_potency',
+          ];
+          for (const k of Object.keys(sheetPatch)) {
+            if (
+              essentialKeys.includes(k) ||
+              k.startsWith('attr_') ||
+              k.startsWith('skill_') ||
+              k.startsWith('disc_')
+            ) {
+              compactSheetPatch[k] = sheetPatch[k];
+            }
+          }
+          sendRawNtfyPacket({
+            senderId: CLIENT_ID,
+            ts: Date.now(),
+            type: 'char_delta',
+            id: char.id,
+            rowPatch,
+            sheetPatch: compactSheetPatch,
+          });
+        }
+        return jsonResponse({
+          success: true,
+          hidden_from_user_ids: parseNullableHiddenIds(char.hidden_from_user_ids),
+          concealed_fields: safeParseJsonArray(char.concealed_fields),
+        });
       }
       if (method === 'DELETE') {
         db.characters = (db.characters || []).filter((c) => Number(c.id) !== charId);
@@ -2798,6 +3315,7 @@
   }
 
   function updateCloudBadgeStatus(label) {
+    currentCloudStatusLabel = label;
     const el = document.getElementById('vtmCloudBadgeText');
     if (el) el.textContent = label;
   }
@@ -2814,7 +3332,7 @@
       pill.style.cssText =
         'margin-right: 10px; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(239,68,68,0.45); font-size: 11px; padding: 4px 10px;';
       pill.title = 'Cloud Sync, Account Switcher & Backup Manager';
-      pill.innerHTML = `<i class="fa-solid fa-cloud" style="color:#ef4444;"></i> <span id="vtmCloudBadgeText">CLOUD VTT</span>`;
+      pill.innerHTML = `<i class="fa-solid fa-cloud" style="color:#ef4444;"></i> <span id="vtmCloudBadgeText">${currentCloudStatusLabel}</span>`;
       pill.onclick = () => openCloudSyncModal();
       rightBar.insertBefore(pill, rightBar.firstChild);
     }
