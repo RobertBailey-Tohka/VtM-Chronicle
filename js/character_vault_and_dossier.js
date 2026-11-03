@@ -995,12 +995,42 @@ function openCharacterSheet(characterId, characterName, characterClan, ownerUser
   switchSheetModalTab('sheet');
 
   if (sheetIframeElement) {
+    sheetIframeElement.onload = () => {
+      try {
+        if (sheetIframeElement.contentWindow && sheetIframeElement.contentWindow.document) {
+          sheetIframeElement.contentWindow.document.addEventListener(
+            'mousedown',
+            () => {
+              if (typeof bringCharacterSheetWindowToFront === 'function') {
+                bringCharacterSheetWindowToFront();
+              }
+            },
+            true
+          );
+        }
+      } catch (e) {}
+    };
     sheetIframeElement.src = `/sheets/${sheetTemplateFilename}?char_id=${characterId}&readonly=${!canEditCharacter}&is_gm=${isStoryteller}&_t=${Date.now()}`;
   }
   
   // Look up the character sheet modal element in the DOM by ID and display it
   const characterSheetModalElement = document.getElementById('characterSheetModal');
-  if (characterSheetModalElement) characterSheetModalElement.classList.add('active');
+  if (characterSheetModalElement) {
+    if (characterSheetModalElement.parentElement !== document.body) {
+      document.body.appendChild(characterSheetModalElement);
+    }
+    characterSheetModalElement.classList.add('active');
+  }
+  const sheetWindowElement = document.getElementById('characterSheetWindow');
+  if (sheetWindowElement) {
+    const rect = sheetWindowElement.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (rect.left < 12) sheetWindowElement.style.left = '16px';
+    if (rect.top < 54) sheetWindowElement.style.top = '56px';
+    if (rect.width > vw - 24) sheetWindowElement.style.width = `${Math.max(540, vw - 32)}px`;
+    if (rect.height > vh - 68) sheetWindowElement.style.height = `${Math.max(400, vh - 72)}px`;
+  }
   if (typeof initCharacterSheetWindowDragAndResize === 'function') {
     initCharacterSheetWindowDragAndResize();
   }

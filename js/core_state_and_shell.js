@@ -911,6 +911,10 @@ function switchTab(tabId) {
     if (timeDivider) timeDivider.style.display = 'none';
     const timeWidget = document.getElementById('widget-chronicle-time');
     if (timeWidget) timeWidget.style.display = 'none';
+    const sheetModal = document.getElementById('characterSheetModal');
+    if (sheetModal) sheetModal.classList.remove('active');
+    const rulesWidget = document.getElementById('widget-quick-rules');
+    if (rulesWidget) rulesWidget.style.display = 'none';
     renderChronicleHub();
   } else if (tabId === 'gameboard') {
     // Schedule a short timer so the gameboard DOM layout settles before initializing widget bounds and clue cords
@@ -985,11 +989,14 @@ function restoreWidget(widgetId) {
   }
 }
 
-let highestFloatingOverlayZIndex = 9550;
+let highestFloatingOverlayZIndex = 100510;
 
 function bringCharacterSheetWindowToFront() {
   const sheetModal = document.getElementById('characterSheetModal');
   if (!sheetModal) return;
+  if (sheetModal.parentElement !== document.body) {
+    document.body.appendChild(sheetModal);
+  }
   highestFloatingOverlayZIndex++;
   sheetModal.style.setProperty('z-index', String(highestFloatingOverlayZIndex), 'important');
 }
@@ -1001,11 +1008,15 @@ function bringDesktopWidgetToFront(widgetElement) {
   const activeTab = document.querySelector('.tab-view.active');
   const isOutsideGameboard = activeTab && activeTab.id !== 'tab-gameboard';
   if (
+    widgetElement.id === 'widget-quick-rules' ||
     isSheetOpen ||
     isOutsideGameboard ||
     widgetElement.parentElement === document.body ||
     widgetElement.style.getPropertyPriority('z-index') === 'important'
   ) {
+    if (widgetElement.id === 'widget-quick-rules' && widgetElement.parentElement !== document.body) {
+      document.body.appendChild(widgetElement);
+    }
     highestFloatingOverlayZIndex++;
     widgetElement.style.setProperty('z-index', String(highestFloatingOverlayZIndex), 'important');
     return;
@@ -1118,12 +1129,32 @@ function openFloatingRulebookCodex() {
   if (isHidden) {
     toggleWidget('widget-quick-rules');
   }
+  rulesWidget.style.display = 'flex';
   rulesWidget.style.position = 'fixed';
   if (rulesWidget.parentElement !== document.body) {
     document.body.appendChild(rulesWidget);
   }
   initDesktopWidgetsDragAndResize();
   bringDesktopWidgetToFront(rulesWidget);
+
+  setTimeout(() => {
+    if (rulesWidget.parentElement !== document.body) {
+      document.body.appendChild(rulesWidget);
+    }
+    rulesWidget.style.position = 'fixed';
+    const rect = rulesWidget.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (rect.top < 54) rulesWidget.style.top = '58px';
+    if (rect.left < 12) rulesWidget.style.left = '24px';
+    if (rect.right > vw - 12) {
+      rulesWidget.style.left = `${Math.max(16, vw - rect.width - 20)}px`;
+    }
+    if (rect.bottom > vh - 12) {
+      rulesWidget.style.top = `${Math.max(58, vh - rect.height - 20)}px`;
+    }
+    bringDesktopWidgetToFront(rulesWidget);
+  }, 25);
 
   // Auto-populate Rules Widget if needed
   if (typeof allRules !== 'undefined' && allRules.length > 0) {
@@ -1254,8 +1285,15 @@ function initDesktopWidgetsDragAndResize() {
         if (activeWidgetDrag) {
           const deltaX = mouseEvent.clientX - activeWidgetDrag.startX;
           const deltaY = mouseEvent.clientY - activeWidgetDrag.startY;
-          const newLeft = Math.max(0, activeWidgetDrag.initialLeft + deltaX);
-          const newTop = Math.max(0, activeWidgetDrag.initialTop + deltaY);
+          const isFixedWindow =
+            activeWidgetDrag.widget.id === 'characterSheetWindow' ||
+            activeWidgetDrag.widget.style.position === 'fixed';
+          const minTop = isFixedWindow ? 52 : 0;
+          const minLeft = isFixedWindow ? 8 : 0;
+          const maxLeft = Math.max(minLeft, window.innerWidth - 140);
+          const maxTop = Math.max(minTop, window.innerHeight - 70);
+          const newLeft = Math.min(maxLeft, Math.max(minLeft, activeWidgetDrag.initialLeft + deltaX));
+          const newTop = Math.min(maxTop, Math.max(minTop, activeWidgetDrag.initialTop + deltaY));
           activeWidgetDrag.widget.style.left = `${newLeft}px`;
           activeWidgetDrag.widget.style.top = `${newTop}px`;
           if (activeWidgetDrag.widget.id === 'widget-clue-board' || activeWidgetDrag.widget.classList.contains('widget-matrix-popup')) {

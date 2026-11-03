@@ -2663,7 +2663,7 @@ html, body {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     pointer-events: none !important;
-    z-index: 9500 !important;
+    z-index: 100500 !important;
     display: none;
 }
 
@@ -2671,12 +2671,22 @@ html, body {
     display: block !important;
 }
 
+#widget-quick-rules {
+    background: #0d090e !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid #581c87 !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.96), 0 0 24px rgba(168, 85, 247, 0.28) !important;
+    z-index: 100505 !important;
+    opacity: 1 !important;
+}
+
 .sheet-modal-container {
     position: fixed;
     top: 56px;
-    left: calc(50vw - min(560px, 45vw));
-    width: min(1120px, 90vw);
-    height: min(820px, 86vh);
+    left: max(16px, calc(50vw - 550px));
+    width: min(1100px, calc(100vw - 32px));
+    height: min(820px, calc(100vh - 72px));
     min-width: 520px;
     min-height: 360px;
     max-width: none;
@@ -5298,7 +5308,7 @@ body.vtm-dragging-or-resizing {
     display: none;
     position: fixed;
     inset: 0;
-    z-index: 9999;
+    z-index: 9999999 !important;
     background: rgba(0,0,0,0.8);
     backdrop-filter: blur(4px);
     align-items: center;
