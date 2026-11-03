@@ -498,11 +498,34 @@
     const cfg = getCloudConfig();
     if (cfg.syncEnabled && cfg.topic && navigator.onLine) {
       const bodyStr = JSON.stringify(pkt);
-      if (bodyStr.length < 3900) {
+      if (bodyStr.length < 3800) {
         nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
           method: 'POST',
           body: bodyStr,
         }).catch(() => {});
+        return true;
+      } else if (pkt && pkt.type !== 'overflow_pkt') {
+        nativeFetch('https://bytebin.lucko.me/post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: bodyStr,
+        })
+          .then((res) => (res && res.ok ? res.json() : null))
+          .then((json) => {
+            if (json && json.key) {
+              const overflowEnvelope = JSON.stringify({
+                senderId: pkt.senderId || CLIENT_ID,
+                ts: pkt.ts || Date.now(),
+                type: 'overflow_pkt',
+                key: json.key,
+              });
+              nativeFetch(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}`, {
+                method: 'POST',
+                body: overflowEnvelope,
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {});
         return true;
       }
     }
@@ -646,11 +669,24 @@
         u: c.user_id,
         x: sd.total_experience ?? sd.total ?? '0',
       };
+      if (sd.spent_experience !== undefined || sd.spent !== undefined) {
+        rec.s = String(sd.spent_experience ?? sd.spent ?? '0');
+      }
       const h = parseNullableHiddenIds(c.hidden_from_user_ids);
       if (h && h.length > 0) rec.h = h;
       const cf = safeParseJsonArray(c.concealed_fields);
       if (cf.length > 0) rec.c = cf;
       if (sd.player_base_edit_unlocked) rec.b = 1;
+      if (String(c.category || '').toLowerCase() === 'pc') {
+        rec.hu = c.hunger ?? 1;
+        rec.hm = c.humanity ?? 7;
+        if (Array.isArray(sd.health_states)) rec.hp = sd.health_states;
+        if (Array.isArray(sd.willpower_states)) rec.wp = sd.willpower_states;
+        if (Array.isArray(sd.humanity_states)) rec.hs = sd.humanity_states;
+        if (sd.health_max !== undefined) rec.hm_max = sd.health_max;
+        if (sd.willpower_max !== undefined) rec.wp_max = sd.willpower_max;
+        if (c.updated_at) rec.ut = c.updated_at;
+      }
       return rec;
     });
     sendRawNtfyPacket({
@@ -671,6 +707,19 @@
     if (!pkt) return;
     if (!isReplay && pkt.senderId === CLIENT_ID) return;
     if (pkt.pktId && markRealtimeIdProcessed(pkt.pktId)) return;
+
+    if (pkt.type === 'overflow_pkt' && pkt.key) {
+      nativeFetch(`https://bytebin.lucko.me/${encodeURIComponent(pkt.key)}`)
+        .then((res) => (res && res.ok ? res.json() : null))
+        .then((unpacked) => {
+          if (unpacked && typeof unpacked === 'object' && unpacked.type !== 'overflow_pkt') {
+            if (pkt.pktId) unpacked.pktId = `${pkt.pktId}_unpacked`;
+            applyIncomingPacket(unpacked, isReplay);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
 
     if (pkt.type === 'scene_sync' && pkt.scene) {
       if (db) {
@@ -713,19 +762,21 @@
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
         } catch (e) {}
-        const enriched = {
-          ...enrichGameboardSceneState(gs),
-          ...pkt.scene,
-        };
-        emitToLocalSockets('gameboard:scene_updated', enriched);
-        if (pkt.scene.active_map_url) {
-          emitToLocalSockets('gameboard:map_updated', {
-            chronicle_id: targetChronId,
-            active_map_url: pkt.scene.active_map_url,
-          });
-        }
-        if (pkt.episode) {
-          emitToLocalSockets('episode:updated', pkt.episode);
+        if (!isReplay) {
+          const enriched = {
+            ...enrichGameboardSceneState(gs),
+            ...pkt.scene,
+          };
+          emitToLocalSockets('gameboard:scene_updated', enriched);
+          if (pkt.scene.active_map_url) {
+            emitToLocalSockets('gameboard:map_updated', {
+              chronicle_id: targetChronId,
+              active_map_url: pkt.scene.active_map_url,
+            });
+          }
+          if (pkt.episode) {
+            emitToLocalSockets('episode:updated', pkt.episode);
+          }
         }
       }
       return;
@@ -847,6 +898,42 @@
         } else if (sc.player_base_edit_unlocked !== undefined) {
           sd.player_base_edit_unlocked = Boolean(sc.player_base_edit_unlocked);
         }
+        const canApplyVitals =
+          !ch.updated_at || !sc.ut || new Date(sc.ut).getTime() >= new Date(ch.updated_at).getTime();
+        if (canApplyVitals) {
+          if (sc.s !== undefined) {
+            sd.spent_experience = String(sc.s);
+            sd.spent = String(sc.s);
+          }
+          if (sc.hu !== undefined) {
+            ch.hunger = Number(sc.hu);
+            sd.hunger = Array(5)
+              .fill('empty')
+              .map((_, i) => (i < ch.hunger ? 'filled' : 'empty'));
+          }
+          if (sc.hm !== undefined) {
+            ch.humanity = Number(sc.hm);
+          }
+          if (Array.isArray(sc.hp)) {
+            sd.health_states = sc.hp;
+            ch.health_superficial = sc.hp.filter((s) => s === 'superficial').length;
+            ch.health_aggravated = sc.hp.filter((s) => s === 'aggravated').length;
+          }
+          if (Array.isArray(sc.wp)) {
+            sd.willpower_states = sc.wp;
+            ch.willpower_superficial = sc.wp.filter((s) => s === 'superficial').length;
+            ch.willpower_aggravated = sc.wp.filter((s) => s === 'aggravated').length;
+          }
+          if (Array.isArray(sc.hs)) {
+            sd.humanity_states = sc.hs;
+            sd.humanity = sc.hs;
+            ch.humanity = sc.hs.filter((s) => s === 'filled').length;
+            sd.stains = sc.hs.filter((s) => s === 'superficial').length;
+          }
+          if (sc.hm_max !== undefined) sd.health_max = sc.hm_max;
+          if (sc.wp_max !== undefined) sd.willpower_max = sc.wp_max;
+          if (sc.ut) ch.updated_at = sc.ut;
+        }
         ch.sheet_data = JSON.stringify(sd);
         anyChanged = true;
       }
@@ -867,23 +954,50 @@
         if (pkt.rowPatch && typeof pkt.rowPatch === 'object') {
           Object.assign(ch, pkt.rowPatch);
         }
+        let sd = {};
+        try {
+          sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+        } catch (e) {}
         if (pkt.sheetPatch && typeof pkt.sheetPatch === 'object') {
-          let sd = {};
-          try {
-            sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
-          } catch (e) {}
           const { xp_upgrades: incomingXpUpgrades, ...restPatch } = pkt.sheetPatch;
           Object.assign(sd, restPatch);
           if (incomingXpUpgrades && typeof incomingXpUpgrades === 'object') {
             sd.xp_upgrades = { ...(sd.xp_upgrades || {}), ...incomingXpUpgrades };
           }
+          if (Array.isArray(sd.hunger)) {
+            ch.hunger = sd.hunger.filter((s) => s === 'filled').length;
+          }
+          if (Array.isArray(sd.humanity_states)) {
+            ch.humanity = sd.humanity_states.filter((s) => s === 'filled').length;
+            sd.stains = sd.humanity_states.filter((s) => s === 'superficial').length;
+          }
+          if (Array.isArray(sd.health_states)) {
+            ch.health_superficial = sd.health_states.filter((s) => s === 'superficial').length;
+            ch.health_aggravated = sd.health_states.filter((s) => s === 'aggravated').length;
+          }
+          if (Array.isArray(sd.willpower_states)) {
+            ch.willpower_superficial = sd.willpower_states.filter((s) => s === 'superficial').length;
+            ch.willpower_aggravated = sd.willpower_states.filter((s) => s === 'aggravated').length;
+          }
           ch.sheet_data = JSON.stringify(sd);
         }
+        ch.updated_at = new Date(pkt.ts || Date.now()).toISOString();
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
         } catch (e) {}
         if (!isReplay) {
           emitToLocalSockets('character:updated', { id: ch.id });
+          emitToLocalSockets('character:vitals_updated', {
+            id: ch.id,
+            character_id: ch.id,
+            hunger: ch.hunger,
+            humanity: ch.humanity,
+            health_superficial: ch.health_superficial,
+            health_aggravated: ch.health_aggravated,
+            willpower_superficial: ch.willpower_superficial,
+            willpower_aggravated: ch.willpower_aggravated,
+            sheet_data: sd,
+          });
         }
       }
       return;
@@ -893,21 +1007,58 @@
       if (pkt.event === 'dice:result' && pkt.data) {
         const rollDedupKey = pkt.data.roll_uid || `roll_${pkt.data.id}_${pkt.data.roller_name}`;
         if (markRealtimeIdProcessed(rollDedupKey)) return;
+        if (db) {
+          if (!Array.isArray(db.dice_rolls)) db.dice_rolls = [];
+          const existingIdx = db.dice_rolls.findIndex((r) => Number(r.id) === Number(pkt.data.id));
+          if (existingIdx >= 0) db.dice_rolls[existingIdx] = pkt.data;
+          else db.dice_rolls.push(pkt.data);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          } catch (e) {}
+        }
+      }
+      if (pkt.event === 'gameboard:canvas_updated' && pkt.data && pkt.data.canvas_state !== undefined && db) {
+        const targetChronId = Number(pkt.data.chronicle_id || pkt.data.campaign_id) || defaultChronicleId();
+        const gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronId) || (db.gameboard_state || [])[0];
+        if (gs) {
+          gs.canvas_state =
+            typeof pkt.data.canvas_state === 'string'
+              ? pkt.data.canvas_state
+              : JSON.stringify(pkt.data.canvas_state);
+          gs.updated_at = new Date(pkt.ts || Date.now()).toISOString();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          } catch (e) {}
+        }
+      }
+      if (pkt.event === 'gameboard:relationship_map_updated' && pkt.data && pkt.data.map_state !== undefined && db) {
+        const targetChronId = Number(pkt.data.chronicle_id || pkt.data.campaign_id) || defaultChronicleId();
+        const gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === targetChronId) || (db.gameboard_state || [])[0];
+        if (gs) {
+          gs.relationship_map_state =
+            typeof pkt.data.map_state === 'string'
+              ? pkt.data.map_state
+              : JSON.stringify(pkt.data.map_state || {});
+          gs.updated_at = new Date(pkt.ts || Date.now()).toISOString();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          } catch (e) {}
+        }
       }
       if (pkt.dbPatch && db) {
-        applyDbPatch(pkt.dbPatch);
+        applyDbPatch(pkt.dbPatch, true);
       }
       if (!isReplay) {
         emitToLocalSockets(pkt.event, pkt.data);
       }
     } else if (pkt.type === 'db:patch' && db) {
-      applyDbPatch(pkt.data);
-    } else if (pkt.type === 'cloud_snapshot' && pkt.key && !isReplay) {
+      applyDbPatch(pkt.data, isReplay);
+    } else if ((pkt.type === 'cloud_snapshot' || pkt.type === 'cloud:snapshot') && pkt.key && !isReplay) {
       pullCloudSnapshot(pkt.key);
     }
   }
 
-  function applyDbPatch(patch) {
+  function applyDbPatch(patch, isReplay = false) {
     if (!patch || !db) return;
     const { table, row, deleteId } = patch;
     if (!table || !Array.isArray(db[table])) return;
@@ -922,6 +1073,24 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
     } catch (e) {}
+    if (!isReplay) {
+      if (table === 'characters') {
+        emitToLocalSockets('character:updated', {
+          id: row ? row.id : deleteId,
+          deleted: deleteId !== undefined,
+        });
+      } else if (table === 'episodes' || table === 'clues' || table === 'lore_entries' || table === 'scenes') {
+        emitToLocalSockets('episode:updated', row || {});
+      } else if (table === 'map_pins') {
+        emitToLocalSockets('gameboard:pins_updated', {
+          chronicle_id: row ? row.chronicle_id : defaultChronicleId(),
+        });
+      } else if (table === 'npc_categories') {
+        emitToLocalSockets('character:updated', {});
+      } else if (table === 'custom_rules') {
+        emitToLocalSockets('rules:updated', {});
+      }
+    }
   }
 
   function publishRealtimeEvent(event, data, dbPatch = null) {
@@ -933,16 +1102,7 @@
       data,
       dbPatch,
     };
-    if (!sendRawNtfyPacket(pkt) && dbPatch) {
-      // Fallback if packet exceeds 3900 bytes: send event without full row so listeners still fire
-      sendRawNtfyPacket({
-        senderId: CLIENT_ID,
-        ts: Date.now(),
-        type: 'socket_event',
-        event,
-        data,
-      });
-    }
+    sendRawNtfyPacket(pkt);
   }
 
   async function pushCloudSnapshot(showAlert = false) {
@@ -1036,9 +1196,13 @@
               pkt.type === 'xp_sync' ||
               pkt.type === 'st_authoritative_sync' ||
               pkt.type === 'char_delta' ||
+              pkt.type === 'scene_sync' ||
+              pkt.type === 'socket_event' ||
+              pkt.type === 'overflow_pkt' ||
               pkt.type === 'presence_update' ||
               pkt.type === 'presence_leave' ||
               pkt.type === 'db:patch' ||
+              pkt.type === 'cloud_snapshot' ||
               pkt.type === 'cloud:snapshot'
             ) {
               // Suppress reply storm while replaying historical presence packets
@@ -1050,6 +1214,34 @@
       }
       if (!allowRecentDiceRollReplay) {
         emitToLocalSockets('character:updated', {});
+        emitToLocalSockets('episode:updated', {});
+        const gs =
+          (db && (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === defaultChronicleId())) ||
+          (db && (db.gameboard_state || [])[0]);
+        if (gs) {
+          emitToLocalSockets('gameboard:scene_updated', enrichGameboardSceneState(gs));
+          let cs = {};
+          try {
+            cs = typeof gs.canvas_state === 'string' ? JSON.parse(gs.canvas_state || '{}') : gs.canvas_state || {};
+          } catch (e) {}
+          emitToLocalSockets('gameboard:canvas_updated', {
+            chronicle_id: gs.chronicle_id,
+            campaign_id: gs.chronicle_id,
+            canvas_state: cs,
+          });
+          let ms = {};
+          try {
+            ms =
+              typeof gs.relationship_map_state === 'string'
+                ? JSON.parse(gs.relationship_map_state || '{}')
+                : gs.relationship_map_state || {};
+          } catch (e) {}
+          emitToLocalSockets('gameboard:relationship_map_updated', {
+            chronicle_id: gs.chronicle_id,
+            campaign_id: gs.chronicle_id,
+            map_state: ms,
+          });
+        }
         emitCombinedPresences();
       }
     } catch (e) {}
@@ -1896,16 +2088,12 @@
           canvas_state: cleanedCanvas,
           updated_by: user.displayName || user.username,
         });
-        publishRealtimeEvent(
-          'gameboard:canvas_updated',
-          {
-            chronicle_id: targetChronicleId,
-            campaign_id: targetChronicleId,
-            canvas_state: cleanedCanvas,
-            updated_by: user.displayName || user.username,
-          },
-          { table: 'gameboard_state', row: gs }
-        );
+        publishRealtimeEvent('gameboard:canvas_updated', {
+          chronicle_id: targetChronicleId,
+          campaign_id: targetChronicleId,
+          canvas_state: cleanedCanvas,
+          updated_by: user.displayName || user.username,
+        });
       }
       return jsonResponse({ success: true });
     }
@@ -1924,16 +2112,12 @@
           map_state: cleanedMap,
           updated_by: user.displayName || user.username,
         });
-        publishRealtimeEvent(
-          'gameboard:relationship_map_updated',
-          {
-            chronicle_id: targetChronicleId,
-            campaign_id: targetChronicleId,
-            map_state: cleanedMap,
-            updated_by: user.displayName || user.username,
-          },
-          { table: 'gameboard_state', row: gs }
-        );
+        publishRealtimeEvent('gameboard:relationship_map_updated', {
+          chronicle_id: targetChronicleId,
+          campaign_id: targetChronicleId,
+          map_state: cleanedMap,
+          updated_by: user.displayName || user.username,
+        });
       }
       return jsonResponse({ success: true });
     }
@@ -2808,7 +2992,34 @@
       } catch (e) {}
 
       const { hunger, humanity, tracker, states, capacity, type, delta } = body;
-      if (tracker && Array.isArray(states)) {
+      const is15BoxHealth =
+        tracker === 'health' &&
+        (String(sheet.sheet_template || '').includes('ALT') ||
+          (Array.isArray(states) && states.length === 15) ||
+          (Array.isArray(sheet.health_states) && sheet.health_states.length === 15));
+      const totalTrackerBoxes = is15BoxHealth ? 15 : 10;
+
+      if (tracker && capacity !== undefined) {
+        sheet[tracker + '_max'] = Number(capacity);
+        const existingStates = Array.isArray(states)
+          ? [...states]
+          : Array.isArray(sheet[tracker + '_states'])
+            ? [...sheet[tracker + '_states']]
+            : Array(totalTrackerBoxes).fill('empty');
+        while (existingStates.length < totalTrackerBoxes) existingStates.push('empty');
+        for (let i = 0; i < totalTrackerBoxes; i++) {
+          if (i >= Number(capacity)) existingStates[i] = 'filled';
+          else if (existingStates[i] === 'filled') existingStates[i] = 'empty';
+        }
+        sheet[tracker + '_states'] = existingStates;
+        if (tracker === 'health') {
+          char.health_aggravated = existingStates.filter((s) => s === 'aggravated').length;
+          char.health_superficial = existingStates.filter((s) => s === 'superficial').length;
+        } else if (tracker === 'willpower') {
+          char.willpower_aggravated = existingStates.filter((s) => s === 'aggravated').length;
+          char.willpower_superficial = existingStates.filter((s) => s === 'superficial').length;
+        }
+      } else if (tracker && Array.isArray(states)) {
         sheet[tracker + '_states'] = states;
         if (tracker === 'health') {
           char.health_aggravated = states.filter((s) => s === 'aggravated').length;
@@ -2819,15 +3030,8 @@
         } else if (tracker === 'humanity') {
           char.humanity = states.filter((s) => s === 'filled').length;
           sheet.stains = states.filter((s) => s === 'superficial').length;
+          sheet.humanity = states;
         }
-      } else if (tracker && capacity !== undefined) {
-        sheet[tracker + '_max'] = capacity;
-        const st = sheet[tracker + '_states'] || Array(10).fill('empty');
-        for (let i = 0; i < 10; i++) {
-          if (i >= capacity) st[i] = 'filled';
-          else if (st[i] === 'filled') st[i] = 'empty';
-        }
-        sheet[tracker + '_states'] = st;
       } else if (type && delta !== undefined) {
         let curHum = Number(char.humanity ?? 7);
         let curStains = Number(sheet.stains || 0);
@@ -2835,7 +3039,7 @@
         if (type === 'humanity') {
           curHum = Math.max(0, Math.min(10, curHum + Number(delta)));
           char.humanity = curHum;
-          const st = sheet.humanity_states || Array(10).fill('empty');
+          const st = sheet.humanity_states ? [...sheet.humanity_states] : Array(10).fill('empty');
           for (let i = 0; i < 10; i++) {
             if (i < curHum) st[i] = 'filled';
             else if (st[i] === 'filled') st[i] = 'empty';
@@ -2845,7 +3049,7 @@
         } else if (type === 'stain') {
           curStains = Math.max(0, Math.min(10, curStains + Number(delta)));
           sheet.stains = curStains;
-          const st = sheet.humanity_states || Array(10).fill('empty');
+          const st = sheet.humanity_states ? [...sheet.humanity_states] : Array(10).fill('empty');
           for (let i = 0; i < 10; i++) {
             if (i < curHum) st[i] = 'filled';
             else if (i >= 10 - curStains) st[i] = 'superficial';
@@ -2861,8 +3065,26 @@
             .map((_, i) => (i < curHunger ? 'filled' : 'empty'));
         }
       } else {
-        if (hunger !== undefined) char.hunger = Number(hunger);
-        if (humanity !== undefined) char.humanity = Number(humanity);
+        if (hunger !== undefined) {
+          const curHunger = Math.max(0, Math.min(5, Number(hunger)));
+          char.hunger = curHunger;
+          sheet.hunger = Array(5)
+            .fill('empty')
+            .map((_, i) => (i < curHunger ? 'filled' : 'empty'));
+        }
+        if (humanity !== undefined) {
+          const curHum = Math.max(0, Math.min(10, Number(humanity)));
+          char.humanity = curHum;
+          const curStains = Number(sheet.stains || 0);
+          const st = Array.isArray(sheet.humanity_states) ? [...sheet.humanity_states] : Array(10).fill('empty');
+          for (let i = 0; i < 10; i++) {
+            if (i < curHum) st[i] = 'filled';
+            else if (i >= 10 - curStains) st[i] = 'superficial';
+            else st[i] = 'empty';
+          }
+          sheet.humanity_states = st;
+          sheet.humanity = st;
+        }
       }
 
       char.sheet_data = JSON.stringify(sheet);
@@ -2870,16 +3092,43 @@
       persistDb();
       const formatted = { ...formatCharacterForApi(char), success: true };
       emitToLocalSockets('character:vitals_updated', {
+        id: char.id,
         character_id: char.id,
         sheet_data: formatted.sheet_data,
         hunger: char.hunger,
         humanity: char.humanity,
+        health_superficial: char.health_superficial,
+        health_aggravated: char.health_aggravated,
+        willpower_superficial: char.willpower_superficial,
+        willpower_aggravated: char.willpower_aggravated,
       });
-      publishRealtimeEvent(
-        'character:vitals_updated',
-        { character_id: char.id, sheet_data: formatted.sheet_data, hunger: char.hunger, humanity: char.humanity },
-        { table: 'characters', row: char }
-      );
+      emitToLocalSockets('character:updated', { id: char.id });
+
+      // Send a compact (~250 byte) char_delta packet so Health, Willpower, Humanity, and Hunger sync immediately over ntfy
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'char_delta',
+        id: char.id,
+        rowPatch: {
+          hunger: char.hunger,
+          humanity: char.humanity,
+          health_superficial: char.health_superficial,
+          health_aggravated: char.health_aggravated,
+          willpower_superficial: char.willpower_superficial,
+          willpower_aggravated: char.willpower_aggravated,
+        },
+        sheetPatch: {
+          hunger: sheet.hunger,
+          health_states: sheet.health_states,
+          willpower_states: sheet.willpower_states,
+          humanity_states: sheet.humanity_states,
+          humanity: sheet.humanity,
+          health_max: sheet.health_max,
+          willpower_max: sheet.willpower_max,
+          stains: sheet.stains,
+        },
+      });
       return jsonResponse(formatted);
     }
 
@@ -3052,14 +3301,13 @@
         if (deltaStr.length < 3600) {
           sendRawNtfyPacket(deltaPkt);
         } else {
-          // If sheetPatch is large (e.g. full sheet save), send essential fields in char_delta so XP, vitals, template, and privacy always sync
+          // Send immediate inline compact delta for vitals/XP/privacy AND send full delta via bytebin overflow
           const compactSheetPatch = {};
           const essentialKeys = [
             'total_experience',
             'total',
             'spent_experience',
             'spent',
-            'xp_locked_ baselines',
             'xp_locked_baselines',
             'sheet_template',
             'name',
@@ -3072,6 +3320,10 @@
             'health_states',
             'willpower_states',
             'humanity_states',
+            'humanity',
+            'health_max',
+            'willpower_max',
+            'stains',
             'blood_potency',
           ];
           for (const k of Object.keys(sheetPatch)) {
@@ -3092,6 +3344,7 @@
             rowPatch,
             sheetPatch: compactSheetPatch,
           });
+          sendRawNtfyPacket(deltaPkt);
         }
         return jsonResponse({
           success: true,

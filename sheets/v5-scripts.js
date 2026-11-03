@@ -1426,6 +1426,37 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        function syncSquareTrackerDomFromCurrentSheetData() {
+            document.querySelectorAll('.dot-group.square-group').forEach(dotGroupElement => {
+                if (!dotGroupElement.id) return;
+                let trackerValue = currentSheetData[dotGroupElement.id];
+                if (dotGroupElement.id === 'health' || dotGroupElement.id === 'health_states') {
+                    trackerValue = currentSheetData.health_states || currentSheetData.health;
+                } else if (dotGroupElement.id === 'willpower' || dotGroupElement.id === 'willpower_states') {
+                    trackerValue = currentSheetData.willpower_states || currentSheetData.willpower;
+                } else if (dotGroupElement.id === 'humanity' || dotGroupElement.id === 'humanity_states') {
+                    trackerValue = currentSheetData.humanity_states || currentSheetData.humanity;
+                } else if (dotGroupElement.id === 'hunger') {
+                    trackerValue = currentSheetData.hunger;
+                }
+                if (typeof trackerValue === 'number') {
+                    const maxBoxes = parseInt(dotGroupElement.getAttribute('data-max')) || 10;
+                    if (dotGroupElement.id === 'hunger' || dotGroupElement.id === 'humanity' || dotGroupElement.id === 'humanity_states') {
+                        trackerValue = Array.from({ length: maxBoxes }, (_, boxIndex) => boxIndex < trackerValue ? 'filled' : 'empty');
+                    } else {
+                        trackerValue = Array.from({ length: maxBoxes }, (_, boxIndex) => boxIndex < trackerValue ? 'empty' : 'filled');
+                    }
+                }
+                if (Array.isArray(trackerValue)) {
+                    const dotElements = dotGroupElement.querySelectorAll('.dot');
+                    dotElements.forEach((dotElement, dotIndex) => {
+                        dotElement.classList.remove('active');
+                        dotElement.setAttribute('data-state', trackerValue[dotIndex] || 'empty');
+                    });
+                }
+            });
+        }
+
         if (messageEvent.data.type === 'vtm:remote_character_updated') {
             if (!charId) return;
             try {
@@ -1460,6 +1491,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (remoteSheetData.xp_upgrades && typeof remoteSheetData.xp_upgrades === 'object') {
                         currentSheetData.xp_upgrades = remoteSheetData.xp_upgrades;
                     }
+                    if (Array.isArray(remoteSheetData.health_states)) {
+                        currentSheetData.health_states = remoteSheetData.health_states;
+                    }
+                    if (remoteSheetData.health_max !== undefined) {
+                        currentSheetData.health_max = remoteSheetData.health_max;
+                    }
+                    if (Array.isArray(remoteSheetData.willpower_states)) {
+                        currentSheetData.willpower_states = remoteSheetData.willpower_states;
+                    }
+                    if (remoteSheetData.willpower_max !== undefined) {
+                        currentSheetData.willpower_max = remoteSheetData.willpower_max;
+                    }
+                    if (Array.isArray(remoteSheetData.humanity_states)) {
+                        currentSheetData.humanity_states = remoteSheetData.humanity_states;
+                    }
+                    if (remoteSheetData.stains !== undefined) {
+                        currentSheetData.stains = remoteSheetData.stains;
+                    }
+                    if (Array.isArray(remoteSheetData.hunger)) {
+                        currentSheetData.hunger = remoteSheetData.hunger;
+                    } else if (remoteCharPayload.hunger !== undefined) {
+                        const hVal = Math.max(0, Math.min(5, Number(remoteCharPayload.hunger) || 0));
+                        currentSheetData.hunger = Array.from({ length: 5 }, (_, i) => i < hVal ? 'filled' : 'empty');
+                    }
+                    currentSheetData = normalizeSheetData(currentSheetData, remoteCharPayload);
+                    syncSquareTrackerDomFromCurrentSheetData();
                     if (remoteCharPayload.concealed_fields !== undefined) {
                         try {
                             const parsedConcealed = typeof remoteCharPayload.concealed_fields === 'string'
@@ -1595,44 +1652,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (messageEvent.data.type === 'vtm:sync_sheet') {
             if (messageEvent.data.sheet_data) {
-                // Update our stale tracking object and normalize for this sheet's layout
-                // JSON.stringify and JSON.parse create a deep clone of the incoming sheet_data object so mutations do not affect the event payload
-                currentSheetData = normalizeSheetData(JSON.parse(JSON.stringify(messageEvent.data.sheet_data)));
-                
-                // Re-render trackers in the DOM!
-                // document.querySelectorAll finds all DOM elements matching the CSS selector '.dot-group'
-                document.querySelectorAll('.dot-group').forEach(dotGroupElement => {
+                const incomingSheet = typeof messageEvent.data.sheet_data === 'string'
+                    ? JSON.parse(messageEvent.data.sheet_data || '{}')
+                    : JSON.parse(JSON.stringify(messageEvent.data.sheet_data));
+                currentSheetData = normalizeSheetData({ ...currentSheetData, ...incomingSheet });
+                syncSquareTrackerDomFromCurrentSheetData();
+                document.querySelectorAll('.dot-group:not(.square-group)').forEach(dotGroupElement => {
                     if (!dotGroupElement.id) return;
-                    let trackerValue = currentSheetData[dotGroupElement.id];
-                    if (dotGroupElement.id === 'health') trackerValue = trackerValue || currentSheetData['health_states'];
-                    if (dotGroupElement.id === 'willpower') trackerValue = trackerValue || currentSheetData['willpower_states'];
-                    if (dotGroupElement.id === 'humanity') trackerValue = trackerValue || currentSheetData['humanity_states'];
-                    
-                    if (dotGroupElement.classList.contains('square-group') && typeof trackerValue === 'number') {
-                        // getAttribute reads the 'data-max' attribute on the tracker group element
-                        let maxBoxes = parseInt(dotGroupElement.getAttribute('data-max')) || 10;
-                        trackerValue = Array.from({length: maxBoxes}, (_, boxIndex) => boxIndex < trackerValue ? 'empty' : 'filled');
-                    }
-                    
-                    if (Array.isArray(trackerValue)) {
-                        // querySelectorAll gets all individual '.dot' elements inside this tracker group
-                        const dotElements = dotGroupElement.querySelectorAll('.dot');
-                        
-                        // If capacity changed (Widget added/removed boxes), we need to update our dots!
-                        if (dotGroupElement.classList.contains('square-group') && (dotGroupElement.id === 'health_states' || dotGroupElement.id === 'willpower_states' || dotGroupElement.id === 'humanity_states')) {
-                            dotElements.forEach((dotElement, dotIndex) => {
-                                // Clear any accidental `.active` classes from old bugs
-                                dotElement.classList.remove('active');
-                                // setAttribute updates the 'data-state' attribute on the DOM element to trigger CSS styling for empty/superficial/aggravated/filled
-                                if (trackerValue[dotIndex]) dotElement.setAttribute('data-state', trackerValue[dotIndex]);
-                                else dotElement.setAttribute('data-state', 'empty');
-                            });
-                        } else {
-                            dotElements.forEach((dotElement, dotIndex) => {
-                                if (trackerValue[dotIndex]) dotElement.setAttribute('data-state', trackerValue[dotIndex]);
-                            });
-                        }
-                    } else if (trackerValue !== undefined) {
+                    if (currentSheetData[dotGroupElement.id] !== undefined) {
                         renderCircularDotGroup(dotGroupElement);
                     }
                 });
@@ -1908,7 +1935,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let lastFilledBoxIndex = boxStates.lastIndexOf('filled');
                         if (lastFilledBoxIndex !== -1) {
                             squareElements[lastFilledBoxIndex].setAttribute('data-state', 'empty');
-                            triggerSave();
+                            triggerSave(null, true);
                         }
                     } else {
                         // Capacity Tracker: Decrease capacity (Add 'filled' black box to the right-most usable box)
@@ -1916,7 +1943,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (currentBlackCapCount < squareElements.length - 1) {
                             const targetBoxIndex = squareElements.length - currentBlackCapCount - 1;
                             squareElements[targetBoxIndex].setAttribute('data-state', 'filled');
-                            triggerSave();
+                            triggerSave(null, true);
                         }
                     }
                 });
@@ -1943,7 +1970,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let firstEmptyBoxIndex = boxStates.indexOf('empty');
                         if (firstEmptyBoxIndex !== -1) {
                             squareElements[firstEmptyBoxIndex].setAttribute('data-state', 'filled');
-                            triggerSave();
+                            triggerSave(null, true);
                         }
                     } else {
                         // Capacity Tracker: Increase capacity (Remove left-most 'filled' black box)
@@ -1951,7 +1978,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (currentBlackCapCount > 0) {
                             const targetBoxIndex = squareElements.length - currentBlackCapCount;
                             squareElements[targetBoxIndex].setAttribute('data-state', 'empty');
-                            triggerSave();
+                            triggerSave(null, true);
                         }
                     }
                 });
@@ -1987,7 +2014,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         hungerBoxElements.forEach((boxElement, boxIndex) => {
                             boxElement.setAttribute('data-state', boxIndex < newHungerRating ? 'filled' : 'empty');
                         });
-                        triggerSave();
+                        triggerSave(null, true);
                         return;
                     }
 
@@ -2012,7 +2039,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // removeAttribute cleans up any legacy 'data-base-state' attribute on the clicked square
                     clickEvent.target.removeAttribute('data-base-state'); // Cleanup any stale attributes
                     
-                    triggerSave();
+                    triggerSave(null, true);
                 }
             });
         } else {
