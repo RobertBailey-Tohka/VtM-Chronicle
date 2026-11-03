@@ -1026,8 +1026,88 @@ function bringDesktopWidgetToFront(widgetElement) {
   widgetElement.style.zIndex = highestDesktopWidgetZIndex;
 }
 
+function shrinkWidgetToFitViewport(containerElement) {
+  if (!containerElement) return;
+  if (containerElement.id === 'characterSheetWindow') {
+    bringCharacterSheetWindowToFront();
+  } else {
+    bringDesktopWidgetToFront(containerElement);
+  }
+  const computedPos = window.getComputedStyle(containerElement).position;
+  const isFixed = computedPos === 'fixed' || containerElement.id === 'characterSheetWindow';
+  const rect = containerElement.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const parentTopOffset = isFixed ? 0 : (containerElement.offsetParent ? containerElement.offsetParent.getBoundingClientRect().top : 52);
+  const parentLeftOffset = isFixed ? 0 : (containerElement.offsetParent ? containerElement.offsetParent.getBoundingClientRect().left : 0);
+
+  let targetViewportTop = Math.max(58, Math.min(rect.top, vh - 260));
+  let targetViewportLeft = Math.max(12, Math.min(rect.left, vw - 320));
+  const maxAllowedHeight = Math.max(220, vh - targetViewportTop - 16);
+  const maxAllowedWidth = Math.max(280, vw - targetViewportLeft - 16);
+
+  // If the bottom is below the browser window, or if the user clicks Shrink to make it more compact:
+  let newHeight;
+  if (rect.bottom > vh - 12) {
+    newHeight = maxAllowedHeight;
+  } else {
+    newHeight = Math.max(240, Math.min(maxAllowedHeight, Math.round(rect.height * 0.78)));
+  }
+  let newWidth = Math.min(rect.width, maxAllowedWidth);
+  if (rect.width > vw * 0.85) {
+    newWidth = Math.max(460, Math.round(vw * 0.72));
+  }
+
+  containerElement.style.left = `${Math.max(0, targetViewportLeft - parentLeftOffset)}px`;
+  containerElement.style.top = `${Math.max(isFixed ? 54 : 4, targetViewportTop - parentTopOffset)}px`;
+  containerElement.style.width = `${newWidth}px`;
+  containerElement.style.height = `${newHeight}px`;
+  containerElement.dataset.isMaximized = 'false';
+  if (containerElement.id === 'widget-clue-board' || containerElement.classList.contains('widget-matrix-popup')) {
+    renderClueCords();
+  }
+}
+window.shrinkWidgetToFitViewport = shrinkWidgetToFitViewport;
+
 function attachMultiDirectionResizeHandles(containerElement, minWidth = 320, minHeight = 220) {
   if (!containerElement) return;
+  const requiredDirs = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+  requiredDirs.forEach((dir) => {
+    if (!containerElement.querySelector(`.sheet-window-resize-handle[data-resize-dir="${dir}"]`)) {
+      const h = document.createElement('div');
+      h.className = `sheet-window-resize-handle sheet-resize-${dir}`;
+      h.dataset.resizeDir = dir;
+      if (dir === 'n' || dir === 'nw' || dir === 'ne') {
+        h.title = 'Drag down to shrink from top (and pull bottom into window)';
+      }
+      containerElement.appendChild(h);
+    }
+  });
+
+  // Also inject a one-click "Shrink / Fit to Window" button into the widget's top header bar if not already present
+  const actionsBar =
+    containerElement.querySelector('.widget-header .widget-actions') ||
+    containerElement.querySelector('.sheet-window-drag-actions');
+  if (actionsBar && !actionsBar.querySelector('.btn-shrink-fit-top')) {
+    const shrinkBtn = document.createElement('button');
+    shrinkBtn.type = 'button';
+    shrinkBtn.className =
+      containerElement.id === 'characterSheetWindow'
+        ? 'sheet-window-ctrl-btn btn-shrink-fit-top'
+        : 'btn-w-ctrl btn-shrink-fit-top';
+    shrinkBtn.title = 'Shrink widget to fit inside browser window';
+    shrinkBtn.innerHTML =
+      containerElement.id === 'characterSheetWindow'
+        ? '<i class="fa-solid fa-down-left-and-up-right-to-center"></i> Shrink'
+        : '<i class="fa-solid fa-down-left-and-up-right-to-center"></i>';
+    shrinkBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      shrinkWidgetToFitViewport(containerElement);
+    };
+    actionsBar.insertBefore(shrinkBtn, actionsBar.firstChild);
+  }
+
   const handles = containerElement.querySelectorAll('.sheet-window-resize-handle, .widget-resize-handle');
   handles.forEach((handleEl) => {
     handleEl.onmousedown = (mouseEvent) => {
@@ -1038,20 +1118,27 @@ function attachMultiDirectionResizeHandles(containerElement, minWidth = 320, min
       } else {
         bringDesktopWidgetToFront(containerElement);
       }
+      const computedPos = window.getComputedStyle(containerElement).position;
+      const isFixed = computedPos === 'fixed' || containerElement.id === 'characterSheetWindow';
       const rect = containerElement.getBoundingClientRect();
-      containerElement.style.left = `${rect.left}px`;
-      containerElement.style.top = `${rect.top}px`;
+      const startLeft = isFixed ? rect.left : containerElement.offsetLeft;
+      const startTop = isFixed ? rect.top : containerElement.offsetTop;
+      containerElement.style.left = `${startLeft}px`;
+      containerElement.style.top = `${startTop}px`;
       containerElement.style.width = `${rect.width}px`;
       containerElement.style.height = `${rect.height}px`;
       containerElement.dataset.isMaximized = 'false';
       document.body.classList.add('vtm-dragging-or-resizing');
       activeWidgetResize = {
         widget: containerElement,
+        isFixed,
         dir: handleEl.dataset.resizeDir || 'se',
         startX: mouseEvent.clientX,
         startY: mouseEvent.clientY,
-        initialLeft: rect.left,
-        initialTop: rect.top,
+        initialLeft: startLeft,
+        initialTop: startTop,
+        initialViewportTop: rect.top,
+        initialViewportBottom: rect.bottom,
         initialWidth: rect.width,
         initialHeight: rect.height,
         minWidth,
@@ -1322,10 +1409,22 @@ function initDesktopWidgetsDragAndResize() {
             }
           }
           if (dir.includes('n')) {
-            const proposedHeight = activeWidgetResize.initialHeight - deltaHeight;
-            if (proposedHeight >= minH) {
-              activeWidgetResize.widget.style.height = `${proposedHeight}px`;
-              activeWidgetResize.widget.style.top = `${Math.max(42, activeWidgetResize.initialTop + deltaHeight)}px`;
+            const minTopAllowed = activeWidgetResize.isFixed ? 52 : 2;
+            const vh = window.innerHeight;
+            if (deltaHeight > 0 && activeWidgetResize.initialViewportBottom > vh - 12) {
+              // When the bottom of the widget is hidden beneath the browser window and the player drags
+              // the top edge/corner down to shrink it, pull the bottom up into the visible viewport too
+              const maxFittingHeight = Math.max(minH, vh - activeWidgetResize.initialViewportTop - 16);
+              const baseHeight = Math.min(activeWidgetResize.initialHeight, maxFittingHeight);
+              const shrunkHeight = Math.max(minH, baseHeight - deltaHeight * 1.35);
+              activeWidgetResize.widget.style.height = `${shrunkHeight}px`;
+              activeWidgetResize.widget.style.top = `${Math.max(minTopAllowed, activeWidgetResize.initialTop + Math.min(deltaHeight * 0.35, 80))}px`;
+            } else {
+              const proposedHeight = activeWidgetResize.initialHeight - deltaHeight;
+              if (proposedHeight >= minH) {
+                activeWidgetResize.widget.style.height = `${proposedHeight}px`;
+                activeWidgetResize.widget.style.top = `${Math.max(minTopAllowed, activeWidgetResize.initialTop + deltaHeight)}px`;
+              }
             }
           }
           if (activeWidgetResize.widget.id === 'widget-clue-board' || activeWidgetResize.widget.classList.contains('widget-matrix-popup')) {

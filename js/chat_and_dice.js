@@ -30,30 +30,44 @@ function executeDiceRoll() {
   let characterId = null;
   let characterName = 'Action';
   let isStorytellerWorld = false;
-  const selectedPersona = personaSelectElement ? personaSelectElement.value : 'storyteller_world';
+  let selectedPersona = personaSelectElement ? personaSelectElement.value : '';
+  if (!selectedPersona) {
+    if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') {
+      selectedPersona = 'storyteller_world';
+    } else if (typeof activeDossierCharId !== 'undefined' && activeDossierCharId) {
+      selectedPersona = String(activeDossierCharId);
+    } else {
+      selectedPersona = 'general_player';
+    }
+  }
   if (selectedPersona === 'storyteller_world') {
-    isStorytellerWorld = true;
-    rollerName = 'Storyteller';
-    characterName = 'Storyteller / World';
+    if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') {
+      isStorytellerWorld = true;
+      rollerName = 'Storyteller';
+      characterName = 'Storyteller / World';
+    } else {
+      characterName = rollerName;
+    }
   } else if (selectedPersona === 'general_player') {
     characterName = rollerName;
   } else {
     characterId = parseInt(selectedPersona, 10);
-    const characterRecord = chronicleCharactersList.find(characterItem => characterItem.id === characterId);
+    const characterRecord = chronicleCharactersList.find(characterItem => Number(characterItem.id) === Number(characterId));
     if (characterRecord) {
       characterName = characterRecord.name;
       if ((activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller')) {
         rollerName = `Storyteller (for ${characterRecord.name})`;
       } else {
-        rollerName = currentUser ? currentUser.displayName || currentUser.username : characterRecord.name;
+        rollerName = characterRecord.name;
       }
     }
   }
   
-  if (socket && socket.connected) {
+  if (socket) {
     // Emit a Socket.IO event to the server to request a dice roll calculation and broadcast
     socket.emit('dice:roll', {
-      campaignId: activeChronicleId || 1,
+      campaignId: activeChronicleId || 6,
+      chronicleId: activeChronicleId || 6,
       rollerName,
       characterId,
       characterName,
@@ -72,30 +86,51 @@ function executeRouseCheck() {
   let characterName = 'Rouse Check';
   let characterId = null;
   let isStorytellerWorld = false;
-  const selectedPersona = personaSelectElement ? personaSelectElement.value : 'storyteller_world';
+  let selectedPersona = personaSelectElement ? personaSelectElement.value : '';
+  if (!selectedPersona) {
+    if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') {
+      selectedPersona = 'storyteller_world';
+    } else if (typeof activeDossierCharId !== 'undefined' && activeDossierCharId) {
+      selectedPersona = String(activeDossierCharId);
+    } else {
+      selectedPersona = 'general_player';
+    }
+  }
   if (selectedPersona === 'storyteller_world') {
-    isStorytellerWorld = true;
-    rollerName = 'Storyteller';
-  } else if (selectedPersona !== 'general_player') {
+    if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') {
+      isStorytellerWorld = true;
+      rollerName = 'Storyteller';
+      characterName = 'Storyteller (Rouse)';
+    } else {
+      characterName = `${rollerName} (Rouse)`;
+    }
+  } else if (selectedPersona === 'general_player') {
+    characterName = `${rollerName} (Rouse)`;
+  } else {
     characterId = parseInt(selectedPersona, 10);
-    const characterRecord = chronicleCharactersList.find(characterItem => characterItem.id === characterId);
+    const characterRecord = chronicleCharactersList.find(characterItem => Number(characterItem.id) === Number(characterId));
     if (characterRecord) {
       characterName = `${characterRecord.name} (Rouse)`;
-      if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') rollerName = `Storyteller (for ${characterRecord.name})`;
+      if (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') {
+        rollerName = `Storyteller (for ${characterRecord.name})`;
+      } else {
+        rollerName = characterRecord.name;
+      }
     }
-    if (socket && socket.connected) {
-      // Emit a Socket.IO event to the server to perform a single-die Rouse Check roll
-      socket.emit('dice:roll', {
-        campaignId: activeChronicleId || 1,
-        rollerName,
-        characterId: characterId,
-        characterName: characterName,
-        poolSize: 1,
-        hungerCount: 1,
-        isSecret: false,
-        isStorytellerWorld
-      });
-    }
+  }
+  if (socket) {
+    // Emit a Socket.IO event to the server to perform a single-die Rouse Check roll
+    socket.emit('dice:roll', {
+      campaignId: activeChronicleId || 6,
+      chronicleId: activeChronicleId || 6,
+      rollerName,
+      characterId: characterId,
+      characterName: characterName,
+      poolSize: 1,
+      hungerCount: 1,
+      isSecret: false,
+      isStorytellerWorld
+    });
   }
 }
 

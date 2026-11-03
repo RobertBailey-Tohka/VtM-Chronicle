@@ -131,6 +131,20 @@ window.saveTrayEditor = function() {
     }
 };
 
+const playedCinematicRollKeys = new Set();
+
+function updateDiceQueueBadge() {
+    const badgeEl = document.getElementById('diceQueueBadge');
+    if (!badgeEl) return;
+    const count = Array.isArray(window.cinematicRollQueue) ? window.cinematicRollQueue.length : 0;
+    if (count > 0) {
+        badgeEl.style.display = 'inline-flex';
+        badgeEl.textContent = count === 1 ? 'UP NEXT: 1 ROLL QUEUED' : `UP NEXT: ${count} ROLLS QUEUED`;
+    } else {
+        badgeEl.style.display = 'none';
+    }
+}
+
 /**
  * Enqueues a dice roll to be shown cinematically, or bypasses the animation 
  * to directly append it to the ledger if animations are turned off.
@@ -138,11 +152,22 @@ window.saveTrayEditor = function() {
  * @param {Object} rollResult - The result object containing details of the roll.
  */
 window.enqueueCinematicRoll = function(rollResult) {
+    if (!rollResult) return;
+    const dedupKey = rollResult.roll_uid || (rollResult.id ? `roll_${rollResult.id}_${rollResult.roller_name || ''}` : null);
+    if (dedupKey) {
+        if (playedCinematicRollKeys.has(dedupKey)) return;
+        playedCinematicRollKeys.add(dedupKey);
+        if (playedCinematicRollKeys.size > 300) {
+            const oldest = playedCinematicRollKeys.values().next().value;
+            playedCinematicRollKeys.delete(oldest);
+        }
+    }
     if (!getDiceAnimationSetting()) {
         appendDiceRollToLedger(rollResult);
         return;
     }
-    cinematicRollQueue.push(rollResult);
+    window.cinematicRollQueue.push(rollResult);
+    updateDiceQueueBadge();
     processCinematicQueue();
 };
 
@@ -151,9 +176,13 @@ window.enqueueCinematicRoll = function(rollResult) {
  * Ensures that only one cinematic roll plays at a time.
  */
 function processCinematicQueue() {
-    if (isCinematicPlaying || cinematicRollQueue.length === 0) return;
-    isCinematicPlaying = true;
-    const currentRollResult = cinematicRollQueue.shift();
+    if (window.isCinematicPlaying || window.cinematicRollQueue.length === 0) {
+        updateDiceQueueBadge();
+        return;
+    }
+    window.isCinematicPlaying = true;
+    const currentRollResult = window.cinematicRollQueue.shift();
+    updateDiceQueueBadge();
     playCinematicRoll(currentRollResult);
 }
 
@@ -273,19 +302,39 @@ window.renderD10Svg = renderD10Svg;
  * @param {Object} rollResult - The outcome of the dice roll containing values for regular and hunger dice.
  */
 function playCinematicRoll(rollResult) {
+    // Remove any stale overlay so rolls always play cleanly one after another
+    document.querySelectorAll('.dice-cinematic-overlay').forEach(el => el.remove());
+
     // Retrieve the saved dice tray dimensions and coordinates from browser localStorage
     let savedTrayDimensions = JSON.parse(localStorage.getItem('vtm_dice_tray') || 'null');
     if (!savedTrayDimensions) {
         savedTrayDimensions = { w: 600, h: 400, x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 200 };
     }
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 768;
+    const clampedW = Math.min(Math.max(300, savedTrayDimensions.w || 600), vw - 32);
+    const clampedH = Math.min(Math.max(220, savedTrayDimensions.h || 400), vh - 80);
+    const clampedX = Math.min(Math.max(16, savedTrayDimensions.x ?? (vw / 2 - clampedW / 2)), Math.max(16, vw - clampedW - 16));
+    const clampedY = Math.min(Math.max(58, savedTrayDimensions.y ?? (vh / 2 - clampedH / 2)), Math.max(58, vh - clampedH - 16));
+    savedTrayDimensions = { w: clampedW, h: clampedH, x: clampedX, y: clampedY };
 
-    const rollerLabel = (rollResult.roller_name || 'Kindred').toUpperCase();
+    const rollerLabel = (rollResult.character_name && rollResult.character_name !== 'Action'
+        ? `${rollResult.roller_name || 'Kindred'} — ${rollResult.character_name}`
+        : (rollResult.roller_name || 'Kindred')).toUpperCase();
+    const queuedCount = Array.isArray(window.cinematicRollQueue) ? window.cinematicRollQueue.length : 0;
+    const queueBadgeStyle = queuedCount > 0 ? 'display:inline-flex;' : 'display:none;';
+    const queueBadgeText = queuedCount === 1 ? 'UP NEXT: 1 ROLL QUEUED' : `UP NEXT: ${queuedCount} ROLLS QUEUED`;
+
     // Create a new div element in the DOM for the cinematic dice overlay
     const cinematicOverlayElement = document.createElement('div');
     cinematicOverlayElement.className = 'dice-cinematic-overlay';
     cinematicOverlayElement.innerHTML = `
         <div class="dice-soft-box" style="width: ${savedTrayDimensions.w}px; height: ${savedTrayDimensions.h}px; left: ${savedTrayDimensions.x}px; top: ${savedTrayDimensions.y}px;">
-            <div class="dice-watermark">${rollerLabel}</div>
+            <div style="position:absolute; top:10px; left:14px; right:14px; display:flex; align-items:center; justify-content:space-between; z-index:12; pointer-events:none;">
+                <span style="font-family:'Cinzel',serif; font-size:13px; font-weight:700; color:#f8fafc; background:rgba(15,8,12,0.82); border:1px solid rgba(239,68,68,0.45); border-radius:6px; padding:4px 10px; letter-spacing:0.8px; text-shadow:0 1px 3px #000;"><i class="fa-solid fa-dice-d20" style="color:#ef4444;margin-right:6px;"></i>${rollerLabel}</span>
+                <span id="diceQueueBadge" style="${queueBadgeStyle} align-items:center; gap:5px; font-size:11px; font-weight:800; color:#fde047; background:rgba(30,15,20,0.9); border:1px solid rgba(250,204,21,0.55); border-radius:20px; padding:4px 10px; letter-spacing:0.6px; box-shadow:0 0 12px rgba(250,204,21,0.25);">${queueBadgeText}</span>
+            </div>
+            <div class="dice-watermark">${(rollResult.roller_name || 'Kindred').toUpperCase()}</div>
             <div class="dice-soft-box-tray" id="dicePhysicsTray"></div>
         </div>
     `;
@@ -296,7 +345,7 @@ function playCinematicRoll(rollResult) {
     cinematicOverlayElement.classList.add('active');
     
     // Query the DOM for the physics tray container element by its ID
-    const physicsTrayElement = document.getElementById('dicePhysicsTray');
+    const physicsTrayElement = cinematicOverlayElement.querySelector('#dicePhysicsTray') || document.getElementById('dicePhysicsTray');
     // Measure the screen bounding rectangle of the physics tray
     const trayBoundingRect = physicsTrayElement.getBoundingClientRect();
     const trayWidth = Math.max(240, trayBoundingRect.width || savedTrayDimensions.w || 600);

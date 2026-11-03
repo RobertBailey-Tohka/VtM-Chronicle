@@ -443,11 +443,26 @@
 
   // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + ntfy.sh SSE) ----------------
   let sseSource = null;
+  let sseReconnectTimer = null;
+  let fastLivePollTimer = null;
   let currentCloudStatusLabel = 'CLOUD VTT';
   const activePresencesByUserId = new Map();
+  const processedRealtimeIds = new Set();
   let localPresenceRecord = null;
   let presenceReplyTimer = null;
   let stSyncTimer = null;
+
+  function markRealtimeIdProcessed(id) {
+    if (!id) return false;
+    const key = String(id);
+    if (processedRealtimeIds.has(key)) return true;
+    processedRealtimeIds.add(key);
+    if (processedRealtimeIds.size > 600) {
+      const first = processedRealtimeIds.values().next().value;
+      processedRealtimeIds.delete(first);
+    }
+    return false;
+  }
 
   function emitToLocalSockets(event, payload) {
     const outPayload = rewritePayloadUrlsOut(payload);
@@ -571,6 +586,26 @@
   function applyIncomingPacket(pkt, isReplay = false) {
     if (!pkt) return;
     if (!isReplay && pkt.senderId === CLIENT_ID) return;
+    if (pkt.pktId && markRealtimeIdProcessed(pkt.pktId)) return;
+
+    if (pkt.type === 'dice_roll' && pkt.roll) {
+      const roll = pkt.roll;
+      const rollDedupKey = roll.roll_uid || `roll_${roll.id}_${roll.roller_name}`;
+      if (markRealtimeIdProcessed(rollDedupKey)) return;
+      if (db) {
+        if (!Array.isArray(db.dice_rolls)) db.dice_rolls = [];
+        const existingIdx = db.dice_rolls.findIndex((r) => Number(r.id) === Number(roll.id));
+        if (existingIdx >= 0) db.dice_rolls[existingIdx] = roll;
+        else db.dice_rolls.push(roll);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+      }
+      if (!isReplay || Date.now() - (pkt.ts || 0) < 15000) {
+        emitToLocalSockets('dice:result', roll);
+      }
+      return;
+    }
 
     if (pkt.type === 'presence_update' && pkt.presence && pkt.presence.userId) {
       if (!isReplay || Date.now() - (pkt.ts || 0) < 240000) {
@@ -712,6 +747,10 @@
     }
 
     if (pkt.type === 'socket_event') {
+      if (pkt.event === 'dice:result' && pkt.data) {
+        const rollDedupKey = pkt.data.roll_uid || `roll_${pkt.data.id}_${pkt.data.roller_name}`;
+        if (markRealtimeIdProcessed(rollDedupKey)) return;
+      }
       if (pkt.dbPatch && db) {
         applyDbPatch(pkt.dbPatch);
       }
@@ -826,10 +865,10 @@
     }
   }
 
-  async function pollRecentNtfyHistory(topic) {
+  async function pollRecentNtfyHistory(topic, sinceWindow = '12h', allowRecentDiceRollReplay = false) {
     try {
       await ensureDbLoaded();
-      const res = await nativeFetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=12h`);
+      const res = await nativeFetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(sinceWindow)}`);
       if (!res || !res.ok) return;
       const text = await res.text();
       if (!text) return;
@@ -839,32 +878,82 @@
           const wrapper = JSON.parse(line);
           if (wrapper && wrapper.event === 'message' && wrapper.message) {
             const pkt = JSON.parse(wrapper.message);
+            if (!pkt) continue;
+            if (wrapper.id) pkt.pktId = wrapper.id;
+            if (
+              allowRecentDiceRollReplay &&
+              (pkt.type === 'dice_roll' || (pkt.type === 'socket_event' && pkt.event === 'dice:result')) &&
+              Date.now() - (pkt.ts || (wrapper.time ? wrapper.time * 1000 : 0)) < 14000
+            ) {
+              await applyIncomingPacket(pkt, false);
+              continue;
+            }
             // Replay state-syncing packets and recent presence packets without re-popping old dice roll animations
             if (
-              pkt &&
-              (pkt.type === 'xp_sync' ||
-                pkt.type === 'st_authoritative_sync' ||
-                pkt.type === 'char_delta' ||
-                pkt.type === 'presence_update' ||
-                pkt.type === 'presence_leave' ||
-                pkt.type === 'db:patch' ||
-                pkt.type === 'cloud:snapshot')
+              pkt.type === 'xp_sync' ||
+              pkt.type === 'st_authoritative_sync' ||
+              pkt.type === 'char_delta' ||
+              pkt.type === 'presence_update' ||
+              pkt.type === 'presence_leave' ||
+              pkt.type === 'db:patch' ||
+              pkt.type === 'cloud:snapshot'
             ) {
               // Suppress reply storm while replaying historical presence packets
               if (pkt.type === 'presence_update') pkt.requestReply = false;
-              await applyIncomingPacket(pkt);
+              await applyIncomingPacket(pkt, !allowRecentDiceRollReplay);
             }
           }
         } catch (e) {}
       }
-      emitToLocalSockets('character:updated', {});
-      emitCombinedPresences();
+      if (!allowRecentDiceRollReplay) {
+        emitToLocalSockets('character:updated', {});
+        emitCombinedPresences();
+      }
+    } catch (e) {}
+  }
+
+  function connectNtfySse(topic) {
+    if (!topic || typeof EventSource === 'undefined') return;
+    try {
+      if (sseSource) {
+        try {
+          sseSource.close();
+        } catch (e) {}
+      }
+      sseSource = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}/sse`);
+      sseSource.onopen = () => {
+        updateCloudBadgeStatus('CLOUD LIVE');
+        broadcastLocalPresence(true);
+        broadcastStorytellerAuthoritativeState();
+      };
+      sseSource.onmessage = (ev) => {
+        try {
+          const wrapper = JSON.parse(ev.data);
+          if (wrapper && wrapper.event === 'message' && wrapper.message) {
+            const pkt = JSON.parse(wrapper.message);
+            if (pkt) {
+              if (wrapper.id) pkt.pktId = wrapper.id;
+              applyIncomingPacket(pkt, false);
+            }
+          }
+        } catch (e) {}
+      };
+      sseSource.onerror = () => {
+        updateCloudBadgeStatus('RECONNECTING...');
+        if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+        sseReconnectTimer = setTimeout(() => {
+          const latestCfg = getCloudConfig();
+          if (latestCfg.syncEnabled && latestCfg.topic) {
+            connectNtfySse(latestCfg.topic);
+          }
+        }, 4500);
+      };
     } catch (e) {}
   }
 
   function startRealtimeListeners() {
     if (localBus) {
-      localBus.onmessage = (ev) => applyIncomingPacket(ev.data);
+      localBus.onmessage = (ev) => applyIncomingPacket(ev.data, false);
     }
     window.addEventListener('storage', (ev) => {
       if (ev.key === STORAGE_KEY && ev.newValue) {
@@ -878,24 +967,17 @@
     const cfg = getCloudConfig();
     if (!cfg.syncEnabled || !cfg.topic || typeof EventSource === 'undefined') return;
     try {
-      pollRecentNtfyHistory(cfg.topic);
-      if (sseSource) sseSource.close();
-      sseSource = new EventSource(`https://ntfy.sh/${encodeURIComponent(cfg.topic)}/sse`);
-      sseSource.onopen = () => {
-        updateCloudBadgeStatus('CLOUD LIVE');
-        broadcastLocalPresence(true);
-        broadcastStorytellerAuthoritativeState();
-      };
-      sseSource.onmessage = (ev) => {
-        try {
-          const wrapper = JSON.parse(ev.data);
-          if (wrapper && wrapper.event === 'message' && wrapper.message) {
-            const pkt = JSON.parse(wrapper.message);
-            applyIncomingPacket(pkt);
-          }
-        } catch (e) {}
-      };
-      sseSource.onerror = () => updateCloudBadgeStatus('LOCAL / OFFLINE');
+      pollRecentNtfyHistory(cfg.topic, '12h', false);
+      connectNtfySse(cfg.topic);
+
+      // Fast 4-second live catch-up poll so dice rolls and XP updates arrive even if SSE temporarily hiccups
+      if (fastLivePollTimer) clearInterval(fastLivePollTimer);
+      fastLivePollTimer = setInterval(() => {
+        const latestCfg = getCloudConfig();
+        if (latestCfg.syncEnabled && latestCfg.topic && navigator.onLine) {
+          pollRecentNtfyHistory(latestCfg.topic, '12s', true);
+        }
+      }, 4000);
 
       setInterval(() => {
         broadcastLocalPresence(false, true);
@@ -1152,13 +1234,20 @@
       } = data || {};
       const campId = Number(chronicleId || campaignId) || defChronId;
       const roll = rollV5Dice(rollerName, characterId, characterName, poolSize, hungerCount, isSecret, isStorytellerWorld);
-      roll.id = nextId('dice_rolls');
+      roll.id = Math.max(nextId('dice_rolls'), Math.floor(Date.now() % 1000000000) * 100 + Math.floor(Math.random() * 100));
+      roll.roll_uid = `${CLIENT_ID}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       roll.chronicle_id = campId;
+      markRealtimeIdProcessed(roll.roll_uid);
       db.dice_rolls = db.dice_rolls || [];
       db.dice_rolls.push(roll);
       persistDb();
       emitToLocalSockets('dice:result', roll);
-      publishRealtimeEvent('dice:result', roll, { table: 'dice_rolls', row: roll });
+      sendRawNtfyPacket({
+        senderId: CLIENT_ID,
+        ts: Date.now(),
+        type: 'dice_roll',
+        roll,
+      });
       return;
     }
 

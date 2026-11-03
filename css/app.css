@@ -2794,16 +2794,49 @@ html, body {
 
 .sheet-window-resize-handle {
     position: absolute;
-    z-index: 40;
+    z-index: 95;
 }
 
-.sheet-resize-n { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.sheet-resize-s { bottom: 0; left: 10px; right: 10px; height: 7px; cursor: ns-resize; }
-.sheet-resize-e { top: 10px; bottom: 10px; right: 0; width: 7px; cursor: ew-resize; }
-.sheet-resize-w { top: 10px; bottom: 10px; left: 0; width: 7px; cursor: ew-resize; }
-.sheet-resize-ne { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
-.sheet-resize-nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
-.sheet-resize-sw { bottom: 0; left: 0; width: 16px; height: 16px; cursor: nesw-resize; }
+.sheet-resize-n {
+    top: 0;
+    left: 14px;
+    right: 14px;
+    height: 8px;
+    cursor: ns-resize;
+}
+.sheet-resize-n:hover {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.55) 0%, transparent 100%);
+}
+.sheet-resize-s { bottom: 0; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.sheet-resize-e { top: 10px; bottom: 10px; right: 0; width: 8px; cursor: ew-resize; }
+.sheet-resize-w { top: 10px; bottom: 10px; left: 0; width: 8px; cursor: ew-resize; }
+.sheet-resize-ne {
+    top: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nesw-resize;
+    background: linear-gradient(225deg, rgba(239, 68, 68, 0.55) 0%, rgba(239, 68, 68, 0.55) 35%, transparent 36%);
+    border-top-right-radius: 9px;
+}
+.sheet-resize-nw {
+    top: 0;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.55) 0%, rgba(239, 68, 68, 0.55) 35%, transparent 36%);
+    border-top-left-radius: 9px;
+}
+.sheet-resize-sw {
+    bottom: 0;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nesw-resize;
+    background: linear-gradient(45deg, rgba(239, 68, 68, 0.55) 0%, rgba(239, 68, 68, 0.55) 35%, transparent 36%);
+    border-bottom-left-radius: 9px;
+}
 .sheet-resize-se {
     bottom: 0;
     right: 0;
@@ -5848,7 +5881,7 @@ i.fa-trash, i.fa-trash-can {
 .dice-cinematic-overlay {
     position: fixed;
     inset: 0;
-    z-index: 9999;
+    z-index: 9999990 !important;
     display: block; /* No longer flex center */
     opacity: 0;
     pointer-events: none;
