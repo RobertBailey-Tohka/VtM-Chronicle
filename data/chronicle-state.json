@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-11-02T22:42:53.937Z",
+  "exportedAt": "2026-11-09T20:20:00.000Z",
   "database": "vtm_chronicle",
   "default_assets": [
     {
@@ -2170,14 +2170,14 @@
       "concept": "1950s Greaser Warlord",
       "avatar_url": "/uploads/character_avatar_31.png?v=1791829505410",
       "hunger": 1,
-      "health_superficial": 1,
+      "health_superficial": 0,
       "health_aggravated": 0,
       "willpower_superficial": 0,
       "willpower_aggravated": 0,
-      "sheet_data": "{\"hunger\":[\"filled\",\"empty\",\"empty\",\"empty\",\"empty\"],\"humanity\":[\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"empty\",\"empty\",\"empty\"],\"humanity_states\":[\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"empty\",\"empty\",\"empty\"],\"total_experience\":\"\",\"spent_experience\":\"\",\"predator\":\"Blood Leech\",\"name\":\"Baroness \\\"Jax\\\"\",\"clan\":\"Brujah\",\"concept\":\"1950s Greaser Warlord\",\"chronicle\":\"The Louisville Chronicle\",\"ambition\":\"To drive the Camarilla out of the industrial sectors completely.\",\"sire\":\"A fallen WWII Anarch veteran\",\"desire\":\"To turn the coterie into her most lethal, unquestioning strike team.\",\"generation\":\"9th\",\"athletics_specialty\":\"\",\"brawl_specialty\":\"\",\"craft_specialty\":\"\",\"drive_specialty\":\"\",\"firearms_specialty\":\"\",\"larceny_specialty\":\"\",\"melee_specialty\":\"\",\"stealth_specialty\":\"\",\"survival_specialty\":\"\",\"animal_ken_specialty\":\"\",\"etiquette_specialty\":\"\",\"insight_specialty\":\"\",\"intimidation_specialty\":\"\",\"leadership_specialty\":\"\",\"performance_specialty\":\"\",\"persuasion_specialty\":\"\",\"streetwise_specialty\":\"\",\"subterfuge_specialty\":\"\",\"academics_specialty\":\"\",\"awareness_specialty\":\"\",\"finance_specialty\":\"\",\"investigation_specialty\":\"\",\"medicine_specialty\":\"\",\"occult_specialty\":\"\",\"politics_specialty\":\"\",\"science_specialty\":\"\",\"technology_specialty\":\"\",\"discipline_name_0\":\"\",\"discipline_power_0_0\":\"\",\"discipline_power_0_1\":\"\",\"discipline_power_0_2\":\"\",\"discipline_power_0_3\":\"\",\"discipline_power_0_4\":\"\",\"discipline_name_1\":\"\",\"discipline_power_1_0\":\"\",\"discipline_power_1_1\":\"\",\"discipline_power_1_2\":\"\",\"discipline_power_1_3\":\"\",\"discipline_power_1_4\":\"\",\"discipline_name_2\":\"\",\"discipline_power_2_0\":\"\",\"discipline_power_2_1\":\"\",\"discipline_power_2_2\":\"\",\"discipline_power_2_3\":\"\",\"discipline_power_2_4\":\"\",\"discipline_name_3\":\"\",\"discipline_power_3_0\":\"\",\"discipline_power_3_1\":\"\",\"discipline_power_3_2\":\"\",\"discipline_power_3_3\":\"\",\"discipline_power_3_4\":\"\",\"discipline_name_4\":\"\",\"discipline_power_4_0\":\"\",\"discipline_power_4_1\":\"\",\"discipline_power_4_2\":\"\",\"discipline_power_4_3\":\"\",\"discipline_power_4_4\":\"\",\"discipline_name_5\":\"\",\"discipline_power_5_0\":\"\",\"discipline_power_5_1\":\"\",\"discipline_power_5_2\":\"\",\"discipline_power_5_3\":\"\",\"discipline_power_5_4\":\"\",\"resonance\":\"\",\"chronicle_tenets\":\"\",\"touchstones_convictions\":\"\",\"clan_bane\":\"\",\"adv_flaw_name_1\":\"\",\"adv_flaw_name_2\":\"\",\"adv_flaw_name_3\":\"\",\"adv_flaw_name_4\":\"\",\"adv_flaw_name_5\":\"\",\"adv_flaw_name_6\":\"\",\"adv_flaw_name_7\":\"\",\"adv_flaw_name_8\":\"\",\"adv_flaw_name_9\":\"\",\"notes\":\"Fought in early labor riots. She sees the Anarch cause as a continuation of mortal labor struggles against oppressive barons.\",\"blood_surge\":\"\",\"mend_amount\":\"\",\"power_bonus\":\"\",\"rouse_reroll\":\"\",\"feeding_penalty\":\"\",\"bane_severity\":\"\",\"true_age\":\"~60 years\",\"apparent_age\":\"Mid 20s\",\"date_of_birth\":\"1870s\",\"date_of_death\":\"1890s\",\"appearance\":\"Leather jackets adorned with patches of fallen allies; slicked-back hair, grease on her hands.\",\"distinguishing_features\":\"A massive, jagged scar across her throat that never healed.\",\"history\":\"Fought in early labor riots. She sees the Anarch cause as a continuation of mortal labor struggles against oppressive barons.\",\"widgetRulebookSearchInput\":\"\",\"sheetTemplateSelect\":\"V5-Character-Sheet-ALT.html\",\"strength\":0,\"dexterity\":0,\"stamina\":0,\"charisma\":0,\"manipulation\":0,\"composure\":0,\"intelligence\":0,\"wits\":0,\"resolve\":0,\"health_states\":[\"empty\",\"empty\",\"empty\",\"empty\",\"superficial\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\"],\"willpower_states\":[\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\"],\"athletics\":0,\"brawl\":0,\"craft\":0,\"drive\":0,\"firearms\":0,\"larceny\":0,\"melee\":0,\"stealth\":0,\"survival\":0,\"animal_ken\":0,\"etiquette\":0,\"insight\":0,\"intimidation\":0,\"leadership\":0,\"performance\":0,\"persuasion\":0,\"streetwise\":0,\"subterfuge\":0,\"academics\":0,\"awareness\":0,\"finance\":0,\"investigation\":0,\"medicine\":0,\"occult\":0,\"politics\":0,\"science\":0,\"technology\":0,\"discipline_dots_0\":0,\"discipline_dots_1\":0,\"discipline_dots_2\":0,\"discipline_dots_3\":0,\"discipline_dots_4\":0,\"discipline_dots_5\":0,\"adv_flaw_rating_1\":0,\"adv_flaw_rating_2\":0,\"adv_flaw_rating_3\":0,\"adv_flaw_rating_4\":0,\"adv_flaw_rating_5\":0,\"adv_flaw_rating_6\":0,\"adv_flaw_rating_7\":0,\"adv_flaw_rating_8\":0,\"adv_flaw_rating_9\":0,\"blood_potency\":3,\"sheet_template\":\"V5-Character-Sheet-ALT.html\",\"stains\":0,\"total\":\"\",\"spent\":\"\",\"predator_type\":\"Blood Leech\",\"health_max\":5}",
+      "sheet_data": "{\"hunger\":[\"filled\",\"empty\",\"empty\",\"empty\",\"empty\"],\"humanity\":[\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"empty\",\"empty\",\"empty\"],\"humanity_states\":[\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"empty\",\"empty\",\"empty\"],\"total_experience\":\"\",\"spent_experience\":\"\",\"predator\":\"Blood Leech\",\"name\":\"Baroness \\\"Jax\\\"\",\"clan\":\"Brujah\",\"concept\":\"1950s Greaser Warlord\",\"chronicle\":\"The Louisville Chronicle\",\"ambition\":\"To drive the Camarilla out of the industrial sectors completely.\",\"sire\":\"A fallen WWII Anarch veteran\",\"desire\":\"To turn the coterie into her most lethal, unquestioning strike team.\",\"generation\":\"9th\",\"athletics_specialty\":\"\",\"brawl_specialty\":\"\",\"craft_specialty\":\"\",\"drive_specialty\":\"\",\"firearms_specialty\":\"\",\"larceny_specialty\":\"\",\"melee_specialty\":\"\",\"stealth_specialty\":\"\",\"survival_specialty\":\"\",\"animal_ken_specialty\":\"\",\"etiquette_specialty\":\"\",\"insight_specialty\":\"\",\"intimidation_specialty\":\"\",\"leadership_specialty\":\"\",\"performance_specialty\":\"\",\"persuasion_specialty\":\"\",\"streetwise_specialty\":\"\",\"subterfuge_specialty\":\"\",\"academics_specialty\":\"\",\"awareness_specialty\":\"\",\"finance_specialty\":\"\",\"investigation_specialty\":\"\",\"medicine_specialty\":\"\",\"occult_specialty\":\"\",\"politics_specialty\":\"\",\"science_specialty\":\"\",\"technology_specialty\":\"\",\"discipline_name_0\":\"\",\"discipline_power_0_0\":\"\",\"discipline_power_0_1\":\"\",\"discipline_power_0_2\":\"\",\"discipline_power_0_3\":\"\",\"discipline_power_0_4\":\"\",\"discipline_name_1\":\"\",\"discipline_power_1_0\":\"\",\"discipline_power_1_1\":\"\",\"discipline_power_1_2\":\"\",\"discipline_power_1_3\":\"\",\"discipline_power_1_4\":\"\",\"discipline_name_2\":\"\",\"discipline_power_2_0\":\"\",\"discipline_power_2_1\":\"\",\"discipline_power_2_2\":\"\",\"discipline_power_2_3\":\"\",\"discipline_power_2_4\":\"\",\"discipline_name_3\":\"\",\"discipline_power_3_0\":\"\",\"discipline_power_3_1\":\"\",\"discipline_power_3_2\":\"\",\"discipline_power_3_3\":\"\",\"discipline_power_3_4\":\"\",\"discipline_name_4\":\"\",\"discipline_power_4_0\":\"\",\"discipline_power_4_1\":\"\",\"discipline_power_4_2\":\"\",\"discipline_power_4_3\":\"\",\"discipline_power_4_4\":\"\",\"discipline_name_5\":\"\",\"discipline_power_5_0\":\"\",\"discipline_power_5_1\":\"\",\"discipline_power_5_2\":\"\",\"discipline_power_5_3\":\"\",\"discipline_power_5_4\":\"\",\"resonance\":\"\",\"chronicle_tenets\":\"\",\"touchstones_convictions\":\"\",\"clan_bane\":\"\",\"adv_flaw_name_1\":\"\",\"adv_flaw_name_2\":\"\",\"adv_flaw_name_3\":\"\",\"adv_flaw_name_4\":\"\",\"adv_flaw_name_5\":\"\",\"adv_flaw_name_6\":\"\",\"adv_flaw_name_7\":\"\",\"adv_flaw_name_8\":\"\",\"adv_flaw_name_9\":\"\",\"notes\":\"Fought in early labor riots. She sees the Anarch cause as a continuation of mortal labor struggles against oppressive barons.\",\"blood_surge\":\"\",\"mend_amount\":\"\",\"power_bonus\":\"\",\"rouse_reroll\":\"\",\"feeding_penalty\":\"\",\"bane_severity\":\"\",\"true_age\":\"~60 years\",\"apparent_age\":\"Mid 20s\",\"date_of_birth\":\"1870s\",\"date_of_death\":\"1890s\",\"appearance\":\"Leather jackets adorned with patches of fallen allies; slicked-back hair, grease on her hands.\",\"distinguishing_features\":\"A massive, jagged scar across her throat that never healed.\",\"history\":\"Fought in early labor riots. She sees the Anarch cause as a continuation of mortal labor struggles against oppressive barons.\",\"widgetRulebookSearchInput\":\"\",\"sheetTemplateSelect\":\"V5-Character-Sheet-ALT.html\",\"strength\":0,\"dexterity\":0,\"stamina\":0,\"charisma\":0,\"manipulation\":0,\"composure\":0,\"intelligence\":0,\"wits\":0,\"resolve\":0,\"health_states\":[\"empty\",\"empty\",\"empty\",\"empty\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\",\"filled\"],\"willpower_states\":[\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\",\"empty\"],\"athletics\":0,\"brawl\":0,\"craft\":0,\"drive\":0,\"firearms\":0,\"larceny\":0,\"melee\":0,\"stealth\":0,\"survival\":0,\"animal_ken\":0,\"etiquette\":0,\"insight\":0,\"intimidation\":0,\"leadership\":0,\"performance\":0,\"persuasion\":0,\"streetwise\":0,\"subterfuge\":0,\"academics\":0,\"awareness\":0,\"finance\":0,\"investigation\":0,\"medicine\":0,\"occult\":0,\"politics\":0,\"science\":0,\"technology\":0,\"discipline_dots_0\":0,\"discipline_dots_1\":0,\"discipline_dots_2\":0,\"discipline_dots_3\":0,\"discipline_dots_4\":0,\"discipline_dots_5\":0,\"adv_flaw_rating_1\":0,\"adv_flaw_rating_2\":0,\"adv_flaw_rating_3\":0,\"adv_flaw_rating_4\":0,\"adv_flaw_rating_5\":0,\"adv_flaw_rating_6\":0,\"adv_flaw_rating_7\":0,\"adv_flaw_rating_8\":0,\"adv_flaw_rating_9\":0,\"blood_potency\":3,\"sheet_template\":\"V5-Character-Sheet-ALT.html\",\"stains\":0,\"total\":\"\",\"spent\":\"\",\"predator_type\":\"Blood Leech\",\"health_max\":4}",
       "fog_of_war": null,
       "created_at": "2026-10-12T17:35:14.000Z",
-      "updated_at": "2026-10-14T17:00:14.000Z",
+      "updated_at": "2026-11-09T19:52:12.000Z",
       "user_id": 11,
       "authorized_user_ids": "[]",
       "humanity": 7,
@@ -2781,6 +2781,15 @@
       "joined_at": "2026-10-12T19:45:00.000Z",
       "status": "active",
       "role": "player"
+    },
+    {
+      "id": 600019,
+      "chronicle_id": 6,
+      "user_id": 19,
+      "joined_at": "2026-11-09T19:38:00.000Z",
+      "status": "active",
+      "role": "player",
+      "approved_by_gm": true
     }
   ],
   "clan_symbols": [
@@ -4670,110 +4679,49 @@
       "npc_agendas": "[]",
       "scenes": "[]",
       "fallout_notes": "Pre-Arc 2 Downtime bridging the 1920s and 1950s.\n- Sets up Episode 6 (The Leash), where Baroness Jax calls in the coterie's life-debt.",
-      "status": "planning",
+      "status": "active",
       "created_at": "2026-11-02T23:01:00.000Z",
       "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
       "location": "Post-War Louisville (1950s)",
       "revealed": 1
-    },
-    {
-      "id": 12,
-      "chronicle_id": 6,
-      "campaign_id": 5,
-      "episode_number": 6,
-      "title": "The Leash (Arc 2 - Night 1)",
-      "concepts": "- Establish the 1950s greaser aesthetic.\n- Baroness \"Jax\" treats the coterie like expendable muscle paying off a life-debt (Mask: freedom fighter; Truth: desperate warlord whose turf is starving).\n- The docks are guarded by Camarilla ghouls (Tier 2: 6/4/2 dice pools). Encourage stealth, social engineering, or ambushes.\n- Plant the seed of doubt: Jax's last strike team was massacred here due to bad intel.",
-      "hook": "Forced to repay their debt to the Anarch warlord Baroness \"Jax\", the coterie is ordered to investigate a heavily guarded Camarilla smuggling front at the 1950s Louisville industrial docks.",
-      "npc_agendas": "[{\"npc\":\"Baroness \\\"Jax\\\" (#31)\",\"agenda\":\"Desperately needs a win at the docks to stop her starving Anarch gang from mutinying; treats the coterie as expendable shock troops.\"},{\"npc\":\"\\\"Slick\\\", the Defector\",\"agenda\":\"Terrified of Camarilla retaliation; wants protection in exchange for the Warehouse Master Key and the truth about Jax's last team.\"}]",
-      "scenes": "[{\"title\":\"Scene 1: The Anarch's Turf\",\"description\":\"Baroness \\\"Jax\\\" summons the coterie to her 1950s garage/roadhouse court and orders them to recon the Camarilla smuggling front at the Ohio River docks.\"},{\"title\":\"Scene 2: Approaching the Industrial Docks\",\"description\":\"Fog-choked 1950s river docks patrolled by armed Camarilla ghouls (Exceptional 6 / Standard 4 / Weakness 2).\"},{\"title\":\"Scene 3: The Harbor Master's Office (Info Holder 1)\",\"description\":\"Investigating The Dockmaster's Ledger for shipment schedules, Montgomery's secret weapons cache, and proof of the Camarilla blockade.\"},{\"title\":\"Scene 4: Cornering \\\"Slick\\\" the Defector (Info Holder 2)\",\"description\":\"Tracking down Slick near the rail cars to learn ghoul patrol blind spots, secure the Warehouse Master Key, and uncover the massacre of Jax's previous strike team.\"},{\"title\":\"Scene 5: Reporting Back & The Velvet Invitation\",\"description\":\"The coterie decides how much intel to hand over to Jax—just as their prowess catches the attention of Camarilla Seneschal Montgomery.\"}]",
-      "fallout_notes": "STORYTELLER GAMEPLAN FOR EPISODE 6:\n1. Open in 1950s Louisville at Baroness Jax's roadhouse/garage. Chain-smoking, leather jacket with patches of fallen \"blood-kin.\"\n2. Send the coterie to the Ohio River Industrial Docks.\n3. Let them uncover Info Holder 1 (The Dockmaster's Ledger) and Info Holder 2 (\"Slick\", the Defector).\n4. Key Twist: Slick reveals Jax's last team was slaughtered here because of her bad intel, giving the coterie a reason to question their loyalty to Jax before Seneschal Montgomery approaches them in Episode 7.",
-      "status": "active",
-      "created_at": "2026-11-02T23:02:00.000Z",
-      "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
-      "location": "1950s Louisville Industrial Docks",
-      "revealed": 1
-    },
-    {
-      "id": 13,
-      "chronicle_id": 6,
-      "campaign_id": 5,
-      "episode_number": 7,
-      "title": "The Bribe (Arc 2 - Night 2)",
-      "concepts": "- Contrast the gritty Anarch roadhouse with the opulent, velvet-gloved power of the 1950s Camarilla.\n- High-stakes social negotiation with Seneschal Montgomery (#32, Tier 4: 8/6/4 pools).\n- If players push too hard, Montgomery subtly threatens their mortal Touchstones.\n- Introduce Kincaid (#33, Tier 4: 8/6/4 pools), the Camarilla Hound who views the coterie as \"gutter trash.\"",
-      "hook": "While working for the Anarchs, Camarilla Seneschal Montgomery covertly intercepts the coterie at an upscale 1950s lounge—offering luxurious estates, cleared records, and Camarilla legitimacy if they betray Baroness Jax during tomorrow's raid.",
-      "npc_agendas": "[{\"npc\":\"Seneschal Montgomery (#32)\",\"agenda\":\"Buy the coterie's allegiance with 1950s estates and status—or coerce them by implicitly threatening their mortal Touchstones.\"},{\"npc\":\"Kincaid, Camarilla Hound (#33)\",\"agenda\":\"Polices the domain with lethal force; openly despises the coterie as \\\"gutter trash\\\" and plans to ambush the warehouse raid.\"}]",
-      "scenes": "[{\"title\":\"Scene 1: The Coat-Check Intercept\",\"description\":\"Seneschal Montgomery intercepts the coterie in an upscale 1950s lounge, swirling a glass of vintage blood.\"},{\"title\":\"Scene 2: The Velvet Bribe (Info Holder 1)\",\"description\":\"Montgomery offers deeds to 1950s estates and amnesty if they turn on Jax during the warehouse raid—while subtly mentioning their Touchstones' addresses.\"},{\"title\":\"Scene 3: Sizing Up Kincaid (Info Holder 2)\",\"description\":\"Confronting or reading Kincaid (#33) outside the lounge to learn the Camarilla's ambush positions and how the Ivory Tower treats disposable pawns.\"}]",
-      "fallout_notes": "STORYTELLER GAMEPLAN FOR EPISODE 7:\n1. Show the seduction of Camarilla wealth, safety, and legitimacy after decades in the dirt.\n2. Make clear that both factions have teeth: Jax uses \"family\" guilt while Montgomery uses polite extortion.\n3. End the episode on the eve of the Warehouse Raid (Episode 8), forcing the coterie to debate which side they will betray.",
-      "status": "planning",
-      "created_at": "2026-11-02T23:03:00.000Z",
-      "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
-      "location": "1950s Upscale Lounge / Elysium",
-      "revealed": 0
-    },
-    {
-      "id": 14,
-      "chronicle_id": 6,
-      "campaign_id": 5,
-      "episode_number": 8,
-      "title": "The Crossroads (Arc 2 - Night 3 Climax)",
-      "concepts": "- The defining branching point of the Chronicle. Their choice determines their home sect for Arc 3 (1980s) and Arc 4 (2003).\n- Chaotic three-way confrontation at the smuggling warehouse.\n- The White Phosphorus crate poses a massive Rötschreck (fire terror) and collateral damage hazard.\n- Foreshadow Arc 3 via the \"V. Enterprises\" shipping manifests hidden in the crate.",
-      "hook": "The night of the raid arrives. As Baroness Jax's Anarchs breach the docks and Kincaid's Camarilla ambush springs from the shadows, the coterie must pull the trigger and permanently choose their sect.",
-      "npc_agendas": "[{\"npc\":\"Baroness \\\"Jax\\\" (#31)\",\"agenda\":\"Seize the Camarilla blood and weapons cache at all costs to save her Barony.\"},{\"npc\":\"Kincaid (#33) & Seneschal Montgomery (#32)\",\"agenda\":\"Spring the warehouse trap to wipe out Jax's strike force and test the coterie's loyalty.\"}]",
-      "scenes": "[{\"title\":\"Scene 1: Breaching the Warehouse\",\"description\":\"Using the Master Key or slipping in with the strike team as tensions reach a boiling point.\"},{\"title\":\"Scene 2: The Trap Springs\",\"description\":\"Kincaid's Camarilla forces clash with Jax's Anarchs. Both leaders look to the coterie to tip the scales.\"},{\"title\":\"Scene 3: White Phosphorus & Hostages\",\"description\":\"Navigating the military-grade White Phosphorus crate (Info Holder 1) and the Captured Scout dilemma (Info Holder 2).\"},{\"title\":\"Scene 4: Blood & Allegiance\",\"description\":\"The defeated faction retreats swearing eternal vengeance; the victorious sect welcomes the coterie into their ranks—and the coterie discovers the \\\"V. Enterprises\\\" manifest.\"}]",
-      "fallout_notes": "STORYTELLER GAMEPLAN FOR EPISODE 8:\n- If they back the Anarchs: Jax secures the docks, names them heroes of the Barony, and Seneschal Montgomery becomes their sworn Camarilla nemesis.\n- If they back the Camarilla: Kincaid and the coterie crush Jax's raid, Montgomery awards them 1950s estates and Camarilla citizenship, and Jax becomes their sworn Anarch nemesis.\n- Make sure they find the \"V. Enterprises\" manifest in the crate false bottom to hook Arc 3 (1980s)!",
-      "status": "planning",
-      "created_at": "2026-11-02T23:04:00.000Z",
-      "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
-      "location": "Ohio River Smuggling Warehouse",
-      "revealed": 0
-    },
-    {
-      "id": 15,
-      "chronicle_id": 6,
-      "campaign_id": 5,
-      "episode_number": 9,
-      "title": "Respite: Spoils of the Docks",
-      "concepts": "- Claim the rewards of their chosen sect (1950s Camarilla Estates or Anarch Barony Turf).\n- Resolve Humanity stains and Rötschreck fallout from the warehouse battle.\n- Establish the bitter rivalry with the betrayed faction leader.",
-      "hook": "In the smoking aftermath of the warehouse raid, the coterie claims their new domain and status within their chosen sect while fortifying against the enemies they just made.",
-      "npc_agendas": "[]",
-      "scenes": "[]",
-      "fallout_notes": "Post-Climax Respite for Arc 2.",
-      "status": "planning",
-      "created_at": "2026-11-02T23:05:00.000Z",
-      "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
-      "location": "1950s Louisville Domain",
-      "revealed": 0
-    },
-    {
-      "id": 16,
-      "chronicle_id": 6,
-      "campaign_id": 5,
-      "episode_number": 10,
-      "title": "Downtime: Toward the 1980s",
-      "concepts": "- Long-term downtime spanning the 1960s and 1970s.\n- Following the trail of \"V. Enterprises\" as Louisville transforms into a 1980s corporate metropolis.\n- Set the stage for Arc 3: The House Always Loses.",
-      "hook": "With a sect behind them and the \"V. Enterprises\" shipping manifest in hand, the coterie spends the next three decades expanding their influence—preparing to hunt down Valerius in 1980s corporate Louisville.",
-      "npc_agendas": "[]",
-      "scenes": "[]",
-      "fallout_notes": "Downtime bridging Arc 2 (1950s) and Arc 3 (1980s).",
-      "status": "planning",
-      "created_at": "2026-11-02T23:06:00.000Z",
-      "maps": "[{\"url\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"name\":\"Louisville (Mid-Century / 1950s)\",\"mood\":\"1950s Industrial Docks & Neon Noir\"}]",
-      "location": "Louisville (1960s–1980s Transition)",
-      "revealed": 0
     }
   ],
   "gameboard_pins": [
     {
-      "id": 10,
+      "id": 11,
+      "chronicle_id": 6,
+      "map_url": "/uploads/1791828207401_9fdc032a_Louisville_1940.png",
+      "x": 944,
+      "y": 872,
+      "title": "Joe's Diner",
+      "description": "",
+      "security_measures": "",
+      "infiltration_routes": "",
+      "created_at": "2026-11-03T00:46:33.319Z"
+    },
+    {
+      "id": 12,
       "chronicle_id": 6,
       "map_url": "/uploads/1791828207393_8e1367eb_Louisville_1921.png",
-      "x": 2601,
-      "y": 291,
-      "title": "Exit of Underground Layer",
-      "description": "Players exited the terrible ordeal here.",
-      "created_at": "2026-10-27T00:10:30.000Z",
+      "x": 1004,
+      "y": 1034,
+      "title": "Joes Diner",
+      "description": "",
       "security_measures": "",
-      "infiltration_routes": ""
+      "infiltration_routes": "",
+      "created_at": "2026-11-03T03:47:04.527Z"
+    },
+    {
+      "id": 13,
+      "chronicle_id": 6,
+      "map_url": "/uploads/1791828207401_9fdc032a_Louisville_1940.png",
+      "x": 1342,
+      "y": 658,
+      "title": "A diner",
+      "description": "place to eat",
+      "security_measures": "",
+      "infiltration_routes": "",
+      "created_at": "2026-11-09T19:42:30.625Z"
     }
   ],
   "gameboard_state": [
@@ -4781,14 +4729,14 @@
       "id": 1,
       "chronicle_id": 6,
       "active_scene_banner": "/images/banner_1200x400.jpg",
-      "active_location": "1950s Louisville Industrial Docks",
+      "active_location": "Post-War Louisville (1950s)",
       "active_npc_persona": "Storyteller",
       "active_npc_avatar": "/images/banner_1200x400.jpg",
-      "active_mood_text": "Forced to repay their debt to the Anarch warlord Baroness \"Jax\", the coterie is ordered to investigate a heavily guarded Camarilla smuggling front at the 1950s Louisville industrial docks.",
-      "updated_at": "2026-11-03T03:58:21.574Z",
+      "active_mood_text": "Time jumps forward to the 1950s. After surviving for decades as unaligned strays, a brush with destruction leaves the coterie owing a binding Life Boon to the Anarch warlord Baroness \"Jax\".",
+      "updated_at": "2026-11-09T19:52:12.000Z",
       "canvas_state": "{\"backdrop\":\"/uploads/1791828207401_9fdc032a_Louisville_1940.png\",\"entities\":[],\"links\":[]}",
       "active_map_url": "/uploads/1791828207401_9fdc032a_Louisville_1940.png",
-      "active_episode_id": 12,
+      "active_episode_id": 11,
       "game_time": "10:00pm",
       "relationship_map_state": "{\"nodes\":{\"node_1791833479682\":{\"id\":\"node_1791833479682\",\"x\":-410.9362989372917,\"y\":-504.7101954463193,\"text\":\"Sasha Steele\",\"w\":143,\"h\":15},\"node_1791833493269\":{\"id\":\"node_1791833493269\",\"x\":927.4506300991802,\"y\":-641.7355238952914,\"text\":\"September\",\"w\":100,\"h\":20},\"node_1793052405841\":{\"id\":\"node_1793052405841\",\"x\":-1106.9068008605193,\"y\":531.3433450508734,\"text\":\"Tom Sombadil\",\"w\":100,\"h\":20},\"node_1793052425894\":{\"id\":\"node_1793052425894\",\"x\":1977.0009133074002,\"y\":37.59144165707781,\"text\":\"Ophelia Vale\",\"w\":100,\"h\":20},\"node_1793052432148\":{\"id\":\"node_1793052432148\",\"x\":189.20181732308941,\"y\":1254.1765562352587,\"text\":\"Seraphina Nocturne\",\"w\":159,\"h\":21},\"node_1793052503928\":{\"id\":\"node_1793052503928\",\"x\":1884.8013497474053,\"y\":896.6580358350639,\"text\":\"Mathias\",\"w\":100,\"h\":20}},\"edges\":[{\"source\":\"node_1791833479682\",\"target\":\"node_1791833493269\",\"type\":\"one-way\",\"text\":\"Just met\\nOptop\"},{\"source\":\"node_1791833493269\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1793052405841\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"},{\"source\":\"node_1793052405841\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1793052405841\",\"type\":\"one-way\"},{\"source\":\"node_1793052503928\",\"target\":\"node_1791833479682\",\"type\":\"one-way\"},{\"source\":\"node_1793052432148\",\"target\":\"node_1793052425894\",\"type\":\"one-way\"},{\"source\":\"node_1793052432148\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1793052425894\",\"target\":\"node_1791833493269\",\"type\":\"one-way\"},{\"source\":\"node_1791833479682\",\"target\":\"node_1793052432148\",\"type\":\"one-way\"}]}"
     }
@@ -10533,6 +10481,27 @@
       "created_at": "2026-10-12T22:00:29.000Z",
       "bio": null,
       "avatar_url": null
+    },
+    {
+      "id": 19,
+      "username": "TohkaTest",
+      "display_name": "TestDummy",
+      "role": "player",
+      "created_at": "2026-11-09T19:37:17.276Z",
+      "bio": null,
+      "avatar_url": null
     }
-  ]
+  ],
+  "_deleted": {
+    "episodes": [
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "gameboard_pins": [
+      10
+    ]
+  }
 }

@@ -304,6 +304,23 @@
         if (savedRaw) {
           const saved = JSON.parse(savedRaw);
           if (saved && Array.isArray(saved.characters) && Array.isArray(saved.chronicles) && saved.chronicles.length > 0) {
+            // Heal pin ID 13 collision where a deleted pin ID was reused for a newly created pin
+            if (Array.isArray(saved._deleted?.gameboard_pins) && Array.isArray(saved.gameboard_pins)) {
+              const activePinIds = new Set(saved.gameboard_pins.map((p) => Number(p.id)));
+              saved._deleted.gameboard_pins = saved._deleted.gameboard_pins.filter(
+                (delId) => !activePinIds.has(Number(delId))
+              );
+            }
+            const mergedDeleted = { ...(seed._deleted || {}) };
+            if (saved._deleted && typeof saved._deleted === 'object') {
+              for (const dKey of Object.keys(saved._deleted)) {
+                const combined = new Set([
+                  ...(Array.isArray(mergedDeleted[dKey]) ? mergedDeleted[dKey].map(Number) : []),
+                  ...(Array.isArray(saved._deleted[dKey]) ? saved._deleted[dKey].map(Number) : []),
+                ]);
+                mergedDeleted[dKey] = Array.from(combined);
+              }
+            }
             for (const key of Object.keys(seed)) {
               if (
                 Array.isArray(seed[key]) &&
@@ -322,16 +339,32 @@
                         continue;
                       }
                     }
+                    if (key === 'gameboard_state') {
+                      const seedGs = byId.get(Number(sItem.id));
+                      const delEps = Array.isArray(mergedDeleted.episodes) ? mergedDeleted.episodes.map(Number) : [];
+                      if (
+                        seedGs &&
+                        (delEps.includes(Number(sItem.active_episode_id)) ||
+                          (seedGs.updated_at &&
+                            sItem.updated_at &&
+                            new Date(seedGs.updated_at).getTime() > new Date(sItem.updated_at).getTime()))
+                      ) {
+                        continue;
+                      }
+                    }
                     byId.set(Number(sItem.id), { ...byId.get(Number(sItem.id)), ...sItem });
                   }
                 }
-                if (Array.isArray(saved._deleted?.[key])) {
-                  for (const delId of saved._deleted[key]) byId.delete(Number(delId));
+                if (Array.isArray(mergedDeleted[key])) {
+                  for (const delId of mergedDeleted[key]) {
+                    if (key === 'gameboard_pins' && Number(delId) === 13 && byId.has(13)) continue;
+                    byId.delete(Number(delId));
+                  }
                 }
                 seed[key] = Array.from(byId.values());
               }
             }
-            seed._deleted = saved._deleted || {};
+            seed._deleted = mergedDeleted;
             seed._updatedAt = saved._updatedAt || seed.exportedAt;
           }
         }
@@ -360,28 +393,32 @@
           }
         }
       }
-      // Heal legacy 1920s default scene in localStorage if present
+      // Heal legacy 1920s or deleted-episode default scene in localStorage if present
       if (Array.isArray(seed.episodes)) {
         for (const ep of seed.episodes) {
-          if (Number(ep.id) >= 7 && Number(ep.id) <= 12) {
+          if (Number(ep.id) >= 7 && Number(ep.id) <= 11) {
             ep.revealed = 1;
           }
         }
       }
       if (Array.isArray(seed.gameboard_state) && seed.gameboard_state[0]) {
         const gs0 = seed.gameboard_state[0];
+        const activeEpExists =
+          Array.isArray(seed.episodes) && seed.episodes.some((e) => Number(e.id) === Number(gs0.active_episode_id));
         if (
-          !gs0._syncTs &&
-          (gs0.active_location === 'Louisville circa 1920' ||
-            gs0.active_mood_text === 'Somewhere underground...' ||
-            Number(gs0.active_episode_id) === 7)
+          !activeEpExists ||
+          (!gs0._syncTs &&
+            (gs0.active_location === 'Louisville circa 1920' ||
+              gs0.active_mood_text === 'Somewhere underground...' ||
+              Number(gs0.active_episode_id) === 7 ||
+              Number(gs0.active_episode_id) === 12))
         ) {
-          const ep12 = Array.isArray(seed.episodes) ? seed.episodes.find((e) => Number(e.id) === 12) : null;
-          gs0.active_episode_id = 12;
-          gs0.active_location = (ep12 && ep12.location) || '1950s Louisville Industrial Docks';
+          const ep11 = Array.isArray(seed.episodes) ? seed.episodes.find((e) => Number(e.id) === 11) : null;
+          gs0.active_episode_id = ep11 ? 11 : (seed.episodes?.[seed.episodes.length - 1]?.id || 11);
+          gs0.active_location = (ep11 && ep11.location) || 'Post-War Louisville (1950s)';
           gs0.active_mood_text =
-            (ep12 && ep12.hook) ||
-            'Forced to repay their debt to the Anarch warlord Baroness "Jax", the coterie is ordered to investigate a heavily guarded Camarilla smuggling front at the 1950s Louisville industrial docks.';
+            (ep11 && ep11.hook) ||
+            'Time jumps forward to the 1950s. After surviving for decades as unaligned strays, a brush with destruction leaves the coterie owing a binding Life Boon to the Anarch warlord Baroness "Jax".';
           gs0.active_map_url = '/uploads/1791828207401_9fdc032a_Louisville_1940.png';
           let cs = {};
           try {
@@ -426,11 +463,20 @@
     }
   }
 
+  function unrecordDelete(table, id) {
+    if (!db || !db._deleted || !Array.isArray(db._deleted[table])) return;
+    db._deleted[table] = db._deleted[table].filter((x) => Number(x) !== Number(id));
+  }
+
   function nextId(table) {
     const arr = db[table] || [];
+    const delArr = db._deleted && Array.isArray(db._deleted[table]) ? db._deleted[table] : [];
     let max = 0;
     for (const r of arr) {
       if (Number(r.id) > max) max = Number(r.id);
+    }
+    for (const dId of delArr) {
+      if (Number(dId) > max) max = Number(dId);
     }
     return max + 1;
   }
@@ -535,8 +581,9 @@
 
   // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + Multi-Relay ntfy SSE) ----------------
   const NTFY_RELAYS = [
+    'https://ntfy.adminforge.de',
+    'https://ntfy.mzte.de',
     'https://ntfy.envs.net',
-    'https://ntfy.hostux.net',
     'https://ntfy.sh',
   ];
   let sseSources = [];
@@ -578,7 +625,7 @@
         continue;
       }
       if (localPresenceRecord && Number(uid) === Number(localPresenceRecord.userId)) continue;
-      if (pres.lastSeen && now - pres.lastSeen > 240000) {
+      if (pres.lastSeen && now - pres.lastSeen > 43200000) {
         activePresencesByUserId.delete(uid);
       }
     }
@@ -815,6 +862,23 @@
     });
   }
 
+  function encodeBoxStatesCompact(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) return undefined;
+    return arr
+      .map((s) => (s === 'superficial' ? 's' : s === 'aggravated' ? 'a' : s === 'filled' ? 'f' : 'e'))
+      .join('');
+  }
+
+  function decodeBoxStatesCompact(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string' && val.length > 0) {
+      return val
+        .split('')
+        .map((c) => (c === 's' ? 'superficial' : c === 'a' ? 'aggravated' : c === 'f' ? 'filled' : 'empty'));
+    }
+    return null;
+  }
+
   function broadcastStorytellerAuthoritativeState() {
     if (!db || !Array.isArray(db.characters)) return;
     const authUser = extractValidAuthUser();
@@ -837,16 +901,14 @@
       const cf = safeParseJsonArray(c.concealed_fields);
       if (cf.length > 0) rec.c = cf;
       if (sd.player_base_edit_unlocked) rec.b = 1;
-      if (String(c.category || '').toLowerCase() === 'pc') {
-        rec.hu = c.hunger ?? 1;
-        rec.hm = c.humanity ?? 7;
-        if (Array.isArray(sd.health_states)) rec.hp = sd.health_states;
-        if (Array.isArray(sd.willpower_states)) rec.wp = sd.willpower_states;
-        if (Array.isArray(sd.humanity_states)) rec.hs = sd.humanity_states;
-        if (sd.health_max !== undefined) rec.hm_max = sd.health_max;
-        if (sd.willpower_max !== undefined) rec.wp_max = sd.willpower_max;
-        if (c.updated_at) rec.ut = c.updated_at;
-      }
+      rec.hu = c.hunger ?? 1;
+      rec.hm = c.humanity ?? 7;
+      if (Array.isArray(sd.health_states)) rec.hp = encodeBoxStatesCompact(sd.health_states);
+      if (Array.isArray(sd.willpower_states)) rec.wp = encodeBoxStatesCompact(sd.willpower_states);
+      if (Array.isArray(sd.humanity_states)) rec.hs = encodeBoxStatesCompact(sd.humanity_states);
+      if (sd.health_max !== undefined) rec.hm_max = sd.health_max;
+      if (sd.willpower_max !== undefined) rec.wp_max = sd.willpower_max;
+      if (c.updated_at) rec.ut = c.updated_at;
       return rec;
     });
     const discoveredClueIds = (db.clues || []).filter((c) => Number(c.discovered) === 1).map((c) => Number(c.id));
@@ -854,6 +916,8 @@
     const activeMemberIds = (db.chronicle_members || [])
       .filter((cm) => Number(cm.chronicle_id) === defaultChronicleId() && (cm.status === 'active' || !cm.status))
       .map((cm) => Number(cm.user_id));
+    const deletedEpisodeIds =
+      db._deleted && Array.isArray(db._deleted.episodes) ? db._deleted.episodes.map(Number) : [];
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
@@ -862,6 +926,7 @@
       discovered_clue_ids: discoveredClueIds,
       discovered_lore_ids: discoveredLoreIds,
       active_member_ids: activeMemberIds,
+      deleted_episode_ids: deletedEpisodeIds,
     });
     setTimeout(() => {
       if (!db) return;
@@ -970,6 +1035,9 @@
       if (pktTs > 0 && lastPinsSyncTs > 0 && pktTs < lastPinsSyncTs) return;
       if (pktTs > 0) lastPinsSyncTs = Math.max(lastPinsSyncTs, pktTs);
       const targetChronId = Number(pkt.chronicle_id) || defaultChronicleId();
+      for (const p of pkt.pins) {
+        if (p && p.id !== undefined) unrecordDelete('gameboard_pins', p.id);
+      }
       db.gameboard_pins = (db.gameboard_pins || [])
         .filter((p) => Number(p.chronicle_id) !== targetChronId)
         .concat(pkt.pins);
@@ -1048,6 +1116,9 @@
           gs.canvas_state = JSON.stringify(cs);
         }
         if (Array.isArray(pkt.pins)) {
+          for (const p of pkt.pins) {
+            if (p && p.id !== undefined) unrecordDelete('gameboard_pins', p.id);
+          }
           db.gameboard_pins = (db.gameboard_pins || [])
             .filter((p) => Number(p.chronicle_id) !== targetChronId)
             .concat(pkt.pins);
@@ -1101,7 +1172,7 @@
       if (db && pkt.presence.role !== 'gm' && !isApprovedChronicleMember(defChronId, pkt.presence.userId)) {
         return;
       }
-      if (!isReplay || Date.now() - (pkt.ts || 0) < 240000) {
+      if (!isReplay || Date.now() - (pkt.ts || 0) < 43200000) {
         activePresencesByUserId.set(Number(pkt.presence.userId), {
           ...pkt.presence,
           lastSeen: pkt.ts || Date.now(),
@@ -1216,21 +1287,24 @@
           if (sc.hm !== undefined) {
             ch.humanity = Number(sc.hm);
           }
-          if (Array.isArray(sc.hp)) {
-            sd.health_states = sc.hp;
-            ch.health_superficial = sc.hp.filter((s) => s === 'superficial').length;
-            ch.health_aggravated = sc.hp.filter((s) => s === 'aggravated').length;
+          const decodedHp = decodeBoxStatesCompact(sc.hp);
+          if (Array.isArray(decodedHp)) {
+            sd.health_states = decodedHp;
+            ch.health_superficial = decodedHp.filter((s) => s === 'superficial').length;
+            ch.health_aggravated = decodedHp.filter((s) => s === 'aggravated').length;
           }
-          if (Array.isArray(sc.wp)) {
-            sd.willpower_states = sc.wp;
-            ch.willpower_superficial = sc.wp.filter((s) => s === 'superficial').length;
-            ch.willpower_aggravated = sc.wp.filter((s) => s === 'aggravated').length;
+          const decodedWp = decodeBoxStatesCompact(sc.wp);
+          if (Array.isArray(decodedWp)) {
+            sd.willpower_states = decodedWp;
+            ch.willpower_superficial = decodedWp.filter((s) => s === 'superficial').length;
+            ch.willpower_aggravated = decodedWp.filter((s) => s === 'aggravated').length;
           }
-          if (Array.isArray(sc.hs)) {
-            sd.humanity_states = sc.hs;
-            sd.humanity = sc.hs;
-            ch.humanity = sc.hs.filter((s) => s === 'filled').length;
-            sd.stains = sc.hs.filter((s) => s === 'superficial').length;
+          const decodedHs = decodeBoxStatesCompact(sc.hs);
+          if (Array.isArray(decodedHs)) {
+            sd.humanity_states = decodedHs;
+            sd.humanity = decodedHs;
+            ch.humanity = decodedHs.filter((s) => s === 'filled').length;
+            sd.stains = decodedHs.filter((s) => s === 'superficial').length;
           }
           if (sc.hm_max !== undefined) sd.health_max = sc.hm_max;
           if (sc.wp_max !== undefined) sd.willpower_max = sc.wp_max;
@@ -1240,6 +1314,17 @@
         anyChanged = true;
       }
       let clueOrLoreChanged = false;
+      if (Array.isArray(pkt.deleted_episode_ids) && pkt.deleted_episode_ids.length > 0 && Array.isArray(db.episodes)) {
+        const delEpSet = new Set(pkt.deleted_episode_ids.map(Number));
+        for (const epId of delEpSet) {
+          recordDelete('episodes', epId);
+        }
+        const beforeEpCount = db.episodes.length;
+        db.episodes = db.episodes.filter((e) => !delEpSet.has(Number(e.id)));
+        if (db.episodes.length !== beforeEpCount) {
+          clueOrLoreChanged = true;
+        }
+      }
       if (Array.isArray(pkt.discovered_clue_ids) && Array.isArray(db.clues)) {
         const set = new Set(pkt.discovered_clue_ids.map(Number));
         for (const c of db.clues) {
@@ -1532,7 +1617,13 @@
       db[table] = db[table].filter((r) => Number(r.id) !== Number(deleteId));
       recordDelete(table, deleteId);
     } else if (row && row.id !== undefined) {
-      if (db._deleted && Array.isArray(db._deleted[table]) && db._deleted[table].map(Number).includes(Number(row.id))) {
+      if (table === 'gameboard_pins') {
+        unrecordDelete(table, row.id);
+      } else if (
+        db._deleted &&
+        Array.isArray(db._deleted[table]) &&
+        db._deleted[table].map(Number).includes(Number(row.id))
+      ) {
         return;
       }
       const idx = db[table].findIndex((r) => Number(r.id) === Number(row.id));
@@ -1651,7 +1742,7 @@
       const encodedTopic = encodeURIComponent(topic);
       const encodedSince = encodeURIComponent(sinceWindow);
       const responses = await Promise.allSettled(
-        NTFY_RELAYS.slice(0, 2).map((base) =>
+        NTFY_RELAYS.map((base) =>
           nativeFetch(`${base}/${encodedTopic}/json?poll=1&since=${encodedSince}`)
         )
       );
@@ -1839,18 +1930,15 @@
       pollRecentNtfyHistory(cfg.topic, '12h', false);
       connectNtfySse(cfg.topic);
 
-      // Fast 4-second live catch-up poll so dice rolls and XP updates arrive even if SSE temporarily hiccups
-      if (fastLivePollTimer) clearInterval(fastLivePollTimer);
-      fastLivePollTimer = setInterval(() => {
-        const latestCfg = getCloudConfig();
-        if (latestCfg.syncEnabled && latestCfg.topic && navigator.onLine) {
-          pollRecentNtfyHistory(latestCfg.topic, '12s', true);
+      // Catch up only when returning to a backgrounded tab instead of polling every 4s (prevents HTTP 429 rate-limiting)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          const latestCfg = getCloudConfig();
+          if (latestCfg.syncEnabled && latestCfg.topic && navigator.onLine) {
+            pollRecentNtfyHistory(latestCfg.topic, '10m', true);
+          }
         }
-      }, 4000);
-
-      setInterval(() => {
-        broadcastLocalPresence(false, true);
-      }, 30000);
+      });
 
       window.addEventListener('beforeunload', () => {
         if (localPresenceRecord && localPresenceRecord.userId) {
