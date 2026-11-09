@@ -47,6 +47,27 @@
           'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       }
     } catch (e) {}
+
+    // Automatically detect if browser served a stale cached index.html from GitHub Pages CDN
+    try {
+      const currentScript = document.querySelector('script[src*="fault_isolation.js"]');
+      const currentVerMatch = currentScript && currentScript.src ? currentScript.src.match(/[?&]v=([^&]+)/) : null;
+      const currentVer = currentVerMatch ? currentVerMatch[1] : null;
+      if (currentVer) {
+        fetch(`index.html?_vtm_check=${Date.now()}`, { cache: 'no-store' })
+          .then((r) => (r.ok ? r.text() : ''))
+          .then((html) => {
+            const liveMatch = html ? html.match(/fault_isolation\.js\?v=([^"&']+)/) : null;
+            const liveVer = liveMatch ? liveMatch[1] : null;
+            if (liveVer && liveVer !== currentVer) {
+              const url = new URL(window.location.href);
+              url.searchParams.set('v', liveVer);
+              window.location.replace(url.toString());
+            }
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
   });
 
   /**
