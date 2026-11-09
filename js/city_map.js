@@ -1495,24 +1495,6 @@ function renderMapPins(mapPinsList) {
       descriptionParagraph.innerText = mapPinRecord.description;
       tooltipElement.appendChild(descriptionParagraph);
     }
-    if (mapPinRecord.security_measures) {
-      // Create a paragraph element for the pin security measures
-      const securityParagraph = document.createElement('p');
-      securityParagraph.innerHTML = '<strong style="color:#ef4444;font-size:10px;">SECURITY:</strong><br>' + escapeHtml(mapPinRecord.security_measures);
-      securityParagraph.style.borderLeft = '2px solid #ef4444';
-      securityParagraph.style.paddingLeft = '6px';
-      securityParagraph.style.marginTop = '6px';
-      tooltipElement.appendChild(securityParagraph);
-    }
-    if (mapPinRecord.infiltration_routes) {
-      // Create a paragraph element for the pin infiltration routes
-      const routesParagraph = document.createElement('p');
-      routesParagraph.innerHTML = '<strong style="color:#10b981;font-size:10px;">ROUTES:</strong><br>' + escapeHtml(mapPinRecord.infiltration_routes);
-      routesParagraph.style.borderLeft = '2px solid #10b981';
-      routesParagraph.style.paddingLeft = '6px';
-      routesParagraph.style.marginTop = '6px';
-      tooltipElement.appendChild(routesParagraph);
-    }
     if (typeof activeChronicleRole !== 'undefined' && (activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller')) {
       const delPinBtn = document.createElement('button');
       delPinBtn.type = 'button';
@@ -1598,8 +1580,6 @@ async function createMapPinSubmit() {
   // Look up the new map pin input elements in the DOM by their IDs
   const pinTitle = document.getElementById('newPinTitle').value.trim();
   const pinDescription = document.getElementById('newPinDescription') ? document.getElementById('newPinDescription').value.trim() : '';
-  const securityMeasures = document.getElementById('newPinSecurity') ? document.getElementById('newPinSecurity').value.trim() : '';
-  const infiltrationRoutes = document.getElementById('newPinInfiltration') ? document.getElementById('newPinInfiltration').value.trim() : '';
   // Show a styled alert if the location title is missing
   if (!pinTitle) {
     if (typeof vtmAlert === 'function') vtmAlert('Please enter a location title for this map pin.', 'Location Title Required');
@@ -1631,7 +1611,7 @@ async function createMapPinSubmit() {
 
   try {
       // Perform an authenticated HTTP POST request to create the new map pin on the server
-      const fetchResponse = await authFetch('/api/chronicles/' + activeChronicleId + '/pins', {
+      await authFetch('/api/chronicles/' + activeChronicleId + '/pins', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json'
@@ -1642,8 +1622,8 @@ async function createMapPinSubmit() {
               y: mapCoordinateY,
               title: pinTitle,
               description: pinDescription,
-              security_measures: securityMeasures,
-              infiltration_routes: infiltrationRoutes
+              security_measures: '',
+              infiltration_routes: ''
           })
       });
       closeModal('newMapPinModal');
@@ -1745,10 +1725,6 @@ window.vtmHandleMapClick = function(mouseEvent) {
         document.getElementById('newPinTitle').value = '';
         const descriptionInputElement = document.getElementById('newPinDescription');
         if (descriptionInputElement) descriptionInputElement.value = '';
-        const securityInputElement = document.getElementById('newPinSecurity');
-        if (securityInputElement) securityInputElement.value = '';
-        const infiltrationInputElement = document.getElementById('newPinInfiltration');
-        if (infiltrationInputElement) infiltrationInputElement.value = '';
         modalElement.classList.add('active'); modalElement.style.zIndex = '9999999';
         vtmMapLog("Modal opened successfully. Display: " + modalElement.style.display + ", z-index: " + modalElement.style.zIndex);
     } else {

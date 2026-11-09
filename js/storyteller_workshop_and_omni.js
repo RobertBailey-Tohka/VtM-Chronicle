@@ -1170,11 +1170,7 @@ function renderWorkshopPinsList() {
             <div style="background:#ef4444; color:#fff; font-size:12px; font-weight:bold; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${pinIndex + 1}</div>
             <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
                 <input type="text" value="${escapeHtml(mapPinRecord.title)}" onchange="updatePin(${mapPinRecord.id}, 'title', this.value)" style="background:transparent; border:none; border-bottom:1px solid #372128; color:#ef4444; font-weight:bold; padding:4px 0; font-size:14px; outline:none;" placeholder="Location Title">
-                <textarea onchange="updatePin(${mapPinRecord.id}, 'description', this.value)" rows="1" style="background:transparent; border:1px solid #2a191f; border-radius:4px; color:#d1d5db; padding:6px; font-size:12px; resize:vertical; outline:none; font-family:inherit;" placeholder="Hover description / details... (Optional)">${escapeHtml(mapPinRecord.description || '')}</textarea>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                    <textarea onchange="updatePin(${mapPinRecord.id}, 'security_measures', this.value)" rows="2" style="background:transparent; border:1px solid #2a191f; border-left:2px solid #ef4444; border-radius:4px; color:#d1d5db; padding:6px; font-size:11px; resize:vertical; outline:none; font-family:inherit;" placeholder="Security Measures & Obstacles...">${escapeHtml(mapPinRecord.security_measures || '')}</textarea>
-                    <textarea onchange="updatePin(${mapPinRecord.id}, 'infiltration_routes', this.value)" rows="2" style="background:transparent; border:1px solid #2a191f; border-left:2px solid #10b981; border-radius:4px; color:#d1d5db; padding:6px; font-size:11px; resize:vertical; outline:none; font-family:inherit;" placeholder="Alternative Infiltration Routes...">${escapeHtml(mapPinRecord.infiltration_routes || '')}</textarea>
-                </div>
+                <textarea onchange="updatePin(${mapPinRecord.id}, 'description', this.value)" rows="2" style="background:transparent; border:1px solid #2a191f; border-radius:4px; color:#d1d5db; padding:6px; font-size:12px; resize:vertical; outline:none; font-family:inherit;" placeholder="Location description / details... (Optional)">${escapeHtml(mapPinRecord.description || '')}</textarea>
             </div>
             <button class="btn-card-ctrl" onclick="deletePin(${mapPinRecord.id})" style="color:#ef4444;" title="Delete Pin"><i class="fa-solid fa-trash"></i></button>
         </div>
@@ -1197,8 +1193,8 @@ async function updatePin(pinId, fieldName, newFieldValue) {
       body: JSON.stringify({
         title: targetPinRecord.title,
         description: targetPinRecord.description,
-        security_measures: targetPinRecord.security_measures,
-        infiltration_routes: targetPinRecord.infiltration_routes
+        security_measures: '',
+        infiltration_routes: ''
       })
     });
     renderWorkshopPinsList();

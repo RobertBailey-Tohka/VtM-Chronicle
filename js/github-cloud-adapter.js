@@ -625,7 +625,7 @@
         continue;
       }
       if (localPresenceRecord && Number(uid) === Number(localPresenceRecord.userId)) continue;
-      if (pres.lastSeen && now - pres.lastSeen > 43200000) {
+      if (pres.lastSeen && now - pres.lastSeen > 300000) {
         activePresencesByUserId.delete(uid);
       }
     }
@@ -1183,7 +1183,7 @@
       if (db && pkt.presence.role !== 'gm' && !isApprovedChronicleMember(defChronId, pkt.presence.userId)) {
         return;
       }
-      if (!isReplay || Date.now() - (pkt.ts || 0) < 43200000) {
+      if (!isReplay || Date.now() - (pkt.ts || 0) < 300000) {
         activePresencesByUserId.set(Number(pkt.presence.userId), {
           ...pkt.presence,
           lastSeen: pkt.ts || Date.now(),
@@ -1969,6 +1969,14 @@
           });
         }
       });
+
+      // Keep active presence fresh every 90s and prune stale (>5m) offline presences
+      setInterval(() => {
+        if (localPresenceRecord && localPresenceRecord.userId && document.visibilityState === 'visible') {
+          broadcastLocalPresence(false, true);
+        }
+        emitCombinedPresences();
+      }, 90000);
     } catch (e) {}
   }
 

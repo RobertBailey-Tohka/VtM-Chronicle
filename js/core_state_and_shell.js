@@ -41,6 +41,7 @@ const PERSISTENT_VISIBILITY_WIDGET_IDS = new Set([
   'widget-chronicle-timeline',
   'widget-personal-notes',
   'widget-quick-rules',
+  'widget-turn-tracker',
   'widget-storyteller-omni'
 ]);
 
@@ -500,10 +501,14 @@ socket.on('presence:sync', activeUsersList => {
 });
 // Register a DOMContentLoaded listener on the document to initialize the application once HTML parsing finishes
 document.addEventListener('DOMContentLoaded', () => {
-  checkActiveSession();
-  loadRulesCodex();
-  initDesktopWidgetsDragAndResize();
-  initDiceWidgetDisplay();
+  const safeInvoke = typeof window.vtmSafeCall === 'function'
+    ? window.vtmSafeCall
+    : (label, fn, ...args) => { try { if (typeof fn === 'function') return fn(...args); } catch (e) { console.error(label, e); } };
+
+  safeInvoke('checkActiveSession', checkActiveSession);
+  safeInvoke('loadRulesCodex', typeof loadRulesCodex !== 'undefined' ? loadRulesCodex : null);
+  safeInvoke('initDesktopWidgetsDragAndResize', typeof initDesktopWidgetsDragAndResize !== 'undefined' ? initDesktopWidgetsDragAndResize : null);
+  safeInvoke('initDiceWidgetDisplay', typeof initDiceWidgetDisplay !== 'undefined' ? initDiceWidgetDisplay : null);
   try {
       const restoredSavedLayout = restoreWidgetLayoutState();
       if (!restoredSavedLayout) {
@@ -522,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   if (widgetElement.id === 'widget-quick-rules') {
                       if (typeof allRules !== 'undefined' && allRules.length > 0) {
                           if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
-                      } else {
+                      } else if (typeof loadRulesCodex === 'function') {
                           loadRulesCodex().then(() => {
                               if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
                           });
@@ -744,7 +749,9 @@ const originalToggleWidget = toggleWidget;
     originalToggleWidget(widgetId);
     if (widgetId === 'widget-chronicle-timeline') {
       renderChronicleTimelineEpisodes();
-  loadPersonalNotes();
+      loadPersonalNotes();
+    } else if (widgetId === 'widget-turn-tracker' && typeof renderTurnTrackerStates === 'function') {
+      renderTurnTrackerStates();
     }
   };
   let mapPinMode = false;
@@ -778,8 +785,6 @@ const originalToggleWidget = toggleWidget;
       const pinYInput = document.getElementById('newPinY');
       const pinTitleInput = document.getElementById('newPinTitle');
       const pinDescInput = document.getElementById('newPinDescription');
-      const pinSecInput = document.getElementById('newPinSecurity');
-      const pinInfInput = document.getElementById('newPinInfiltration');
       if (pinXInput) pinXInput.value = String(pinCoordinateX);
       if (pinYInput) pinYInput.value = String(pinCoordinateY);
       if (pinTitleInput) {
@@ -792,8 +797,6 @@ const originalToggleWidget = toggleWidget;
         };
       }
       if (pinDescInput) pinDescInput.value = '';
-      if (pinSecInput) pinSecInput.value = '';
-      if (pinInfInput) pinInfInput.value = '';
       modalElement.classList.add('active');
       modalElement.style.zIndex = '9999999';
       setTimeout(() => {
@@ -1179,13 +1182,22 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
     role: role, avatar: currentUser ? (currentUser.avatar || currentUser.avatar_url) : null,
     characterId: activeControlledCharacterId || null
   });
-  initCanvasEngine();
-  loadChatMessages();
-  fetchAssets();
-  fetchClanSymbols();
-  loadRecentRolls();
-  updateChatSenderBadge();
-  switchTab(targetTab); if(allRules.length > 0) renderRulebookHierarchy(allRules); else loadRulesCodex();
+  const safeCall = typeof window.vtmSafeCall === 'function'
+    ? window.vtmSafeCall
+    : (label, fn, ...args) => { try { if (typeof fn === 'function') return fn(...args); } catch (e) { console.error(label, e); } };
+
+  safeCall('initCanvasEngine', typeof initCanvasEngine !== 'undefined' ? initCanvasEngine : null);
+  safeCall('loadChatMessages', typeof loadChatMessages !== 'undefined' ? loadChatMessages : null);
+  safeCall('fetchAssets', typeof fetchAssets !== 'undefined' ? fetchAssets : null);
+  safeCall('fetchClanSymbols', typeof fetchClanSymbols !== 'undefined' ? fetchClanSymbols : null);
+  safeCall('loadRecentRolls', typeof loadRecentRolls !== 'undefined' ? loadRecentRolls : null);
+  safeCall('updateChatSenderBadge', typeof updateChatSenderBadge !== 'undefined' ? updateChatSenderBadge : null);
+  safeCall('switchTab', switchTab, targetTab);
+  if (allRules.length > 0) {
+    safeCall('renderRulebookHierarchy', typeof renderRulebookHierarchy !== 'undefined' ? renderRulebookHierarchy : null, allRules);
+  } else {
+    safeCall('loadRulesCodex', typeof loadRulesCodex !== 'undefined' ? loadRulesCodex : null);
+  }
   // Send an authenticated HTTP GET request to fetch metadata and UI settings for the active chronicle
   authFetch(`/api/chronicles/${campaignId}`).then(fetchResponse => fetchResponse.json()).then(chronicleRecord => {
     if (chronicleRecord && chronicleRecord.ui_settings) {
@@ -1193,11 +1205,11 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
             const parsedUiSettings = typeof chronicleRecord.ui_settings === 'string' ? JSON.parse(chronicleRecord.ui_settings) : chronicleRecord.ui_settings;
             if (parsedUiSettings && typeof parsedUiSettings === 'object') {
                 chronicleUiSettings = parsedUiSettings;
-                if (typeof syncAutoAcceptToggleUi === 'function') syncAutoAcceptToggleUi();
-                if (typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();
+                if (typeof syncAutoAcceptToggleUi === 'function') safeCall('syncAutoAcceptToggleUi', syncAutoAcceptToggleUi);
+                if (typeof renderTurnTrackerStates === 'function') safeCall('renderTurnTrackerStates', renderTurnTrackerStates);
                 // Re-render clues now that settings are loaded
-                if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId) {
-                    renderWidgetClueCards(activeWidgetMatrixId);
+                if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId && typeof renderWidgetClueCards === 'function') {
+                    safeCall('renderWidgetClueCards', renderWidgetClueCards, activeWidgetMatrixId);
                 }
             }
         } catch(jsonParseError) {}
@@ -1214,21 +1226,22 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
       }
     }
   }).catch(errorObject => console.error(errorObject));
-  loadGameboardState();
-  loadCharacters();
+  safeCall('loadGameboardState', typeof loadGameboardState !== 'undefined' ? loadGameboardState : null);
+  safeCall('loadCharacters', typeof loadCharacters !== 'undefined' ? loadCharacters : null);
   authFetch(`/api/chronicles/${campaignId}/members`).then(res => res.ok ? res.json() : []).then(members => {
     if (Array.isArray(members)) {
       chronicleMembersList = members;
     }
   }).catch(() => {});
-  loadRecentRolls();
-  loadClueMatricesForWidget();
-  loadLoreMatricesForWidget();
-  loadNpcCategories();
-  renderChronicleTimelineEpisodes();
+  safeCall('loadRecentRolls', typeof loadRecentRolls !== 'undefined' ? loadRecentRolls : null);
+  safeCall('loadClueMatricesForWidget', typeof loadClueMatricesForWidget !== 'undefined' ? loadClueMatricesForWidget : null);
+  safeCall('loadLoreMatricesForWidget', typeof loadLoreMatricesForWidget !== 'undefined' ? loadLoreMatricesForWidget : null);
+  safeCall('loadNpcCategories', typeof loadNpcCategories !== 'undefined' ? loadNpcCategories : null);
+  safeCall('renderChronicleTimelineEpisodes', typeof renderChronicleTimelineEpisodes !== 'undefined' ? renderChronicleTimelineEpisodes : null);
+  safeCall('renderTurnTrackerStates', typeof renderTurnTrackerStates !== 'undefined' ? renderTurnTrackerStates : null);
   if (role === 'gm' || role === 'storyteller') {
-    loadCampaignsList();
-    updatePendingBadgeCount();
+    safeCall('loadCampaignsList', typeof loadCampaignsList !== 'undefined' ? loadCampaignsList : null);
+    safeCall('updatePendingBadgeCount', typeof updatePendingBadgeCount !== 'undefined' ? updatePendingBadgeCount : null);
   }
 }
 

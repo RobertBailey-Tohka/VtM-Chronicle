@@ -1,34 +1,14 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <script src="js/github-cloud-adapter.js?v=20261109_v23"></script>
-
-    <script>
-    
-    const oldError = console.error;
-    console.error = function(...args) {
-        oldError.apply(console, args);
-        fetch('/api/log_error', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: "CONSOLE_ERROR: " + args.join(" ") })
-        }).catch(()=>{});
-    };
-
-    window.onerror = function(message, source, lineno, colno, error) {
-        fetch('/api/log_error', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message, source, lineno, colno, stack: error ? error.stack : '' })
-        }).catch(()=>console.log("Failed to send error log"));
-    };
-    </script>
+    <script src="js/github-cloud-adapter.js?v=20261109_v24"></script>
+    <script src="js/fault_isolation.js?v=20261109_v24"></script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vampire: The Masquerade — Elysium Virtual Tabletop</title>
     <link rel="stylesheet" href="css/all.min.css">
-    <link rel="stylesheet" href="css/app.css?v=20261109_v23">
+    <link rel="stylesheet" href="css/app.css?v=20261109_v24">
 
     <!-- Cropper.js -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
@@ -38,13 +18,6 @@
     <!-- PDF.js for secure searchable PDF viewing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css" />
-    <script>
-        window.addEventListener('DOMContentLoaded', () => {
-            if (window.pdfjsLib) {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            }
-        });
-    </script>
 </head>
 <body class="role-hub">
 
@@ -189,19 +162,6 @@
             <h3><i class="fa-solid fa-users"></i> Active Coterie</h3>
             <button class="btn-close-modal" onclick="togglePlayerDrawer()"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="gm-only-control" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(20,12,16,0.75);">
-            <button type="button" class="btn-action-outline btn-sm" onclick="openCoterieManagerModal()" style="width:100%; margin-bottom:8px; font-size:11px; justify-content:center;">
-                <i class="fa-solid fa-users-gear" style="color:#ef4444; margin-right:5px;"></i> Manage Invites &amp; Coterie
-            </button>
-            <label style="display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:#e2e8f0; cursor:pointer; font-weight:600;">
-                <span><i class="fa-solid fa-door-open" style="color:#f59e0b; margin-right:4px;"></i> Auto-Accept Join Requests</span>
-                <input type="checkbox" id="drawerAutoAcceptInvitesToggle" onchange="toggleAutoAcceptJoinRequests(this)" style="accent-color:#ef4444; width:15px; height:15px; cursor:pointer;">
-            </label>
-            <div style="margin-top:4px; font-size:10px; color:#f87171; line-height:1.35;">
-                <i class="fa-solid fa-triangle-exclamation"></i> Warning: Do NOT turn this on unless actively expecting players. Anyone can join without approval while enabled.
-            </div>
-        </div>
-        <div id="drawerTurnTrackerContainer" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(14,8,12,0.85);"></div>
         <div id="playerTokens" class="player-tokens-column">
             <!-- Avatars injected here -->
         </div>
@@ -784,33 +744,35 @@
                     <div class="widget-resize-handle"></div>
                 </div>
 
-                <!-- 13. STORYTELLER TURN & INITIATIVE TRACKER WIDGET (GM ONLY) -->
-                <div class="elysium-widget widget-turn-tracker gm-only-control" id="widget-turn-tracker" style="top: 90px; left: 560px; width: 350px; height: auto; z-index: 56; display: none;">
+                <!-- 13. TURN & INITIATIVE TRACKER WIDGET (VISIBLE TO BOTH GM & PLAYERS; GM CONTROLS ONLY FOR STORYTELLER) -->
+                <div class="elysium-widget widget-turn-tracker" id="widget-turn-tracker" style="top: 90px; left: 560px; width: 350px; height: auto; z-index: 56; display: none;">
                     <div class="widget-header" id="dragHeader-turn-tracker">
                         <span class="widget-title"><i class="fa-solid fa-hourglass-half" style="color:#ef4444;margin-right:6px;"></i> TURN TRACKER</span>
                         <div class="widget-actions">
-                            <button class="btn-w-ctrl" onclick="syncTurnTrackerWithCoterie()" title="Sync Active Players into Turn Order"><i class="fa-solid fa-rotate"></i></button>
+                            <button class="btn-w-ctrl gm-only-control" id="btnTurnSyncCoterie" onclick="syncTurnTrackerWithCoterie()" title="Sync Online Players into Turn Order"><i class="fa-solid fa-rotate"></i></button>
                             <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-turn-tracker')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
                         </div>
                     </div>
                     <div class="widget-body turn-tracker-widget-body" id="turnTrackerWidgetBody" style="padding:12px;">
-                        <div id="turnTrackerControlsBar" style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:10px; padding:8px 10px; background:rgba(16,9,13,0.9); border:1px solid rgba(239,68,68,0.28); border-radius:6px;">
-                            <button type="button" class="btn-action-outline btn-sm" onclick="stepTurnTracker(-1)" title="Previous Turn" style="padding:4px 8px; font-size:11px;">
+                        <div id="turnTrackerControlsBar" class="turn-tracker-round-bar" style="margin-bottom:10px;">
+                            <button type="button" id="btnTurnPrev" class="btn-action-outline btn-sm gm-only-control" onclick="stepTurnTracker(-1)" title="Previous Turn" style="padding:4px 8px; font-size:11px;">
                                 <i class="fa-solid fa-backward-step"></i> Prev
                             </button>
-                            <div style="text-align:center;">
+                            <div style="text-align:center; flex:1;">
                                 <div style="font-size:9px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;">Current Round</div>
                                 <strong id="turnTrackerRoundLabel" style="font-size:14px; color:#fbbf24; font-family:'Cinzel',serif;">Round 1</strong>
                             </div>
-                            <button type="button" class="btn-action btn-sm" onclick="stepTurnTracker(1)" title="Advance to Next Turn" style="padding:4px 10px; font-size:11px;">
+                            <button type="button" id="btnTurnNext" class="btn-action btn-sm gm-only-control" onclick="stepTurnTracker(1)" title="Advance to Next Turn" style="padding:4px 10px; font-size:11px;">
                                 Next <i class="fa-solid fa-forward-step"></i>
                             </button>
                         </div>
 
-                        <div id="turnTrackerAddBar" style="display:flex; gap:6px; margin-bottom:10px;">
+                        <div id="turnTrackerNowActingBanner" style="margin-bottom:10px;"></div>
+
+                        <div id="turnTrackerAddBar" class="gm-only-control" style="display:flex; gap:6px; margin-bottom:10px;">
                             <div class="vtm-custom-select-wrap" style="flex:1;">
                                 <select id="turnTrackerAddSelect" class="vtm-themed-select" style="padding:5px 26px 5px 8px; font-size:11px;">
-                                    <option value="">+ Add Kindred / NPC to Turn Order...</option>
+                                    <option value="">+ Override / Add Offline Player or NPC...</option>
                                 </select>
                                 <img src="images/vtm_arrow_down.svg" alt="" class="vtm-select-custom-arrow" draggable="false">
                             </div>
@@ -819,14 +781,132 @@
                             </button>
                         </div>
 
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.8px;">Click a row to mark active turn • Reorder with arrows</span>
-                            <button type="button" class="btn-text-danger" onclick="clearTurnTrackerOrder()" title="Reset / Clear Turn Order" style="font-size:10px; background:none; border:none; color:#f87171; cursor:pointer; padding:2px 4px;">
+                        <div id="turnTrackerGmSubbar" class="gm-only-control" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.8px;">Click row to set turn • Drag or arrows to reorder</span>
+                            <button type="button" class="btn-text-danger" onclick="clearTurnTrackerOrder()" title="Reset to Online Players Only" style="font-size:10px; background:none; border:none; color:#f87171; cursor:pointer; padding:2px 4px;">
                                 <i class="fa-solid fa-trash-can"></i> Reset
                             </button>
                         </div>
 
                         <div id="turnTrackerWidgetList" style="display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto;"></div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 14. PERSONAL NOTES WIDGET -->
+                <div class="elysium-widget widget-personal-notes" id="widget-personal-notes" style="top: 150px; left: 450px; width: 650px; height: 500px; z-index: 55; display: none; flex-direction: row; background: #0c080a; border: 1px solid #3f3f46; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); overflow: hidden;">
+                    <div class="widget-header" id="dragHeader-personal-notes" style="position:absolute; top:0; left:0; right:0; z-index: 10;">
+                        <span class="widget-title"><i class="fa-solid fa-pen-nib" style="color:#10b981;margin-right:6px;"></i> PERSONAL NOTES</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="createNewPersonalNote()" title="New Note"><i class="fa-solid fa-plus"></i></button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-personal-notes')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- LEFT PANE: Note List -->
+                    <div style="flex: 0 0 200px; border-right: 1px solid #2a2a35; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; margin-top: 36px; overflow-y: auto;">
+                        <div style="padding: 12px; border-bottom: 1px solid #2a2a35; display:flex; align-items:center; justify-content:space-between;">
+                            <span style="color:#9ca3af; font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Your Notes</span>
+                        </div>
+                        <div id="notesListContainer" style="flex: 1; padding: 8px; display:flex; flex-direction:column; gap:4px;">
+                            <!-- Notes injected here -->
+                        </div>
+                    </div>
+
+                    <!-- RIGHT PANE: Note Editor -->
+                    <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); margin-top: 36px;">
+                        <div id="noteEditorEmpty" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
+                            <i class="fa-solid fa-feather-pointed" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>
+                            Select a note or create a new one.
+                        </div>
+                        
+                        <div id="noteEditorContainer" style="flex: 1; display: none; flex-direction: column; padding: 16px;">
+                            <input type="hidden" id="activeNoteId">
+                            <input type="text" id="activeNoteTitle" class="vtm-input" style="font-size:16px; font-weight:bold; margin-bottom:12px; border:none; border-bottom:1px solid #3f3f46; border-radius:0; padding:4px 0;" placeholder="Note Title" onblur="savePersonalNote()">
+                            <textarea id="activeNoteContent" class="vtm-input" style="flex:1; font-size:13px; line-height:1.6; resize:none; border:none; background:transparent; padding:0;" placeholder="Start typing your notes here..." onblur="savePersonalNote()"></textarea>
+                            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+                                <button class="btn-action-outline text-danger" onclick="deletePersonalNote()"><i class="fa-solid fa-trash"></i> Delete Note</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 15. QUICK RULES REFERENCE WIDGET -->
+                <div class="elysium-widget widget-quick-rules" id="widget-quick-rules" onmousedown="bringDesktopWidgetToFront(this)" style="top: 66px; left: 420px; width: 820px; height: 640px; z-index: 100505; display: none; flex-direction: row; background: #0d090e; border: 1px solid #581c87; border-radius: 8px; box-shadow: 0 24px 64px rgba(0,0,0,0.96), 0 0 24px rgba(168,85,247,0.28); overflow: hidden;">
+                    <div class="widget-header" id="dragHeader-quick-rules" style="position:absolute; top:0; left:0; right:0; z-index: 10; cursor: move; padding: 8px 12px; background: #161020; border-bottom: 1px solid #3b235a; display: flex; justify-content: space-between; align-items: center;">
+                        <span class="widget-title" style="font-weight: bold; font-size: 13px; letter-spacing: 1px; color:#f3e8ff;"><i class="fa-solid fa-book-journal-whills" style="color:#d946ef;margin-right:6px;"></i> RULEBOOK CODEX <span style="font-size:10px; font-weight:normal; color:#9ca3af; margin-left:6px;">(Drag to Move • Resize Corners)</span></span>
+                        <div class="widget-actions" style="display:flex; align-items:center; gap:6px;">
+                            <button type="button" class="sheet-window-ctrl-btn" onclick="tileSheetAndRulebookSideBySide()" title="Snap Character Sheet and Rulebook Codex Side-by-Side" style="font-size:11px; padding:3px 8px;">
+                                <i class="fa-solid fa-table-columns"></i> Side-by-Side
+                            </button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-quick-rules')" style="background:none; border:none; color:#9ca3af; cursor:pointer;"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- LEFT PANE: Hierarchy & Search -->
+                    <div style="flex: 0 0 280px; border-right: 1px solid #2a2a35; background: #09060a; display: flex; flex-direction: column; margin-top: 36px; overflow-y: hidden;">
+                        <div style="padding: 12px; border-bottom: 1px solid #2a2a35; background: #09060a;">
+                            <input type="text" id="widgetRulebookSearchInput" class="vtm-input" placeholder="Search codex..." onkeyup="filterWidgetRulebook()" style="width: 100%; font-size: 13px; padding: 6px 10px; border: 1px solid #3f3f46; border-radius: 4px; background: #120d16; color: #f8fafc;">
+                        </div>
+                        <div id="widgetRulebookHierarchy" style="flex: 1; padding: 8px; overflow-y: auto; background: #09060a;">
+                            <!-- Widget Hierarchy injected here -->
+                        </div>
+                    </div>
+
+                    <!-- RIGHT PANE: Article Content -->
+                    <div style="flex: 1; display: flex; flex-direction: column; background: #0d090e; margin-top: 36px; overflow-y: auto; padding: 20px;" id="widgetRulebookArticleView">
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
+                            <i class="fa-solid fa-book-journal-whills" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>
+                            Select a rule or article to read.
+                        </div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-n" data-resize-dir="n"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-s" data-resize-dir="s"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-e" data-resize-dir="e"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-w" data-resize-dir="w"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-ne" data-resize-dir="ne"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-nw" data-resize-dir="nw"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-sw" data-resize-dir="sw"></div>
+                    <div class="sheet-window-resize-handle sheet-resize-se" data-resize-dir="se" title="Drag to Resize Rulebook Codex"></div>
+                </div>
+
+                <!-- 16. CHRONICLE TIMELINE WIDGET -->
+                <div class="elysium-widget widget-chronicle-timeline" id="widget-chronicle-timeline" style="top: 150px; left: 400px; width: 600px; height: 450px; z-index: 50; display: none;">
+                    <div class="widget-header" id="dragHeader-chronicle-timeline">
+                        <span class="widget-title"><i class="fa-solid fa-timeline" style="color:#ef4444;margin-right:6px;"></i> CHRONICLE TIMELINE</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-chronicle-timeline')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                        </div>
+                    </div>
+                    <div class="widget-body" style="display: flex; flex-direction: row; height: calc(100% - 38px); overflow: hidden; background: rgba(0,0,0,0.2);">
+                        <!-- Timeline Sidebar -->
+                        <div style="width: 33.333%; border-right: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); overflow-y: auto; padding: 10px;">
+                            <div id="storyTimelineSidebar" style="position: relative; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.1); margin-left: 8px; display: flex; flex-direction: column; gap: 16px; padding-top: 8px; padding-bottom: 8px;">
+                                <!-- Timeline items injected here -->
+                            </div>
+                        </div>
+                        <!-- Content Panel -->
+                        <div style="width: 66.666%; padding: 20px; overflow-y: auto;" id="storyTimelineContent">
+                            <div style="display:flex; height:100%; align-items:center; justify-content:center; color:#6b7280; font-family:'Cinzel',serif; font-size:14px; text-align:center;">
+                                Select an episode from the timeline to view the archive.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
+                <!-- 17. CLUE DETAIL WIDGET -->
+                <div class="elysium-widget widget-clue-detail" id="widget-clue-detail" style="top: 150px; left: 400px; width: 400px; height: 500px; z-index: 50; display: none;">
+                    <div class="widget-header" id="dragHeader-clue-detail">
+                        <span class="widget-title"><i class="fa-solid fa-magnifying-glass" style="color:#ef4444;margin-right:6px;"></i> <span id="clueDetailTitle">Clue Detail</span></span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-clue-detail')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                        </div>
+                    </div>
+                    <div class="widget-body" id="clueDetailBody" style="padding: 20px; font-size: 14px; line-height: 1.5; color: #d1d5db; overflow-y: auto; height: calc(100% - 38px);">
+                        <!-- Content injected here -->
                     </div>
                     <div class="widget-resize-handle"></div>
                 </div>
@@ -865,7 +945,7 @@
                     <button class="dock-btn" onclick="toggleWidget('widget-quick-rules')" title="Quick Rules Reference">
                         <i class="fa-solid fa-scale-balanced"></i> <span>Rules</span>
                     </button>
-                    <button class="dock-btn gm-only-control" onclick="toggleWidget('widget-turn-tracker'); if(typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();" title="Turn &amp; Initiative Tracker">
+                    <button class="dock-btn" onclick="toggleWidget('widget-turn-tracker'); if(typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();" title="Turn &amp; Initiative Tracker">
                         <i class="fa-solid fa-hourglass-half"></i> <span>Turns</span>
                     </button>
                     <button class="dock-btn gm-only-control" onclick="toggleWidget('widget-storyteller-omni'); if(document.getElementById('widget-storyteller-omni').style.display !== 'none') { loadOmniUnrevealedClues(); loadOmniUnrevealedLore(); loadOmniHookAndAgendas(); }" title="Storyteller Omni">
@@ -1990,6 +2070,7 @@
                         <label class="checkbox-label" style="font-size:11px;color:#9ca3af;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" value="widget-personal-notes" class="startup-widget-cb"> <span>Personal Notes</span></label>
                         <label class="checkbox-label" style="font-size:11px;color:#9ca3af;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" value="widget-quick-rules" class="startup-widget-cb"> <span>Quick Rules Reference</span></label>
                         <label class="checkbox-label" style="font-size:11px;color:#9ca3af;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" value="widget-chronicle-timeline" class="startup-widget-cb"> <span>Chronicle Timeline</span></label>
+                        <label class="checkbox-label" style="font-size:11px;color:#9ca3af;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" value="widget-turn-tracker" class="startup-widget-cb"> <span>Turn Tracker</span></label>
                     </div>
                 </div>
                 
@@ -2646,146 +2727,17 @@
                 <input type="hidden" id="newPinY" value="49.668128187607266">
                 <div class="form-col">
                     <label>Location / Pin Title</label>
-                    <input type="text" id="newPinTitle" placeholder="e.g. Elysium Entrance" value="New Place">
+                    <input type="text" id="newPinTitle" placeholder="e.g. Elysium Entrance" value="">
                 </div>
                 <div class="form-col">
                     <label>Description (Optional)</label>
-                    <textarea id="newPinDescription" placeholder="What is important about this location?" rows="2" style="background:#140e11; border:1px solid #3f3f46; color:#e2e8f0; border-radius:4px; padding:8px; width:100%; resize:vertical;"></textarea>
-                </div>
-                <div class="form-col" style="margin-top:10px;">
-                    <label style="color:#ef4444; font-size:11px; text-transform:uppercase;"><i class="fa-solid fa-shield-halved"></i> Security Measures & Obstacles</label>
-                    <textarea id="newPinSecurity" rows="2" placeholder="Guards, cameras, supernatural wards..." style="background:#140e11; border:1px solid #3f3f46; border-left:2px solid #ef4444; color:#e2e8f0; border-radius:4px; padding:8px; width:100%; resize:vertical; font-size:12px;"></textarea>
-                </div>
-                <div class="form-col" style="margin-top:10px;">
-                    <label style="color:#10b981; font-size:11px; text-transform:uppercase;"><i class="fa-solid fa-route"></i> Alternative Infiltration Routes</label>
-                    <textarea id="newPinInfiltration" rows="2" placeholder="Ventilation shafts, social engineering bypasses, secondary entrances..." style="background:#140e11; border:1px solid #3f3f46; border-left:2px solid #10b981; color:#e2e8f0; border-radius:4px; padding:8px; width:100%; resize:vertical; font-size:12px;"></textarea>
+                    <textarea id="newPinDescription" placeholder="What is important about this location?" rows="3" style="background:#140e11; border:1px solid #3f3f46; color:#e2e8f0; border-radius:4px; padding:8px; width:100%; resize:vertical;"></textarea>
                 </div>
                 <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;">
                     <button type="button" class="btn-action-outline" onclick="closeModal('newMapPinModal')">Cancel</button>
                     <button type="button" class="btn-action" onclick="createMapPinSubmit()">Drop Pin</button>
                 </div>
             </div>
-        </div>
-    </div>
-
-
-    
-    
-    <!-- PERSONAL NOTES WIDGET -->
-    <div class="elysium-widget widget-personal-notes" id="widget-personal-notes" style="top: 150px; left: 450px; width: 650px; height: 500px; z-index: 55; display: none; flex-direction: row; background: #0c080a; border: 1px solid #3f3f46; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); overflow: hidden;">
-        
-        <!-- Widget Header (absolute so it overlaps or sits at top) -->
-        <div class="widget-header" id="dragHeader-personal-notes" style="position:absolute; top:0; left:0; right:0; z-index: 10;">
-            <span class="widget-title"><i class="fa-solid fa-pen-nib" style="color:#10b981;margin-right:6px;"></i> PERSONAL NOTES</span>
-            <div class="widget-actions">
-                <button class="btn-w-ctrl" onclick="createNewPersonalNote()" title="New Note"><i class="fa-solid fa-plus"></i></button>
-                <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-personal-notes')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
-            </div>
-        </div>
-
-        <!-- LEFT PANE: Note List -->
-        <div style="flex: 0 0 200px; border-right: 1px solid #2a2a35; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; margin-top: 36px; overflow-y: auto;">
-            <div style="padding: 12px; border-bottom: 1px solid #2a2a35; display:flex; align-items:center; justify-content:space-between;">
-                <span style="color:#9ca3af; font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Your Notes</span>
-            </div>
-            <div id="notesListContainer" style="flex: 1; padding: 8px; display:flex; flex-direction:column; gap:4px;">
-                <!-- Notes injected here -->
-            </div>
-        </div>
-
-        <!-- RIGHT PANE: Note Editor -->
-        <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); margin-top: 36px;">
-            <div id="noteEditorEmpty" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
-                <i class="fa-solid fa-feather-pointed" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>
-                Select a note or create a new one.
-            </div>
-            
-            <div id="noteEditorContainer" style="flex: 1; display: none; flex-direction: column; padding: 16px;">
-                <input type="hidden" id="activeNoteId">
-                <input type="text" id="activeNoteTitle" class="vtm-input" style="font-size:16px; font-weight:bold; margin-bottom:12px; border:none; border-bottom:1px solid #3f3f46; border-radius:0; padding:4px 0;" placeholder="Note Title" onblur="savePersonalNote()">
-                <textarea id="activeNoteContent" class="vtm-input" style="flex:1; font-size:13px; line-height:1.6; resize:none; border:none; background:transparent; padding:0;" placeholder="Start typing your notes here..." onblur="savePersonalNote()"></textarea>
-                <div style="display:flex; justify-content:flex-end; margin-top:12px;">
-                    <button class="btn-action-outline text-danger" onclick="deletePersonalNote()"><i class="fa-solid fa-trash"></i> Delete Note</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- RULES WIDGET -->
-    <div class="elysium-widget widget-quick-rules" id="widget-quick-rules" onmousedown="bringDesktopWidgetToFront(this)" style="top: 66px; left: 420px; width: 820px; height: 640px; z-index: 100505; display: none; flex-direction: row; background: #0d090e; border: 1px solid #581c87; border-radius: 8px; box-shadow: 0 24px 64px rgba(0,0,0,0.96), 0 0 24px rgba(168,85,247,0.28); overflow: hidden;">
-        <div class="widget-header" id="dragHeader-quick-rules" style="position:absolute; top:0; left:0; right:0; z-index: 10; cursor: move; padding: 8px 12px; background: #161020; border-bottom: 1px solid #3b235a; display: flex; justify-content: space-between; align-items: center;">
-            <span class="widget-title" style="font-weight: bold; font-size: 13px; letter-spacing: 1px; color:#f3e8ff;"><i class="fa-solid fa-book-journal-whills" style="color:#d946ef;margin-right:6px;"></i> RULEBOOK CODEX <span style="font-size:10px; font-weight:normal; color:#9ca3af; margin-left:6px;">(Drag to Move • Resize Corners)</span></span>
-            <div class="widget-actions" style="display:flex; align-items:center; gap:6px;">
-                <button type="button" class="sheet-window-ctrl-btn" onclick="tileSheetAndRulebookSideBySide()" title="Snap Character Sheet and Rulebook Codex Side-by-Side" style="font-size:11px; padding:3px 8px;">
-                    <i class="fa-solid fa-table-columns"></i> Side-by-Side
-                </button>
-                <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-quick-rules')" style="background:none; border:none; color:#9ca3af; cursor:pointer;"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
-            </div>
-        </div>
-
-        <!-- LEFT PANE: Hierarchy & Search -->
-        <div style="flex: 0 0 280px; border-right: 1px solid #2a2a35; background: #09060a; display: flex; flex-direction: column; margin-top: 36px; overflow-y: hidden;">
-            <div style="padding: 12px; border-bottom: 1px solid #2a2a35; background: #09060a;">
-                <input type="text" id="widgetRulebookSearchInput" class="vtm-input" placeholder="Search codex..." onkeyup="filterWidgetRulebook()" style="width: 100%; font-size: 13px; padding: 6px 10px; border: 1px solid #3f3f46; border-radius: 4px; background: #120d16; color: #f8fafc;">
-            </div>
-            <div id="widgetRulebookHierarchy" style="flex: 1; padding: 8px; overflow-y: auto; background: #09060a;">
-                <!-- Widget Hierarchy injected here -->
-            </div>
-        </div>
-
-        <!-- RIGHT PANE: Article Content -->
-        <div style="flex: 1; display: flex; flex-direction: column; background: #0d090e; margin-top: 36px; overflow-y: auto; padding: 20px;" id="widgetRulebookArticleView">
-            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
-                <i class="fa-solid fa-book-journal-whills" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>
-                Select a rule or article to read.
-            </div>
-        </div>
-        <div class="widget-resize-handle"></div>
-        <div class="sheet-window-resize-handle sheet-resize-n" data-resize-dir="n"></div>
-        <div class="sheet-window-resize-handle sheet-resize-s" data-resize-dir="s"></div>
-        <div class="sheet-window-resize-handle sheet-resize-e" data-resize-dir="e"></div>
-        <div class="sheet-window-resize-handle sheet-resize-w" data-resize-dir="w"></div>
-        <div class="sheet-window-resize-handle sheet-resize-ne" data-resize-dir="ne"></div>
-        <div class="sheet-window-resize-handle sheet-resize-nw" data-resize-dir="nw"></div>
-        <div class="sheet-window-resize-handle sheet-resize-sw" data-resize-dir="sw"></div>
-        <div class="sheet-window-resize-handle sheet-resize-se" data-resize-dir="se" title="Drag to Resize Rulebook Codex"></div>
-    </div>
-
-    <!-- STORY WIDGET -->
-    <div class="elysium-widget widget-chronicle-timeline" id="widget-chronicle-timeline" style="top: 150px; left: 400px; width: 600px; height: 450px; z-index: 50; display: none;">
-        <div class="widget-header" id="dragHeader-chronicle-timeline">
-            <span class="widget-title"><i class="fa-solid fa-timeline" style="color:#ef4444;margin-right:6px;"></i> CHRONICLE TIMELINE</span>
-            <div class="widget-actions">
-                <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-chronicle-timeline')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
-            </div>
-        </div>
-        <div class="widget-body" style="display: flex; flex-direction: row; height: calc(100% - 38px); overflow: hidden; background: rgba(0,0,0,0.2);">
-            <!-- Timeline Sidebar -->
-            <div style="width: 33.333%; border-right: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); overflow-y: auto; padding: 10px;">
-                <div id="storyTimelineSidebar" style="position: relative; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.1); margin-left: 8px; display: flex; flex-direction: column; gap: 16px; padding-top: 8px; padding-bottom: 8px;">
-                    <!-- Timeline items injected here -->
-                </div>
-            </div>
-            <!-- Content Panel -->
-            <div style="width: 66.666%; padding: 20px; overflow-y: auto;" id="storyTimelineContent">
-                <div style="display:flex; height:100%; align-items:center; justify-content:center; color:#6b7280; font-family:'Cinzel',serif; font-size:14px; text-align:center;">
-                    Select an episode from the timeline to view the archive.
-                </div>
-            </div>
-        </div>
-    </div>
-
-    
-    <!-- CLUE DETAIL WIDGET (Generic Draggable) -->
-    <div class="elysium-widget widget-clue-detail" id="widget-clue-detail" style="top: 150px; left: 400px; width: 400px; height: 500px; z-index: 50; display: none;">
-        <div class="widget-header" id="dragHeader-clue-detail">
-            <span class="widget-title"><i class="fa-solid fa-magnifying-glass" style="color:#ef4444;margin-right:6px;"></i> <span id="clueDetailTitle">Clue Detail</span></span>
-            <div class="widget-actions">
-                <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-clue-detail')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
-            </div>
-        </div>
-        <div class="widget-body" id="clueDetailBody" style="padding: 20px; font-size: 14px; line-height: 1.5; color: #d1d5db; overflow-y: auto; height: calc(100% - 38px);">
-            <!-- Content injected here -->
         </div>
     </div>
 
@@ -2883,46 +2835,6 @@
 
 
 
-    <!-- Pin Creation Modal -->
-    <div class="vtm-modal" id="pinCreationModal">
-        <div class="vtm-modal-content" style="max-width: 500px;">
-            <div class="vtm-modal-header">
-                <h2><i class="fa-solid fa-location-dot" style="color:#ef4444; margin-right:8px;"></i> CREATE MAP PIN</h2>
-                <button class="close-btn" onclick="closeModal('pinCreationModal')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
-            </div>
-            <div class="vtm-modal-body">
-                <input type="hidden" id="pendingPinX">
-                <input type="hidden" id="pendingPinY">
-                
-                <div class="form-group">
-                    <label>Location Title <span style="color:#ef4444">*</span></label>
-                    <input type="text" id="pendingPinTitle" class="vtm-input" placeholder="e.g. Elysium, The Rack, Safehouse...">
-                </div>
-                
-                <div class="form-group">
-                    <label>Description / Intel</label>
-                    <textarea id="pendingPinDesc" class="vtm-input" rows="3" placeholder="Notes about who controls this territory, what happened here, etc..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>Security Measures <span style="color:#6b7280; font-size:11px; font-weight:normal;">(Optional)</span></label>
-                    <textarea id="pendingPinSecurity" class="vtm-input" rows="2" placeholder="e.g. 2 Ghouls at front door, CCTV in lobby..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>Infiltration Routes <span style="color:#6b7280; font-size:11px; font-weight:normal;">(Optional)</span></label>
-                    <textarea id="pendingPinRoutes" class="vtm-input" rows="2" placeholder="e.g. Fire escape on the north alleyway..."></textarea>
-                </div>
-            </div>
-            <div class="vtm-modal-footer">
-                <button class="btn-action-outline" onclick="closeModal('pinCreationModal')">Cancel</button>
-                <button class="btn-action-solid" onclick="confirmPinCreation()">Create Location Pin</button>
-            </div>
-        </div>
-    </div>
-
-
-
 <!-- ASSET PICKER MODAL -->
     <div id="assetPickerModal" class="modal-overlay" style="z-index: 9999;">
         <div class="modal-container" style="max-width: 900px; height: 80vh; display: flex; flex-direction: column; padding: 0;">
@@ -2941,7 +2853,7 @@
                 <!-- Picker Main -->
                 <div style="flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <input type="text" id="pickerSearchInput" style="background: rgba(22, 16, 24, 0.85); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px 14px; color: #f1f5f9; width: 300px; font-family: inherit;" placeholder="Search assets..." style="width: 300px;" oninput="renderPickerGrid()">
+                        <input type="text" id="pickerSearchInput" style="background: rgba(22, 16, 24, 0.85); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px 14px; color: #f1f5f9; width: 300px; font-family: inherit;" placeholder="Search assets..." oninput="renderPickerGrid()">
                         <div style="display:flex; gap:8px;">
                             <button class="btn-action-outline" onclick="handlePickerUrlInput()"><i class="fas fa-link"></i> From URL</button>
                             <button class="btn-action-outline" onclick="document.getElementById('pickerDirectUpload').click()"><i class="fas fa-upload"></i> Upload New</button>
@@ -2984,18 +2896,19 @@
     </div>
 
     <script src="socket.io/socket.io.js" onerror="console.log('[VtM] Using Serverless Socket.IO Engine')"></script>
-    <script src="js/v5_data.js?v=20261109_v23"></script>
-    <script src="js/character_wizard.js?v=20261109_v23"></script>
-    <script src="js/relationship_map.js?v=20261109_v23"></script>
-    <script src="js/dice_animations.js?v=20261109_v23"></script>
-    <script src="js/core_state_and_shell.js?v=20261109_v23"></script>
-    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v23"></script>
-    <script src="js/chat_and_dice.js?v=20261109_v23"></script>
-    <script src="js/city_map.js?v=20261109_v23"></script>
-    <script src="js/character_vault_and_dossier.js?v=20261109_v23"></script>
-    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v23"></script>
-    <script src="js/clues_and_lore.js?v=20261109_v23"></script>
-    <script src="js/rulebook_and_notes.js?v=20261109_v23"></script>
-    <script src="js/asset_library.js?v=20261109_v23"></script>
+    <script src="js/v5_data.js?v=20261109_v24"></script>
+    <script src="js/character_wizard.js?v=20261109_v24"></script>
+    <script src="js/relationship_map.js?v=20261109_v24"></script>
+    <script src="js/dice_animations.js?v=20261109_v24"></script>
+    <script src="js/core_state_and_shell.js?v=20261109_v24"></script>
+    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v24"></script>
+    <script src="js/turn_tracker.js?v=20261109_v24"></script>
+    <script src="js/chat_and_dice.js?v=20261109_v24"></script>
+    <script src="js/city_map.js?v=20261109_v24"></script>
+    <script src="js/character_vault_and_dossier.js?v=20261109_v24"></script>
+    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v24"></script>
+    <script src="js/clues_and_lore.js?v=20261109_v24"></script>
+    <script src="js/rulebook_and_notes.js?v=20261109_v24"></script>
+    <script src="js/asset_library.js?v=20261109_v24"></script>
 </body>
 </html>
