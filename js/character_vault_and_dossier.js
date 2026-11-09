@@ -1884,8 +1884,16 @@ function deleteCharacterDirectly(characterId) {
     method: 'DELETE'
   }).then(fetchResponse => fetchResponse.json()).then(responsePayload => {
     if (responsePayload.success) {
-      if (activeControlledCharacterId === characterId) activeControlledCharacterId = null;
-      if (activeNpcPersonaId === characterId) activeNpcPersonaId = null;
+      if (Number(activeControlledCharacterId) === Number(characterId)) activeControlledCharacterId = null;
+      if (Number(activeNpcPersonaId) === Number(characterId)) activeNpcPersonaId = null;
+      if (Number(currentLoadedCharacterId) === Number(characterId)) {
+        currentLoadedCharacterId = null;
+        if (typeof closeSheetModal === 'function') closeSheetModal();
+      }
+      const floatingSheet = document.getElementById(`floating-sheet-${characterId}`);
+      if (floatingSheet) floatingSheet.remove();
+      const floatingDossier = document.getElementById(`widget-character-dossier-${characterId}`);
+      if (floatingDossier) floatingDossier.remove();
       loadCharacters();
     } else {
       // Display a native browser alert if deletion failed
@@ -1893,6 +1901,43 @@ function deleteCharacterDirectly(characterId) {
     }
   }).catch(errorObject => console.error(errorObject));
 }
+
+window.deleteCharacterSubmit = async function () {
+  if (!currentLoadedCharacterId) return;
+  const targetCharId = currentLoadedCharacterId;
+  const charRecord = (chronicleCharactersList || []).find(c => Number(c.id) === Number(targetCharId));
+  const charName = charRecord ? charRecord.name : 'this character';
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm(`Are you absolutely sure you want to delete "${charName}"? This action cannot be undone and will permanently erase this character from the chronicle.`, 'DESTRUCTIVE ACTION')
+    : confirm(`Are you absolutely sure you want to delete "${charName}"? This cannot be undone.`);
+  if (!isConfirmed) return;
+  try {
+    const fetchResponse = await authFetch('/api/characters/' + targetCharId, { method: 'DELETE' });
+    const responsePayload = await fetchResponse.json();
+    if (responsePayload.success) {
+      if (Number(activeControlledCharacterId) === Number(targetCharId)) activeControlledCharacterId = null;
+      if (Number(activeNpcPersonaId) === Number(targetCharId)) activeNpcPersonaId = null;
+      currentLoadedCharacterId = null;
+      if (typeof closeSheetModal === 'function') closeSheetModal();
+      const floatingSheet = document.getElementById(`floating-sheet-${targetCharId}`);
+      if (floatingSheet) floatingSheet.remove();
+      const floatingDossier = document.getElementById(`widget-character-dossier-${targetCharId}`);
+      if (floatingDossier) floatingDossier.remove();
+      if (typeof vtmAlert === 'function') {
+        vtmAlert(`${charName} has been successfully deleted.`, 'Character Deleted');
+      }
+      loadCharacters();
+    } else {
+      if (typeof vtmAlert === 'function') {
+        vtmAlert('Failed to delete character: ' + (responsePayload.error || 'Unknown error'), 'Error');
+      } else {
+        alert('Failed to delete character: ' + (responsePayload.error || 'Unknown error'));
+      }
+    }
+  } catch (errorObject) {
+    console.error(errorObject);
+  }
+};
 
 
 async function loadNpcCategories() {

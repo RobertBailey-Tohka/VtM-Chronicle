@@ -420,8 +420,15 @@ window.executeMassDelete = async function(shouldCascadeDelete) {
     // Display a browser alert confirming how many rule articles were deleted
     alert(`Successfully deleted ${deletedCount} selected article(s).`);
     
+    const articleViewElement = document.getElementById('rulebookArticleView');
+    if (articleViewElement) {
+        articleViewElement.innerHTML = `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#6b7280; font-size:13px;"><i class="fa-solid fa-book-journal-whills" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>Select a rule or article to read.</div>`;
+    }
     if (typeof loadRulesCodex === 'function') {
-        loadRulesCodex();
+        await loadRulesCodex();
+        if (typeof renderWidgetRulebookHierarchy === 'function' && Array.isArray(allRules)) {
+            renderWidgetRulebookHierarchy(allRules);
+        }
     }
 };
 
@@ -442,7 +449,16 @@ async function deleteRuleArticle(ruleId) {
         try {
             // Perform an authenticated HTTP DELETE request to delete the rule article
             const fetchResponse = await authFetch(`/api/rules/${ruleId}${shouldCascadeDelete ? '?cascade=true' : ''}`, { method: 'DELETE' });
-            if (fetchResponse.ok) loadRulesCodex();
+            if (fetchResponse.ok) {
+                const articleViewElement = document.getElementById('rulebookArticleView');
+                if (articleViewElement) {
+                    articleViewElement.innerHTML = `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#6b7280; font-size:13px;"><i class="fa-solid fa-book-journal-whills" style="font-size:32px; margin-bottom:12px; opacity:0.5;"></i>Select a rule or article to read.</div>`;
+                }
+                await loadRulesCodex();
+                if (typeof renderWidgetRulebookHierarchy === 'function' && Array.isArray(allRules)) {
+                    renderWidgetRulebookHierarchy(allRules);
+                }
+            }
         } catch (errorObject) {
             console.error(errorObject);
         }

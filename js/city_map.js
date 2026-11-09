@@ -1410,7 +1410,6 @@ function renderMapPins(mapPinsList) {
     // Create tooltip container and heading elements in memory for the map pin
     const tooltipElement = document.createElement('div');
     tooltipElement.className = 'map-pin-tooltip';
-    tooltipElement.style.pointerEvents = 'auto';
     const headingElement = document.createElement('h4');
     headingElement.innerText = mapPinRecord.title || 'Unknown Location';
     tooltipElement.appendChild(headingElement);

@@ -119,6 +119,15 @@ async function updatePendingBadgeCount() {
           pendingBadgeElement.style.display = 'none';
         }
       }
+      const modalPendingBadge = document.getElementById('modalPendingRequestsBadge');
+      if (modalPendingBadge) {
+        if (pendingCount > 0) {
+          modalPendingBadge.innerText = pendingCount;
+          modalPendingBadge.style.display = 'inline-block';
+        } else {
+          modalPendingBadge.style.display = 'none';
+        }
+      }
     }
   } catch (errorObject) {
     console.error('Failed to update pending badge:', errorObject);
@@ -268,6 +277,15 @@ async function loadCoterieModalData() {
         pendingBadgeElement.style.display = 'none';
       }
     }
+    const modalPendingBadge = document.getElementById('modalPendingRequestsBadge');
+    if (modalPendingBadge) {
+      if (pendingRequests.length > 0) {
+        modalPendingBadge.innerText = pendingRequests.length;
+        modalPendingBadge.style.display = 'inline-block';
+      } else {
+        modalPendingBadge.style.display = 'none';
+      }
+    }
     // Query the DOM for the pending join requests list container element by its ID
     const pendingContainerElement = document.getElementById('coteriePendingList');
     if (pendingRequests.length === 0) {
@@ -327,6 +345,26 @@ async function loadCoterieModalData() {
                 `;
         activeTableBody.appendChild(tableRowElement);
       });
+    }
+    // Also populate the available players dropdown in the modal so the Storyteller can directly invite registered players
+    const availablePlayersResponse = await authFetch(`/api/chronicles/${activeChronicleId}/available-players`);
+    if (availablePlayersResponse.ok) {
+      const availablePlayers = await availablePlayersResponse.json();
+      const inviteSelectElement = document.getElementById('modalAvailablePlayersSelect');
+      if (inviteSelectElement) {
+        inviteSelectElement.innerHTML = '';
+        if (availablePlayers.length === 0) {
+          inviteSelectElement.innerHTML = '<option value="">No other registered players in database</option>';
+        } else {
+          inviteSelectElement.innerHTML = '<option value="">Select a registered player to invite...</option>';
+          availablePlayers.forEach(playerObject => {
+            const optionElement = document.createElement('option');
+            optionElement.value = playerObject.id;
+            optionElement.innerText = `${playerObject.display_name} (@${playerObject.username})`;
+            inviteSelectElement.appendChild(optionElement);
+          });
+        }
+      }
     }
   } catch (errorObject) {
     console.error('Failed to load coterie modal data:', errorObject);
@@ -686,7 +724,8 @@ async function changeMemberRole(userId, newRole) {
     if (fetchResponse.ok) {
       // Display a confirmation alert notification to the user
       alert('Role updated successfully.');
-      openCoterieManagementModal();
+      loadCoterieModalData();
+      loadCoterieManagement();
     } else {
       // Parse the JSON error payload from the HTTP response
       const responseData = await fetchResponse.json();

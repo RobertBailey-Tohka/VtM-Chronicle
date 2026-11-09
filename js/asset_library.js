@@ -517,7 +517,7 @@ async function moveAssetCategory(assetId, mouseEvent) {
     })
   });
   if (fetchResponse.ok) {
-    const matchingAssetRecord = globalAssets.find(assetRecord => assetRecord.id === assetId);
+    const matchingAssetRecord = globalAssets.find(assetRecord => String(assetRecord.id) === String(assetId));
     if (matchingAssetRecord) { matchingAssetRecord.category = targetCategoryId; matchingAssetRecord.category_id = targetCategoryId; }
     renderAssetCategories();
     renderAssetGrid();
@@ -533,7 +533,10 @@ async function deleteAsset(assetId, mouseEvent) {
     method: 'DELETE'
   });
   if (fetchResponse.ok) {
-    globalAssets = globalAssets.filter(assetRecord => assetRecord.id !== assetId);
+    globalAssets = globalAssets.filter(assetRecord => String(assetRecord.id) !== String(assetId));
+    bulkSelectedAssets.delete(assetId);
+    bulkSelectedAssets.delete(Number(assetId));
+    bulkSelectedAssets.delete(String(assetId));
     renderAssetCategories();
     renderAssetGrid();
   }
@@ -869,7 +872,7 @@ async function bulkMoveAssets() {
       })
     });
     if (fetchResponse.ok) {
-      const matchingAssetRecord = globalAssets.find(assetRecord => assetRecord.id === selectedAssetId);
+      const matchingAssetRecord = globalAssets.find(assetRecord => String(assetRecord.id) === String(selectedAssetId));
       if (matchingAssetRecord) { matchingAssetRecord.category = targetCategoryId; matchingAssetRecord.category_id = targetCategoryId; }
     }
   }
@@ -888,7 +891,7 @@ async function bulkDeleteAssets() {
       method: 'DELETE'
     });
     if (fetchResponse.ok) {
-      globalAssets = globalAssets.filter(assetRecord => assetRecord.id !== selectedAssetId);
+      globalAssets = globalAssets.filter(assetRecord => String(assetRecord.id) !== String(selectedAssetId));
     }
   }
   bulkSelectedAssets.clear();

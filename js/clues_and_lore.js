@@ -551,8 +551,14 @@ function deleteMatrix(matrixId) {
     authFetch(`/api/matrices/${matrixId}`, {
       method: 'DELETE'
     }).then(fetchResponse => fetchResponse.json()).then(() => {
+      if (Array.isArray(allChronicleClueMatrices)) {
+        allChronicleClueMatrices = allChronicleClueMatrices.filter(m => Number(m.id) !== Number(matrixId));
+      }
+      const floatingWidget = document.getElementById(`widget-matrix-${matrixId}`);
+      if (floatingWidget) floatingWidget.remove();
       if (activeEpisodeId) loadEpisodeDetails(activeEpisodeId);
       loadClueMatricesForWidget();
+      if (typeof loadGameboardState === 'function') loadGameboardState();
     });
   }
 }
@@ -668,8 +674,12 @@ function deleteLoreMatrix(loreMatrixId) {
     authFetch(`/api/lore_matrices/${loreMatrixId}`, {
       method: 'DELETE'
     }).then(fetchResponse => fetchResponse.json()).then(() => {
+      if (Array.isArray(allChronicleLoreMatrices)) {
+        allChronicleLoreMatrices = allChronicleLoreMatrices.filter(m => Number(m.id) !== Number(loreMatrixId));
+      }
       if (activeEpisodeId) loadEpisodeDetails(activeEpisodeId);
       loadLoreMatricesForWidget();
+      if (typeof loadGameboardState === 'function') loadGameboardState();
     });
   }
 }
@@ -961,8 +971,16 @@ function openClueReaderModal(clueRecord) {
         method: 'DELETE'
       }).then(fetchResponse => fetchResponse.json()).then(responseData => {
         if (responseData.success) {
-          if (activeControlledCharacterId === characterId) activeControlledCharacterId = null;
-          if (activeNpcPersonaId === characterId) activeNpcPersonaId = null;
+          if (Number(activeControlledCharacterId) === Number(characterId)) activeControlledCharacterId = null;
+          if (Number(activeNpcPersonaId) === Number(characterId)) activeNpcPersonaId = null;
+          if (Number(currentLoadedCharacterId) === Number(characterId)) {
+            currentLoadedCharacterId = null;
+            if (typeof closeSheetModal === 'function') closeSheetModal();
+          }
+          const floatingSheet = document.getElementById(`floating-sheet-${characterId}`);
+          if (floatingSheet) floatingSheet.remove();
+          const floatingDossier = document.getElementById(`widget-character-dossier-${characterId}`);
+          if (floatingDossier) floatingDossier.remove();
           vtmAlert(`${characterName} has been successfully deleted.`, 'Character Deleted');
           loadCharacters();
         } else {
@@ -1368,7 +1386,8 @@ window.deleteClue = async function(clueId) {
         // Perform an authenticated HTTP DELETE request to delete the clue from the server
         const fetchResponse = await authFetch('/api/clues/' + clueId, { method: 'DELETE' });
         if (fetchResponse.ok) {
-            loadEpisodeDetails(activeEpisodeId);
+            if (typeof removeClueFromGameboard === 'function') removeClueFromGameboard(clueId);
+            if (activeEpisodeId) loadEpisodeDetails(activeEpisodeId);
             loadClueMatricesForWidget();
         } else {
             alert('Failed to delete clue');
@@ -1387,7 +1406,8 @@ async function deleteLoreEntry(loreEntryId, loreTitle) {
         // Perform an authenticated HTTP DELETE request to remove the lore entry from the server
         const fetchResponse = await authFetch('/api/lore_entries/' + loreEntryId, { method: 'DELETE' });
         if (fetchResponse.ok) {
-            loadEpisodeDetails(activeEpisodeId);
+            if (typeof removeLoreFromGameboard === 'function') removeLoreFromGameboard(loreEntryId);
+            if (activeEpisodeId) loadEpisodeDetails(activeEpisodeId);
             loadLoreMatricesForWidget();
         }
     } catch(errorObject) { console.error(errorObject); }

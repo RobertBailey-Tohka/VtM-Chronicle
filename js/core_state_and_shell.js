@@ -70,8 +70,19 @@ let chronicleMembersList = [];
 socket.on('connect', () => {
   // Query the DOM for the socket connection status indicator element by its ID
   document.getElementById('socketStatus').innerHTML = '<span class="status-dot"></span> <span class="status-text">LIVE</span>';
-  // Emit a Socket.IO event to join the active chronicle's real-time broadcast room
-  socket.emit('room:join', activeChronicleId || 1);
+  // Emit a Socket.IO event to join the active chronicle's real-time broadcast room only if inside an approved chronicle
+  if (activeChronicleId && currentUser) {
+    socket.emit('room:join', {
+      campaignId: activeChronicleId,
+      chronicleId: activeChronicleId,
+      userId: currentUser.id,
+      username: currentUser.username,
+      displayName: currentUser.displayName || currentUser.username,
+      role: activeChronicleRole || 'player',
+      avatar: currentUser.avatar || currentUser.avatar_url || null,
+      characterId: activeControlledCharacterId || null
+    });
+  }
 });
 // Listen for the Socket.IO 'disconnect' event fired when the connection to the server is lost
 socket.on('disconnect', () => {
@@ -211,24 +222,45 @@ socket.on('rules:updated', () => {
 });
 // Listen for incoming coterie join requests broadcast by the server via Socket.IO
 socket.on('coterie:request_received', requestData => {
-  if ((activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') && activeChronicleId === requestData.campaign_id) {
+  const targetChronId = Number(requestData && (requestData.chronicle_id || requestData.campaign_id || requestData.chronicleId));
+  if ((activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller') && Number(activeChronicleId) === targetChronId) {
     updatePendingBadgeCount();
     // Query the DOM for the coterie manager modal element by its ID
     const pendingModalElement = document.getElementById('coterieManagerModal');
     if (pendingModalElement && pendingModalElement.classList.contains('active')) {
       loadCoterieModalData();
     }
+    if (typeof loadCoterieManagement === 'function') {
+      loadCoterieManagement();
+    }
   }
 });
 // Listen for coterie join request approvals broadcast by the server via Socket.IO
 socket.on('coterie:request_approved', approvalData => {
-  if (currentUser && currentUser.id === approvalData.user_id) {
+  const approvedUid = Number(approvalData && (approvalData.user_id || approvalData.userId));
+  if (currentUser && Number(currentUser.id) === approvedUid) {
     // Display an alert notification informing the user their join request was approved
     alert('Your request to join the chronicle has been approved by the Storyteller!');
     // Query the DOM for the chronicle hub tab view element by its ID
     const lobbyViewElement = document.getElementById('tab-chronicle-hub');
     if (lobbyViewElement && lobbyViewElement.classList.contains('active')) {
       renderChronicleHub();
+    }
+  }
+});
+// Listen for coterie member removal or request denial broadcast by the server via Socket.IO
+socket.on('coterie:member_removed', removalData => {
+  const removedUid = Number(removalData && (removalData.user_id || removalData.userId));
+  const targetChronId = Number(removalData && (removalData.chronicle_id || removalData.campaign_id || removalData.chronicleId));
+  if (currentUser && Number(currentUser.id) === removedUid) {
+    if (activeChronicleId && (!targetChronId || Number(activeChronicleId) === targetChronId)) {
+      alert('Storyteller approval is required to access this Chronicle. Returning to the Chronicle Hub.');
+      returnToChronicleHub();
+    } else {
+      const lobbyViewElement = document.getElementById('tab-chronicle-hub');
+      if (lobbyViewElement && lobbyViewElement.classList.contains('active')) {
+        renderChronicleHub();
+      }
     }
   }
 });
@@ -788,8 +820,42 @@ function returnToChronicleHub() {
   if (timeWidget) timeWidget.style.display = 'none';
 }
 
-function enterChronicle(campaignId, role, targetTab = 'gameboard') {
+async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
   campaignId = parseInt(campaignId);
+  if (!campaignId || Number.isNaN(campaignId)) {
+    returnToChronicleHub();
+    return;
+  }
+  try {
+    const dirResponse = await authFetch('/api/chronicles/directory');
+    if (dirResponse.ok) {
+      const chroniclesDirectory = await dirResponse.json();
+      const chronEntry = Array.isArray(chroniclesDirectory)
+        ? chroniclesDirectory.find(c => Number(c.id) === Number(campaignId))
+        : null;
+      if (!chronEntry || (!chronEntry.is_owner && chronEntry.member_status !== 'active')) {
+        localStorage.removeItem('lastChronicleId');
+        localStorage.removeItem('lastChronicleRole');
+        if (chronEntry && chronEntry.member_status === 'pending') {
+          alert('Your request to join this Chronicle is awaiting Storyteller approval.');
+        } else if (chronEntry) {
+          alert('Access denied: The Storyteller must approve your request before you can view or enter this Chronicle.');
+        }
+        returnToChronicleHub();
+        return;
+      }
+      // Enforce verified role from server/directory
+      if (chronEntry.is_owner) {
+        role = 'gm';
+      } else if (chronEntry.member_role === 'storyteller' || chronEntry.member_role === 'gm') {
+        role = 'storyteller';
+      } else {
+        role = 'player';
+      }
+    }
+  } catch (verifyError) {
+    console.error('Failed to verify chronicle membership:', verifyError);
+  }
   // Save the active chronicle ID and role to browser localStorage for session persistence
   localStorage.setItem('lastChronicleId', campaignId);
   localStorage.setItem('lastChronicleRole', role);

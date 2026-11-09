@@ -168,8 +168,8 @@
       const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
       return {
-        topic: parsed.topic || NTFY_DEFAULT_TOPIC,
-        syncEnabled: parsed.syncEnabled !== false,
+        topic: NTFY_DEFAULT_TOPIC,
+        syncEnabled: true,
         lastCloudKey: parsed.lastCloudKey || null,
       };
     } catch (e) {
@@ -287,6 +287,14 @@
         if (!Array.isArray(seed[tbl])) seed[tbl] = [];
       }
 
+      // Mark seed chronicle_members as GM-approved
+      const seedApprovedMemberKeys = new Set(
+        (seed.chronicle_members || []).map((cm) => `${Number(cm.chronicle_id)}_${Number(cm.user_id)}`)
+      );
+      for (const cm of seed.chronicle_members || []) {
+        cm.approved_by_gm = true;
+      }
+
       // Overlay any locally saved edits
       try {
         localStorage.removeItem('vtm_chronicle_cloud_state_v1');
@@ -306,6 +314,14 @@
                 const byId = new Map(seed[key].map((item) => [Number(item.id), item]));
                 for (const sItem of saved[key]) {
                   if (sItem && sItem.id !== undefined) {
+                    if (key === 'chronicle_members') {
+                      const memKey = `${Number(sItem.chronicle_id)}_${Number(sItem.user_id)}`;
+                      const isSeedApproved = seedApprovedMemberKeys.has(memKey);
+                      // Strip unapproved auto-joined active entries created by the old registration bug
+                      if (!isSeedApproved && (sItem.status === 'active' || !sItem.status) && !sItem.approved_by_gm) {
+                        continue;
+                      }
+                    }
                     byId.set(Number(sItem.id), { ...byId.get(Number(sItem.id)), ...sItem });
                   }
                 }
@@ -477,17 +493,44 @@
     };
   }
 
+  function deterministicUserId(username) {
+    const clean = String(username || '').trim().toLowerCase();
+    let hash = 2166136261;
+    for (let i = 0; i < clean.length; i++) {
+      hash ^= clean.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    let candidate = 10000 + (Math.abs(hash) % 89999);
+    const existingIds = new Set((db && db.users ? db.users : []).map((u) => Number(u.id)));
+    while (existingIds.has(candidate)) {
+      candidate++;
+    }
+    return candidate;
+  }
+
   function isChronicleGM(chronicleId, userId) {
-    if (!chronicleId || !userId || !db) return true;
+    if (!chronicleId || !userId || !db) return false;
     const c = (db.chronicles || []).find((x) => Number(x.id) === Number(chronicleId));
     if (c && Number(c.gm_id) === Number(userId)) return true;
     const m = (db.chronicle_members || []).find(
-      (x) => Number(x.chronicle_id) === Number(chronicleId) && Number(x.user_id) === Number(userId)
+      (x) =>
+        Number(x.chronicle_id) === Number(chronicleId) &&
+        Number(x.user_id) === Number(userId) &&
+        (x.status === 'active' || !x.status)
     );
     if (m && (m.role === 'storyteller' || m.role === 'gm')) return true;
     const u = (db.users || []).find((x) => Number(x.id) === Number(userId));
     if (u && (u.role === 'gm' || u.username === 'TohkaTakushi' || u.username === 'storyteller')) return true;
     return false;
+  }
+
+  function isApprovedChronicleMember(chronicleId, userId) {
+    if (!chronicleId || !userId || !db) return false;
+    if (isChronicleGM(chronicleId, userId)) return true;
+    const m = (db.chronicle_members || []).find(
+      (x) => Number(x.chronicle_id) === Number(chronicleId) && Number(x.user_id) === Number(userId)
+    );
+    return Boolean(m && (m.status === 'active' || !m.status));
   }
 
   // ---------------- REAL-TIME SYNC ENGINE (BroadcastChannel + Multi-Relay ntfy SSE) ----------------
@@ -528,20 +571,28 @@
 
   function emitCombinedPresences() {
     const now = Date.now();
+    const defChronId = defaultChronicleId();
     for (const [uid, pres] of activePresencesByUserId.entries()) {
+      if (db && pres.role !== 'gm' && !isApprovedChronicleMember(defChronId, uid)) {
+        activePresencesByUserId.delete(uid);
+        continue;
+      }
       if (localPresenceRecord && Number(uid) === Number(localPresenceRecord.userId)) continue;
       if (pres.lastSeen && now - pres.lastSeen > 240000) {
         activePresencesByUserId.delete(uid);
       }
     }
     if (localPresenceRecord && localPresenceRecord.userId) {
-      localPresenceRecord.lastSeen = now;
-      activePresencesByUserId.set(Number(localPresenceRecord.userId), localPresenceRecord);
+      if (!db || isApprovedChronicleMember(defChronId, localPresenceRecord.userId)) {
+        localPresenceRecord.lastSeen = now;
+        activePresencesByUserId.set(Number(localPresenceRecord.userId), localPresenceRecord);
+      } else {
+        activePresencesByUserId.delete(Number(localPresenceRecord.userId));
+        localPresenceRecord = null;
+      }
     }
     const list = Array.from(activePresencesByUserId.values());
-    if (list.length > 0) {
-      emitToLocalSockets('presence:sync', list);
-    }
+    emitToLocalSockets('presence:sync', list);
   }
 
   function postToAllRelays(topic, bodyStr) {
@@ -598,10 +649,11 @@
   }
 
   function broadcastLocalPresence(isJoin = false, isReply = false) {
+    const defChronId = defaultChronicleId();
     if (!localPresenceRecord) {
       const authUser = extractValidAuthUser();
-      if (authUser && authUser.id) {
-        const defChronId = defaultChronicleId();
+      const hasEnteredChronicle = Boolean(localStorage.getItem('lastChronicleId'));
+      if (authUser && authUser.id && hasEnteredChronicle && isApprovedChronicleMember(defChronId, authUser.id)) {
         const isGm = isChronicleGM(defChronId, authUser.id);
         const ownedPc = !isGm
           ? (db && db.characters ? db.characters : []).find(
@@ -629,6 +681,12 @@
       }
     }
     if (!localPresenceRecord || !localPresenceRecord.userId) return;
+    if (db && !isApprovedChronicleMember(defChronId, localPresenceRecord.userId)) {
+      activePresencesByUserId.delete(Number(localPresenceRecord.userId));
+      localPresenceRecord = null;
+      emitCombinedPresences();
+      return;
+    }
     localPresenceRecord.lastSeen = Date.now();
     activePresencesByUserId.set(Number(localPresenceRecord.userId), localPresenceRecord);
     emitCombinedPresences();
@@ -793,6 +851,9 @@
     });
     const discoveredClueIds = (db.clues || []).filter((c) => Number(c.discovered) === 1).map((c) => Number(c.id));
     const discoveredLoreIds = (db.lore_entries || []).filter((l) => Number(l.discovered) === 1).map((l) => Number(l.id));
+    const activeMemberIds = (db.chronicle_members || [])
+      .filter((cm) => Number(cm.chronicle_id) === defaultChronicleId() && (cm.status === 'active' || !cm.status))
+      .map((cm) => Number(cm.user_id));
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
@@ -800,6 +861,7 @@
       characters: compactChars,
       discovered_clue_ids: discoveredClueIds,
       discovered_lore_ids: discoveredLoreIds,
+      active_member_ids: activeMemberIds,
     });
     setTimeout(() => {
       if (!db) return;
@@ -940,7 +1002,10 @@
           gs._syncTs = pktTs;
           lastSceneSyncTs = Math.max(lastSceneSyncTs, pktTs);
         }
-        if (pkt.episode && pkt.episode.id !== undefined) {
+        const deletedEpisodeIds = (db._deleted && Array.isArray(db._deleted.episodes))
+          ? db._deleted.episodes.map(Number)
+          : [];
+        if (pkt.episode && pkt.episode.id !== undefined && !deletedEpisodeIds.includes(Number(pkt.episode.id))) {
           db.episodes = db.episodes || [];
           const epIdx = db.episodes.findIndex((e) => Number(e.id) === Number(pkt.episode.id));
           if (epIdx >= 0) {
@@ -949,7 +1014,11 @@
             db.episodes.push(pkt.episode);
           }
         }
-        if (pkt.scene.active_episode_id !== undefined && pkt.scene.active_episode_id !== null)
+        if (
+          pkt.scene.active_episode_id !== undefined &&
+          pkt.scene.active_episode_id !== null &&
+          !deletedEpisodeIds.includes(Number(pkt.scene.active_episode_id))
+        )
           gs.active_episode_id = pkt.scene.active_episode_id;
         if (pkt.scene.active_location !== undefined && pkt.scene.active_location !== '')
           gs.active_location = pkt.scene.active_location;
@@ -1028,6 +1097,10 @@
     }
 
     if (pkt.type === 'presence_update' && pkt.presence && pkt.presence.userId) {
+      const defChronId = defaultChronicleId();
+      if (db && pkt.presence.role !== 'gm' && !isApprovedChronicleMember(defChronId, pkt.presence.userId)) {
+        return;
+      }
       if (!isReplay || Date.now() - (pkt.ts || 0) < 240000) {
         activePresencesByUserId.set(Number(pkt.presence.userId), {
           ...pkt.presence,
@@ -1187,6 +1260,55 @@
           }
         }
       }
+      if (Array.isArray(pkt.active_member_ids)) {
+        const defChronId = defaultChronicleId();
+        const activeSet = new Set(pkt.active_member_ids.map(Number));
+        const authUser = extractValidAuthUser();
+        const isSelfGm = authUser && isChronicleGM(defChronId, authUser.id);
+        if (!isSelfGm) {
+          db.chronicle_members = db.chronicle_members || [];
+          const beforeLen = db.chronicle_members.length;
+          // Remove any active membership not in the Storyteller's authoritative active_member_ids list (keep pending requests)
+          db.chronicle_members = db.chronicle_members.filter((cm) => {
+            if (Number(cm.chronicle_id) !== defChronId) return true;
+            if (cm.status === 'pending') return true;
+            return activeSet.has(Number(cm.user_id));
+          });
+          // Ensure every active_member_id is marked active & approved
+          for (const uid of activeSet) {
+            let mem = db.chronicle_members.find(
+              (cm) => Number(cm.chronicle_id) === defChronId && Number(cm.user_id) === uid
+            );
+            if (!mem) {
+              mem = {
+                id: defChronId * 100000 + uid,
+                chronicle_id: defChronId,
+                user_id: uid,
+                joined_at: new Date().toISOString(),
+                status: 'active',
+                role: 'player',
+                approved_by_gm: true,
+              };
+              db.chronicle_members.push(mem);
+              anyChanged = true;
+            } else if (mem.status !== 'active' || !mem.approved_by_gm) {
+              mem.status = 'active';
+              mem.approved_by_gm = true;
+              anyChanged = true;
+            }
+          }
+          if (db.chronicle_members.length !== beforeLen) {
+            anyChanged = true;
+          }
+          if (authUser && authUser.id && !activeSet.has(Number(authUser.id))) {
+            emitToLocalSockets('coterie:member_removed', {
+              chronicle_id: defChronId,
+              campaign_id: defChronId,
+              user_id: Number(authUser.id),
+            });
+          }
+        }
+      }
       if (anyChanged || clueOrLoreChanged) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
@@ -1298,6 +1420,97 @@
           } catch (e) {}
         }
       }
+      if (pkt.event === 'coterie:request_received' && pkt.data && db) {
+        if (pkt.data.userRecord && pkt.data.userRecord.id !== undefined) {
+          db.users = db.users || [];
+          const uIdx = db.users.findIndex(
+            (u) =>
+              Number(u.id) === Number(pkt.data.userRecord.id) ||
+              (u.username &&
+                pkt.data.userRecord.username &&
+                String(u.username).toLowerCase() === String(pkt.data.userRecord.username).toLowerCase())
+          );
+          if (uIdx >= 0) db.users[uIdx] = { ...db.users[uIdx], ...pkt.data.userRecord };
+          else db.users.push(pkt.data.userRecord);
+        }
+        if (pkt.data.memberRecord && pkt.data.memberRecord.user_id !== undefined) {
+          db.chronicle_members = db.chronicle_members || [];
+          if (db._deleted && Array.isArray(db._deleted.chronicle_members)) {
+            db._deleted.chronicle_members = db._deleted.chronicle_members.filter(
+              (id) => Number(id) !== Number(pkt.data.memberRecord.id)
+            );
+          }
+          const mIdx = db.chronicle_members.findIndex(
+            (cm) =>
+              Number(cm.chronicle_id) === Number(pkt.data.memberRecord.chronicle_id) &&
+              Number(cm.user_id) === Number(pkt.data.memberRecord.user_id)
+          );
+          if (mIdx >= 0) {
+            if (db.chronicle_members[mIdx].status !== 'active') {
+              db.chronicle_members[mIdx] = { ...db.chronicle_members[mIdx], ...pkt.data.memberRecord };
+            }
+          } else {
+            db.chronicle_members.push(pkt.data.memberRecord);
+          }
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+      }
+      if (pkt.event === 'coterie:request_approved' && pkt.data && db) {
+        const cId = Number(pkt.data.chronicle_id || pkt.data.campaign_id || pkt.data.chronicleId) || defaultChronicleId();
+        const targetUid = Number(pkt.data.user_id || pkt.data.userId);
+        if (targetUid) {
+          db.chronicle_members = db.chronicle_members || [];
+          const memRec = pkt.data.memberRecord || {
+            id: cId * 100000 + targetUid,
+            chronicle_id: cId,
+            user_id: targetUid,
+            joined_at: new Date().toISOString(),
+            status: 'active',
+            role: 'player',
+            approved_by_gm: true,
+          };
+          memRec.status = 'active';
+          memRec.approved_by_gm = true;
+          if (db._deleted && Array.isArray(db._deleted.chronicle_members)) {
+            db._deleted.chronicle_members = db._deleted.chronicle_members.filter((id) => Number(id) !== Number(memRec.id));
+          }
+          const mIdx = db.chronicle_members.findIndex(
+            (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUid
+          );
+          if (mIdx >= 0) db.chronicle_members[mIdx] = { ...db.chronicle_members[mIdx], ...memRec };
+          else db.chronicle_members.push(memRec);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          } catch (e) {}
+        }
+      }
+      if (pkt.event === 'coterie:member_removed' && pkt.data && db) {
+        const cId = Number(pkt.data.chronicle_id || pkt.data.campaign_id || pkt.data.chronicleId) || defaultChronicleId();
+        const targetUid = Number(pkt.data.user_id || pkt.data.userId);
+        if (targetUid) {
+          const toDelete = (db.chronicle_members || []).filter(
+            (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUid
+          );
+          for (const m of toDelete) {
+            recordDelete('chronicle_members', m.id);
+          }
+          if (Array.isArray(pkt.data.deletedMemberIds)) {
+            for (const delId of pkt.data.deletedMemberIds) {
+              recordDelete('chronicle_members', delId);
+            }
+          }
+          db.chronicle_members = (db.chronicle_members || []).filter(
+            (cm) => !(Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUid)
+          );
+          activePresencesByUserId.delete(targetUid);
+          if (!isReplay) emitCombinedPresences();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          } catch (e) {}
+        }
+      }
       if (pkt.dbPatch && db) {
         applyDbPatch(pkt.dbPatch, true);
       }
@@ -1319,6 +1532,9 @@
       db[table] = db[table].filter((r) => Number(r.id) !== Number(deleteId));
       recordDelete(table, deleteId);
     } else if (row && row.id !== undefined) {
+      if (db._deleted && Array.isArray(db._deleted[table]) && db._deleted[table].map(Number).includes(Number(row.id))) {
+        return;
+      }
       const idx = db[table].findIndex((r) => Number(r.id) === Number(row.id));
       if (idx >= 0) db[table][idx] = { ...db[table][idx], ...row };
       else db[table].push(row);
@@ -1798,14 +2014,42 @@
     const user = validUser || parseAuthUser();
     const defChronId = defaultChronicleId();
 
+    if (event === 'room:leave') {
+      sock.chronicleId = null;
+      sock.presence = null;
+      const leavingUid = Number((localPresenceRecord && localPresenceRecord.userId) || (validUser && validUser.id) || 0);
+      localPresenceRecord = null;
+      if (leavingUid) {
+        activePresencesByUserId.delete(leavingUid);
+        emitCombinedPresences();
+        sendRawNtfyPacket({
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'presence_leave',
+          userId: leavingUid,
+        });
+      }
+      return;
+    }
+
     if (event === 'room:join') {
       const campId =
         typeof data === 'object' && data !== null
-          ? Number(data.chronicleId || data.campaignId) || defChronId
-          : Number(data) || defChronId;
+          ? Number(data.chronicleId || data.campaignId)
+          : Number(data);
+      if (!campId) return;
+      const uid = Number((data && data.userId) || (validUser && validUser.id) || (user && user.id));
+      if (!uid || !isApprovedChronicleMember(campId, uid)) {
+        sock.chronicleId = null;
+        sock.presence = null;
+        localPresenceRecord = null;
+        if (uid) activePresencesByUserId.delete(uid);
+        emitCombinedPresences();
+        return;
+      }
       sock.chronicleId = campId;
-      const uid = Number((data && data.userId) || (validUser && validUser.id) || user.id);
-      const uRole = (data && data.role) || (validUser && validUser.role) || user.role || 'player';
+      const isGm = isChronicleGM(campId, uid);
+      const uRole = isGm ? 'gm' : (data && data.role) || (validUser && validUser.role) || user.role || 'player';
       let charData = null;
       if (data && data.characterId) {
         charData = (db.characters || []).find((c) => Number(c.id) === Number(data.characterId)) || null;
@@ -2083,7 +2327,7 @@
         ) || null;
       if (!u && uname) {
         u = {
-          id: nextId('users'),
+          id: deterministicUserId(body.username.trim()),
           username: body.username.trim(),
           display_name: body.username.trim(),
           role: 'player',
@@ -2120,7 +2364,7 @@
       const existing = (db.users || []).find((x) => (x.username || '').toLowerCase() === username.toLowerCase());
       if (existing) return jsonResponse({ error: 'Username already taken.' }, 400);
       const newUser = {
-        id: nextId('users'),
+        id: deterministicUserId(username),
         username,
         display_name: displayName,
         role: 'player',
@@ -2129,14 +2373,7 @@
         avatar_url: null,
       };
       db.users.push(newUser);
-      db.chronicle_members.push({
-        id: nextId('chronicle_members'),
-        chronicle_id: defChronId,
-        user_id: newUser.id,
-        status: 'active',
-        role: 'player',
-        joined_at: new Date().toISOString(),
-      });
+      // Do NOT auto-insert into chronicle_members: Storyteller approval is required before joining any chronicle
       persistDb({ table: 'users', row: newUser });
       const userPayload = { id: newUser.id, username: newUser.username, displayName: newUser.display_name, role: 'player' };
       try {
@@ -2627,8 +2864,8 @@
           ...c,
           gm_name: gmUser ? gmUser.display_name || gmUser.username : 'Storyteller',
           is_owner: Boolean(isOwner),
-          member_status: isOwner ? 'active' : mem ? mem.status || 'active' : 'active',
-          member_role: isOwner ? 'storyteller' : mem ? mem.role || 'player' : 'player',
+          member_status: isOwner ? 'active' : mem ? (mem.status || 'active') : null,
+          member_role: isOwner ? 'storyteller' : mem ? (mem.role || 'player') : null,
           player_count: activePlayers,
         };
       });
@@ -2723,7 +2960,11 @@
       const cId = Number(chronIdMatch[1]);
       const chron = (db.chronicles || []).find((c) => Number(c.id) === cId);
       if (method === 'GET') {
-        return chron ? jsonResponse(chron) : jsonResponse({ error: 'Chronicle not found' }, 404);
+        if (!chron) return jsonResponse({ error: 'Chronicle not found' }, 404);
+        if (!isApprovedChronicleMember(cId, user.id)) {
+          return jsonResponse({ error: 'Access denied: Storyteller approval is required to view this Chronicle.' }, 403);
+        }
+        return jsonResponse(chron);
       }
       if (method === 'PUT' && chron) {
         Object.assign(chron, {
@@ -2740,6 +2981,10 @@
         return jsonResponse({ success: true });
       }
       if (method === 'DELETE') {
+        (db.campaigns || []).filter((c) => Number(c.chronicle_id) === cId).forEach((c) => recordDelete('campaigns', c.id));
+        db.campaigns = (db.campaigns || []).filter((c) => Number(c.chronicle_id) !== cId);
+        (db.episodes || []).filter((e) => Number(e.chronicle_id) === cId).forEach((e) => recordDelete('episodes', e.id));
+        db.episodes = (db.episodes || []).filter((e) => Number(e.chronicle_id) !== cId);
         db.chronicles = (db.chronicles || []).filter((c) => Number(c.id) !== cId);
         recordDelete('chronicles', cId);
         persistDb({ table: 'chronicles', deleteId: cId });
@@ -2788,10 +3033,28 @@
     if (memberDelMatch && method === 'DELETE') {
       const cId = Number(memberDelMatch[1]);
       const targetUserId = Number(memberDelMatch[2]);
+      const toRemove = (db.chronicle_members || []).filter(
+        (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId
+      );
+      const deletedMemberIds = toRemove.map((m) => m.id);
+      for (const m of toRemove) {
+        recordDelete('chronicle_members', m.id);
+      }
       db.chronicle_members = (db.chronicle_members || []).filter(
         (cm) => !(Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId)
       );
-      persistDb();
+      activePresencesByUserId.delete(targetUserId);
+      emitCombinedPresences();
+      persistDb(deletedMemberIds.length > 0 ? { table: 'chronicle_members', deleteId: deletedMemberIds[0] } : null);
+      publishRealtimeEvent('coterie:member_removed', {
+        chronicle_id: cId,
+        campaign_id: cId,
+        chronicleId: cId,
+        user_id: targetUserId,
+        userId: targetUserId,
+        deletedMemberIds,
+      });
+      broadcastStorytellerAuthoritativeState();
       return jsonResponse({ success: true });
     }
 
@@ -2813,33 +3076,90 @@
       const action = inviteMatch[2];
       const targetUserId = Number(body.user_id || user.id);
       if (action === 'deny-join') {
+        const toRemove = (db.chronicle_members || []).filter(
+          (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId
+        );
+        const deletedMemberIds = toRemove.map((m) => m.id);
+        for (const m of toRemove) {
+          recordDelete('chronicle_members', m.id);
+        }
         db.chronicle_members = (db.chronicle_members || []).filter(
           (cm) => !(Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId)
         );
-        persistDb();
+        activePresencesByUserId.delete(targetUserId);
+        emitCombinedPresences();
+        persistDb(deletedMemberIds.length > 0 ? { table: 'chronicle_members', deleteId: deletedMemberIds[0] } : null);
+        publishRealtimeEvent('coterie:member_removed', {
+          chronicle_id: cId,
+          campaign_id: cId,
+          chronicleId: cId,
+          user_id: targetUserId,
+          userId: targetUserId,
+          deletedMemberIds,
+        });
+        broadcastStorytellerAuthoritativeState();
         return jsonResponse({ success: true, message: 'Request denied.' });
       }
       let mem = (db.chronicle_members || []).find(
         (cm) => Number(cm.chronicle_id) === cId && Number(cm.user_id) === targetUserId
       );
+      const deterministicMemId = cId * 100000 + targetUserId;
+      if (db._deleted && Array.isArray(db._deleted.chronicle_members)) {
+        db._deleted.chronicle_members = db._deleted.chronicle_members.filter(
+          (id) => Number(id) !== deterministicMemId && (!mem || Number(id) !== Number(mem.id))
+        );
+      }
       if (!mem) {
         mem = {
-          id: nextId('chronicle_members'),
+          id: deterministicMemId,
           chronicle_id: cId,
           user_id: targetUserId,
           joined_at: new Date().toISOString(),
           status: action === 'request-join' ? 'pending' : 'active',
           role: 'player',
+          approved_by_gm: action !== 'request-join',
         };
         db.chronicle_members.push(mem);
       } else {
-        mem.status = action === 'request-join' ? mem.status || 'pending' : 'active';
+        mem.status = action === 'request-join' ? (mem.status === 'active' && mem.approved_by_gm ? 'active' : 'pending') : 'active';
+        if (action !== 'request-join') {
+          mem.approved_by_gm = true;
+        }
+      }
+      let userRecord = (db.users || []).find((u) => Number(u.id) === targetUserId);
+      if (!userRecord && action === 'request-join') {
+        userRecord = {
+          id: targetUserId,
+          username: user.username || 'player',
+          display_name: user.displayName || user.username || 'Player',
+          role: 'player',
+          created_at: new Date().toISOString(),
+        };
+        db.users.push(userRecord);
       }
       persistDb({ table: 'chronicle_members', row: mem });
       if (action === 'request-join') {
-        publishRealtimeEvent('coterie:request_received', { chronicleId: cId, userId: targetUserId });
+        publishRealtimeEvent('coterie:request_received', {
+          chronicle_id: cId,
+          campaign_id: cId,
+          chronicleId: cId,
+          user_id: targetUserId,
+          userId: targetUserId,
+          username: userRecord ? userRecord.username : user.username,
+          display_name: userRecord ? userRecord.display_name : user.displayName || user.username,
+          userRecord,
+          memberRecord: mem,
+        });
       } else {
-        publishRealtimeEvent('coterie:request_approved', { chronicleId: cId, userId: targetUserId });
+        publishRealtimeEvent('coterie:request_approved', {
+          chronicle_id: cId,
+          campaign_id: cId,
+          chronicleId: cId,
+          user_id: targetUserId,
+          userId: targetUserId,
+          memberRecord: mem,
+        });
+        broadcastStorytellerAuthoritativeState();
       }
       return jsonResponse({ success: true, status: mem.status, message: 'Updated membership.' });
     }
@@ -2879,6 +3199,9 @@
         return jsonResponse({ success: true });
       }
       if (method === 'DELETE') {
+        const campEpisodes = (db.episodes || []).filter((e) => Number(e.campaign_id) === campId);
+        campEpisodes.forEach((ep) => recordDelete('episodes', ep.id));
+        db.episodes = (db.episodes || []).filter((e) => Number(e.campaign_id) !== campId);
         db.campaigns = (db.campaigns || []).filter((c) => Number(c.id) !== campId);
         recordDelete('campaigns', campId);
         persistDb({ table: 'campaigns', deleteId: campId });
@@ -2943,9 +3266,44 @@
     if (epItemMatch) {
       const epId = Number(epItemMatch[1]);
       if (method === 'DELETE') {
+        const targetEp = (db.episodes || []).find((e) => Number(e.id) === epId);
+        const epChronId = targetEp ? Number(targetEp.chronicle_id) : defChronId;
+        // Cascade-delete clue matrices & clues tied to this episode
+        const epMatrixIds = (db.clue_matrices || [])
+          .filter((m) => Number(m.episode_id) === epId)
+          .map((m) => Number(m.id));
+        if (epMatrixIds.length > 0) {
+          (db.clues || [])
+            .filter((c) => epMatrixIds.includes(Number(c.matrix_id)))
+            .forEach((c) => recordDelete('clues', c.id));
+          db.clues = (db.clues || []).filter((c) => !epMatrixIds.includes(Number(c.matrix_id)));
+          epMatrixIds.forEach((mId) => recordDelete('clue_matrices', mId));
+          db.clue_matrices = (db.clue_matrices || []).filter((m) => !epMatrixIds.includes(Number(m.id)));
+        }
+        // Cascade-delete lore matrices & lore entries tied to this episode
+        const epLoreMatrixIds = (db.lore_matrices || [])
+          .filter((lm) => Number(lm.episode_id) === epId)
+          .map((lm) => Number(lm.id));
+        if (epLoreMatrixIds.length > 0) {
+          (db.lore_entries || [])
+            .filter((le) => epLoreMatrixIds.includes(Number(le.matrix_id)))
+            .forEach((le) => recordDelete('lore_entries', le.id));
+          db.lore_entries = (db.lore_entries || []).filter((le) => !epLoreMatrixIds.includes(Number(le.matrix_id)));
+          epLoreMatrixIds.forEach((lmId) => recordDelete('lore_matrices', lmId));
+          db.lore_matrices = (db.lore_matrices || []).filter((lm) => !epLoreMatrixIds.includes(Number(lm.id)));
+        }
         db.episodes = (db.episodes || []).filter((e) => Number(e.id) !== epId);
         recordDelete('episodes', epId);
+        // If the deleted episode was the active gameboard episode, advance or clear active_episode_id
+        const gs = (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === epChronId);
+        if (gs && Number(gs.active_episode_id) === epId) {
+          const remainingEps = (db.episodes || [])
+            .filter((e) => Number(e.chronicle_id) === epChronId)
+            .sort((a, b) => Number(a.episode_number) - Number(b.episode_number));
+          gs.active_episode_id = remainingEps.length > 0 ? remainingEps[0].id : null;
+        }
         persistDb({ table: 'episodes', deleteId: epId });
+        emitToLocalSockets('episode:updated', { deletedId: epId });
         return jsonResponse({ success: true });
       }
       const ep = (db.episodes || []).find((e) => Number(e.id) === epId);
@@ -3062,6 +3420,12 @@
     const matDelMatch = path.match(/^\/api\/matrices\/(\d+)$/);
     if (matDelMatch && method === 'DELETE') {
       const mId = Number(matDelMatch[1]);
+      const childClues = (db.clues || []).filter((c) => Number(c.matrix_id) === mId);
+      childClues.forEach((c) => {
+        recordDelete('clues', c.id);
+        emitToLocalSockets('gameboard:clue_hidden', { id: c.id });
+      });
+      db.clues = (db.clues || []).filter((c) => Number(c.matrix_id) !== mId);
       db.clue_matrices = (db.clue_matrices || []).filter((m) => Number(m.id) !== mId);
       recordDelete('clue_matrices', mId);
       persistDb({ table: 'clue_matrices', deleteId: mId });
@@ -3105,6 +3469,8 @@
         db.clues = (db.clues || []).filter((c) => Number(c.id) !== clueId);
         recordDelete('clues', clueId);
         persistDb({ table: 'clues', deleteId: clueId });
+        emitToLocalSockets('gameboard:clue_hidden', { id: clueId });
+        publishRealtimeEvent('gameboard:clue_hidden', { id: clueId }, { table: 'clues', deleteId: clueId });
         return jsonResponse({ success: true });
       }
     }
@@ -3164,6 +3530,12 @@
     const loreMatDelMatch = path.match(/^\/api\/lore_matrices\/(\d+)$/);
     if (loreMatDelMatch && method === 'DELETE') {
       const lmId = Number(loreMatDelMatch[1]);
+      const childLore = (db.lore_entries || []).filter((le) => Number(le.matrix_id) === lmId);
+      childLore.forEach((le) => {
+        recordDelete('lore_entries', le.id);
+        emitToLocalSockets('gameboard:lore_hidden', { id: le.id });
+      });
+      db.lore_entries = (db.lore_entries || []).filter((le) => Number(le.matrix_id) !== lmId);
       db.lore_matrices = (db.lore_matrices || []).filter((m) => Number(m.id) !== lmId);
       recordDelete('lore_matrices', lmId);
       persistDb({ table: 'lore_matrices', deleteId: lmId });
@@ -3204,6 +3576,8 @@
         db.lore_entries = (db.lore_entries || []).filter((x) => Number(x.id) !== leId);
         recordDelete('lore_entries', leId);
         persistDb({ table: 'lore_entries', deleteId: leId });
+        emitToLocalSockets('gameboard:lore_hidden', { id: leId });
+        publishRealtimeEvent('gameboard:lore_hidden', { id: leId }, { table: 'lore_entries', deleteId: leId });
         return jsonResponse({ success: true });
       }
     }
@@ -3948,8 +4322,30 @@
         return jsonResponse({ success: true });
       }
       if (method === 'DELETE') {
-        db.rules_codex = (db.rules_codex || []).filter((r) => Number(r.id) !== rId);
-        recordDelete('rules_codex', rId);
+        const cascade = q.get('cascade') === 'true';
+        const targetRule = (db.rules_codex || []).find((r) => Number(r.id) === rId);
+        const idsToDelete = new Set([rId]);
+        if (cascade) {
+          let added = true;
+          while (added) {
+            added = false;
+            for (const r of db.rules_codex || []) {
+              if (r.parent_id && idsToDelete.has(Number(r.parent_id)) && !idsToDelete.has(Number(r.id))) {
+                idsToDelete.add(Number(r.id));
+                added = true;
+              }
+            }
+          }
+        } else {
+          const fallbackParentId = targetRule ? targetRule.parent_id || null : null;
+          for (const r of db.rules_codex || []) {
+            if (Number(r.parent_id) === rId) {
+              r.parent_id = fallbackParentId;
+            }
+          }
+        }
+        db.rules_codex = (db.rules_codex || []).filter((r) => !idsToDelete.has(Number(r.id)));
+        idsToDelete.forEach((delId) => recordDelete('rules_codex', delId));
         persistDb({ table: 'rules_codex', deleteId: rId });
         emitToLocalSockets('rules:updated', { id: rId, deleted: true });
         return jsonResponse({ success: true });
@@ -4116,9 +4512,21 @@
         return jsonResponse({ success: true, name: cat.name });
       }
       if (method === 'DELETE') {
+        const parentCat = cat.parent_id
+          ? (db.asset_categories || []).find((c) => Number(c.id) === Number(cat.parent_id))
+          : null;
+        for (const childCat of db.asset_categories || []) {
+          if (Number(childCat.parent_id) === catId) {
+            childCat.parent_id = cat.parent_id || null;
+          }
+        }
         for (const a of db.chronicle_assets || []) {
-          if (Number(a.chronicle_id) === Number(cat.chronicle_id) && a.category === cat.name) {
-            a.category = 'Uncategorized';
+          if (
+            Number(a.category_id) === catId ||
+            (Number(a.chronicle_id) === Number(cat.chronicle_id) && a.category === cat.name)
+          ) {
+            a.category_id = cat.parent_id || null;
+            a.category = parentCat ? parentCat.name : 'Uncategorized';
           }
         }
         db.asset_categories = (db.asset_categories || []).filter((c) => Number(c.id) !== catId);
@@ -4291,232 +4699,20 @@
 
   function updateCloudBadgeStatus(label) {
     currentCloudStatusLabel = label;
-    const el = document.getElementById('vtmCloudBadgeText');
-    if (el) el.textContent = label;
   }
 
   function injectCloudSyncControls() {
-    if (window.location.pathname.includes('/sheets/')) return;
-    if (document.getElementById('vtmCloudSyncPill')) return;
-
-    const rightBar = document.querySelector('.elysium-bar-right');
-    if (rightBar) {
-      const pill = document.createElement('button');
-      pill.id = 'vtmCloudSyncPill';
-      pill.className = 'btn-action-outline btn-sm';
-      pill.style.cssText =
-        'margin-right: 10px; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(239,68,68,0.45); font-size: 11px; padding: 4px 10px;';
-      pill.title = 'Cloud Sync, Account Switcher & Backup Manager';
-      pill.innerHTML = `<i class="fa-solid fa-cloud" style="color:#ef4444;"></i> <span id="vtmCloudBadgeText">${currentCloudStatusLabel}</span>`;
-      pill.onclick = () => openCloudSyncModal();
-      rightBar.insertBefore(pill, rightBar.firstChild);
-    }
-
-    // Also add quick account switcher inside the login form for 1-click sign-in on GitHub Pages
-    const authForm = document.getElementById('authForm');
-    if (authForm && !document.getElementById('vtmQuickLoginBox') && db && Array.isArray(db.users)) {
-      const box = document.createElement('div');
-      box.id = 'vtmQuickLoginBox';
-      box.style.cssText =
-        'margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); text-align: left;';
-      box.innerHTML = `
-        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
-          <i class="fa-solid fa-bolt" style="color:#ef4444;"></i> Quick Chronicle Sign-In (No Password Required on GitHub Pages)
-        </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-          ${db.users
-            .map(
-              (u) => `
-            <button type="button" class="btn-action-outline btn-sm" style="font-size: 11px; padding: 4px 8px;" data-quick-user="${u.username}">
-              <i class="fa-solid ${u.role === 'gm' || u.username === 'TohkaTakushi' ? 'fa-crown' : 'fa-user'}" style="color:${
-                u.role === 'gm' || u.username === 'TohkaTakushi' ? '#f59e0b' : '#ef4444'
-              };"></i> ${u.display_name || u.username}
-            </button>`
-            )
-            .join('')}
-        </div>
-      `;
-      box.querySelectorAll('[data-quick-user]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const uname = btn.getAttribute('data-quick-user');
-          const uInput = document.getElementById('authUsername');
-          const pInput = document.getElementById('authPassword');
-          if (uInput) uInput.value = uname;
-          if (pInput) pInput.value = 'chronicle';
-          authForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        });
-      });
-      authForm.appendChild(box);
-    }
+    // Cloud Live button and account switcher intentionally removed so all players stay on the unified server channel
+    const existingPill = document.getElementById('vtmCloudSyncPill');
+    if (existingPill) existingPill.remove();
+    const existingModal = document.getElementById('vtmCloudSyncModal');
+    if (existingModal) existingModal.remove();
+    const existingQuickLogin = document.getElementById('vtmQuickLoginBox');
+    if (existingQuickLogin) existingQuickLogin.remove();
   }
 
   function openCloudSyncModal() {
-    let modal = document.getElementById('vtmCloudSyncModal');
-    if (modal) modal.remove();
-
-    const cfg = getCloudConfig();
-    const users = (db && db.users) || [];
-    const currentUser = parseAuthUser();
-
-    modal = document.createElement('div');
-    modal.id = 'vtmCloudSyncModal';
-    modal.className = 'modal-overlay active';
-    modal.style.cssText = 'display:flex; z-index: 1000000;';
-    modal.onclick = (e) => {
-      if (e.target === modal) modal.remove();
-    };
-
-    modal.innerHTML = `
-      <div class="modal-container" style="max-width: 540px; width: 92%;">
-        <div class="modal-header">
-          <h3><i class="fa-solid fa-cloud" style="color:#ef4444;margin-right:8px;"></i> Elysium Cloud Sync & Account Switcher</h3>
-          <button class="btn-close-modal" onclick="document.getElementById('vtmCloudSyncModal').remove()"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div class="modal-body form-body" style="display:flex; flex-direction:column; gap:14px;">
-          <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 12px; font-size:12px; color:#e2e8f0; line-height:1.5;">
-            <strong>Zero-VPN Cloud Mode Active:</strong> Dice rolls, chat messages, scene transitions, clue reveals, and character sheet edits sync live across browsers via <code>ntfy.sh</code> SSE and cloud state snapshots.
-          </div>
-
-          <div class="form-col">
-            <label>Switch Active Account (Current: <strong>${currentUser.displayName || currentUser.username}</strong>)</label>
-            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
-              ${users
-                .map(
-                  (u) => `
-                <button type="button" class="btn-action-outline btn-sm" data-switch-user="${u.id}" style="font-size:11px; padding:5px 10px; ${
-                    Number(u.id) === Number(currentUser.id) ? 'border-color:#ef4444; background:rgba(239,68,68,0.2);' : ''
-                  }">
-                  <i class="fa-solid ${u.role === 'gm' || u.username === 'TohkaTakushi' ? 'fa-crown' : 'fa-user'}"></i>
-                  ${u.display_name || u.username}
-                </button>`
-                )
-                .join('')}
-            </div>
-          </div>
-
-          <div class="form-col">
-            <label>Live Sync Channel Topic (ntfy.sh SSE)</label>
-            <div style="display:flex; gap:8px;">
-              <input type="text" id="vtmCloudTopicInput" class="vtm-input" value="${cfg.topic}" style="flex:1;">
-              <button type="button" class="btn-action" id="vtmSaveTopicBtn">Save Channel</button>
-            </div>
-          </div>
-
-          <div class="form-col">
-            <label>Cloud Snapshot Sync (Push / Pull Full Table State Across Devices)</label>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button type="button" class="btn-action" id="vtmPushCloudBtn"><i class="fa-solid fa-cloud-arrow-up"></i> Push Table to Cloud</button>
-              <input type="text" id="vtmPullKeyInput" class="vtm-input" placeholder="Snapshot code..." value="${
-                cfg.lastCloudKey || ''
-              }" style="width:150px;">
-              <button type="button" class="btn-action-outline" id="vtmPullCloudBtn"><i class="fa-solid fa-cloud-arrow-down"></i> Pull</button>
-            </div>
-          </div>
-
-          <div class="form-col" style="border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
-            <label>Chronicle Database Backup & Restore</label>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button type="button" class="btn-action-outline btn-sm" id="vtmExportJsonBtn"><i class="fa-solid fa-download"></i> Export Full JSON</button>
-              <label class="btn-action-outline btn-sm" style="cursor:pointer; margin:0;">
-                <i class="fa-solid fa-upload"></i> Import JSON
-                <input type="file" id="vtmImportJsonInput" accept=".json" style="display:none;">
-              </label>
-              <button type="button" class="btn-action-outline btn-sm" id="vtmResetCanonicalBtn" style="border-color:#ef4444; color:#fca5a5;">
-                <i class="fa-solid fa-rotate-left"></i> Reset to Linux Mint Live State
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelectorAll('[data-switch-user]').forEach((btn) => {
-      btn.onclick = () => {
-        const uid = Number(btn.getAttribute('data-switch-user'));
-        const u = users.find((x) => Number(x.id) === uid);
-        if (u) {
-          const isGm =
-            u.role === 'gm' ||
-            u.username === 'TohkaTakushi' ||
-            (db.chronicles || []).some((c) => Number(c.gm_id) === Number(u.id));
-          const payload = {
-            id: u.id,
-            username: u.username,
-            displayName: u.display_name || u.username,
-            role: isGm ? 'gm' : u.role || 'player',
-            bio: u.bio || null,
-            avatar_url: u.avatar_url || null,
-            avatar: u.avatar_url || null,
-          };
-          localStorage.setItem('vtm_auth_token', makeMockToken(payload));
-          localStorage.setItem('vtm_user', JSON.stringify(payload));
-          window.location.reload();
-        }
-      };
-    });
-
-    modal.querySelector('#vtmSaveTopicBtn').onclick = () => {
-      const topic = modal.querySelector('#vtmCloudTopicInput').value.trim() || NTFY_DEFAULT_TOPIC;
-      saveCloudConfig({ topic });
-      startRealtimeListeners();
-      alert('Live sync channel updated to: ' + topic);
-    };
-
-    modal.querySelector('#vtmPushCloudBtn').onclick = async () => {
-      const key = await pushCloudSnapshot(true);
-      if (key && modal.querySelector('#vtmPullKeyInput')) {
-        modal.querySelector('#vtmPullKeyInput').value = key;
-      }
-    };
-
-    modal.querySelector('#vtmPullCloudBtn').onclick = async () => {
-      const key = modal.querySelector('#vtmPullKeyInput').value.trim();
-      if (!key) return alert('Enter a snapshot code first.');
-      await pullCloudSnapshot(key, true);
-    };
-
-    modal.querySelector('#vtmExportJsonBtn').onclick = () => {
-      const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `vtm-chronicle-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-    };
-
-    modal.querySelector('#vtmImportJsonInput').onchange = (e) => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          let imported = JSON.parse(reader.result);
-          if (imported && imported.tables && typeof imported.tables === 'object') {
-            imported = { ...imported, ...imported.tables };
-            delete imported.tables;
-          }
-          if (imported && imported.characters && imported.chronicles) {
-            db = imported;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-            alert('Chronicle database imported! Reloading...');
-            window.location.reload();
-          } else {
-            alert('Invalid chronicle JSON file.');
-          }
-        } catch (err) {
-          alert('Failed to parse JSON: ' + err.message);
-        }
-      };
-      reader.readAsText(file);
-    };
-
-    modal.querySelector('#vtmResetCanonicalBtn').onclick = () => {
-      if (confirm('Reset local browser state back to the canonical Linux Mint database dump?')) {
-        localStorage.removeItem(STORAGE_KEY);
-        window.location.reload();
-      }
-    };
+    // Disabled
   }
 
   // Expose adapter API

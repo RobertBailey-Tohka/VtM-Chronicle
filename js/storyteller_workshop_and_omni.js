@@ -51,10 +51,16 @@ async function loadCampaignsList() {
             targetCampaignRecord.episodes[0];
           loadEpisodeDetails(targetEpisodeRecord.id);
         } else {
+          activeEpisodeId = null;
+          currentEpisodeData = null;
+          clearEpisodeDetailsPane();
           // Look up the episode cards list container in the DOM and display an empty state message
           document.getElementById('episodeCardsList').innerHTML = '<p>No episodes in this campaign.</p>';
         }
       } else {
+        activeEpisodeId = null;
+        currentEpisodeData = null;
+        clearEpisodeDetailsPane();
         campaignSelectElement.innerHTML = '<option value="">No Campaigns</option>';
         // Look up the episode cards list container in the DOM and display an empty state message
         document.getElementById('episodeCardsList').innerHTML = '<p>No campaigns found.</p>';
@@ -208,6 +214,12 @@ function switchCampaign(campaignId) {
       renderEpisodesList(campaignRecord.episodes || []);
       if (campaignRecord.episodes && campaignRecord.episodes.length > 0) {
         loadEpisodeDetails(campaignRecord.episodes[0].id);
+      } else {
+        activeEpisodeId = null;
+        currentEpisodeData = null;
+        clearEpisodeDetailsPane();
+        const episodeCardsListElement = document.getElementById('episodeCardsList');
+        if (episodeCardsListElement) episodeCardsListElement.innerHTML = '<p>No episodes in this campaign.</p>';
       }
     }
   }
@@ -1647,6 +1659,34 @@ function openEpisodeDetailWidget(episodeId) {
 }
 
 
+function clearEpisodeDetailsPane() {
+  const episodeTitleElement = document.getElementById('activeEpTitle') || document.getElementById('epDetailTitle');
+  if (episodeTitleElement) episodeTitleElement.innerText = 'No Episode Selected';
+  const episodeTitleInputElement = document.getElementById('epTitleInput');
+  if (episodeTitleInputElement) episodeTitleInputElement.value = '';
+  const episodeLocationInputElement = document.getElementById('epLocation');
+  if (episodeLocationInputElement) episodeLocationInputElement.value = '';
+  const episodeHookInputElement = document.getElementById('epHook');
+  if (episodeHookInputElement) episodeHookInputElement.value = '';
+  const episodeConceptsInputElement = document.getElementById('epConcepts');
+  if (episodeConceptsInputElement) episodeConceptsInputElement.value = '';
+  const episodeSummaryInputElement = document.getElementById('epSummary');
+  if (episodeSummaryInputElement) episodeSummaryInputElement.value = '';
+  const episodeAgendasListElement = document.getElementById('epAgendasList');
+  if (episodeAgendasListElement) episodeAgendasListElement.innerHTML = '<div style="color:#9ca3af;font-size:12px;font-style:italic;">No episode selected.</div>';
+  const episodeScenesListElement = document.getElementById('epScenesList');
+  if (episodeScenesListElement) episodeScenesListElement.innerHTML = '';
+  const episodeMapsContainerElement = document.getElementById('epMapsListContainer');
+  if (episodeMapsContainerElement) episodeMapsContainerElement.innerHTML = '<div style="color:#9ca3af;font-size:12px;font-style:italic;">No episode selected.</div>';
+  const clueMatricesContainerElement = document.getElementById('clueMatricesContainer');
+  if (clueMatricesContainerElement) clueMatricesContainerElement.innerHTML = '';
+  const loreMatricesContainerElement = document.getElementById('loreMatricesContainer');
+  if (loreMatricesContainerElement) loreMatricesContainerElement.innerHTML = '';
+  updatePushEpisodeHeaderBtn();
+}
+
+window.loadEpisodes = loadCampaignsList;
+
 async function deleteActiveCampaign() {
   // Read the currently selected campaign ID from the campaign dropdown in the DOM
   const selectedCampaignId = document.getElementById('campaignSelect').value;
@@ -1657,7 +1697,14 @@ async function deleteActiveCampaign() {
     // Perform an authenticated HTTP DELETE request to delete the selected campaign on the server
     const fetchResponse = await authFetch(`/api/campaigns/${selectedCampaignId}`, { method: 'DELETE' });
     if (fetchResponse.ok) {
-      loadCampaignsList();
+      if (Number(activeSubCampaignId) === Number(selectedCampaignId)) {
+        activeSubCampaignId = null;
+        activeEpisodeId = null;
+        currentEpisodeData = null;
+      }
+      await loadCampaignsList();
+      if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
+      if (typeof loadGameboardState === 'function') loadGameboardState();
     } else {
       // Parse the error response JSON payload from the server
       const responsePayload = await fetchResponse.json();
@@ -1677,7 +1724,16 @@ async function deleteEpisode(episodeId, clickEventObject) {
     // Perform an authenticated HTTP DELETE request to remove the episode from the server
     const fetchResponse = await authFetch(`/api/episodes/${episodeId}`, { method: 'DELETE' });
     if (fetchResponse.ok) {
-      loadEpisodes();
+      if (Number(activeEpisodeId) === Number(episodeId)) {
+        activeEpisodeId = null;
+        currentEpisodeData = null;
+        clearEpisodeDetailsPane();
+      }
+      await loadCampaignsList();
+      if (typeof renderChronicleTimelineEpisodes === 'function') renderChronicleTimelineEpisodes();
+      if (typeof loadClueMatricesForWidget === 'function') loadClueMatricesForWidget();
+      if (typeof loadLoreMatricesForWidget === 'function') loadLoreMatricesForWidget();
+      if (typeof loadGameboardState === 'function') loadGameboardState();
     } else {
       // Parse the error response JSON payload from the server
       const responsePayload = await fetchResponse.json();

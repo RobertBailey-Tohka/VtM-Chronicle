@@ -4551,7 +4551,7 @@ body.vtm-dragging-or-resizing {
     pointer-events: auto;
 }
 .map-pin-marker:hover {
-    z-index: 999;
+    z-index: 9999;
     transform: scale(1.2);
 }
 .map-pin-tooltip {
@@ -4568,13 +4568,24 @@ body.vtm-dragging-or-resizing {
     color: #f3f4f6;
     font-size: 11px;
     pointer-events: none;
+    visibility: hidden;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
     z-index: 999999 !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
+.map-pin-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 10px;
+}
 .map-pin-marker:hover .map-pin-tooltip {
+    visibility: visible;
     opacity: 1;
+    pointer-events: auto;
 }
 .map-pin-tooltip h4 {
     margin: 0 0 4px 0;
