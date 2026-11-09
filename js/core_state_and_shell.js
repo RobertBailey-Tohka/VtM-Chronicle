@@ -30,24 +30,216 @@ function normalizeWidgetId(widgetId) {
   return LEGACY_WIDGET_ID_MAP[widgetId] || widgetId;
 }
 
+const PERSISTENT_VISIBILITY_WIDGET_IDS = new Set([
+  'widget-chat',
+  'widget-dice',
+  'widget-city-map',
+  'widget-character-dossier',
+  'widget-character-cast',
+  'widget-clue-board',
+  'widget-lore-archive',
+  'widget-chronicle-timeline',
+  'widget-personal-notes',
+  'widget-quick-rules',
+  'widget-storyteller-omni'
+]);
+
+function getWidgetLayoutStorageKey() {
+  let uid = 'default';
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) {
+    uid = String(currentUser.id);
+  } else {
+    try {
+      const savedUser = JSON.parse(localStorage.getItem('vtm_user') || 'null');
+      if (savedUser && savedUser.id) uid = String(savedUser.id);
+    } catch (e) {}
+  }
+  return `vtm_widget_layout_v1_${uid}`;
+}
+
 /**
- * Saves the current visibility state of all Elysium widgets to the browser's local storage.
- * It iterates through all DOM elements with the class '.elysium-widget', captures their 
- * current 'display' CSS property, and stores this mapping as a JSON string under the 
- * key 'vtm_widget_vis'. This is typically used to persist the user's UI layout 
- * preferences across sessions.
- * 
+ * Saves the current visibility, position (left/top), dimensions (width/height),
+ * z-index, and collapsed state of all Elysium widgets to localStorage so that
+ * closing/reopening a widget or leaving and returning to the website restores
+ * the exact layout the player or Storyteller had.
+ *
  * @returns {void}
  */
 function saveWidgetVisibility() {
+  try {
+    const storageKey = getWidgetLayoutStorageKey();
+    let existingLayout = {};
+    try {
+      existingLayout = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('vtm_widget_layout_v1') || '{}') || {};
+    } catch (e) {
+      existingLayout = {};
+    }
     const widgetVisibilityStates = {};
-    // Query all Elysium widget elements in the DOM
     document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
-        // Read the resolved CSS display property of the widget element via the browser window API
-        widgetVisibilityStates[widgetElement.id] = window.getComputedStyle(widgetElement).display;
+      if (!widgetElement.id) return;
+      const computedStyle = window.getComputedStyle(widgetElement);
+      const isVisible = computedStyle.display !== 'none';
+      widgetVisibilityStates[widgetElement.id] = computedStyle.display;
+
+      const prevEntry = existingLayout[widgetElement.id] || {};
+      const bodyEl = widgetElement.querySelector('.widget-body');
+      const isCollapsed = Boolean(bodyEl && bodyEl.style.display === 'none');
+
+      // Only update coordinates/dimensions if currently visible or explicitly styled in inline CSS
+      const leftVal = widgetElement.style.left || prevEntry.left || null;
+      const topVal = widgetElement.style.top || prevEntry.top || null;
+      const widthVal = widgetElement.style.width || prevEntry.width || null;
+      const heightVal = widgetElement.style.height || prevEntry.height || null;
+      const zIndexVal = widgetElement.style.zIndex || prevEntry.zIndex || null;
+
+      existingLayout[widgetElement.id] = {
+        display: PERSISTENT_VISIBILITY_WIDGET_IDS.has(widgetElement.id)
+          ? (isVisible ? 'flex' : 'none')
+          : (prevEntry.display || 'none'),
+        left: leftVal,
+        top: topVal,
+        width: widthVal,
+        height: heightVal,
+        zIndex: zIndexVal,
+        collapsed: isCollapsed
+      };
     });
-    // Persist the serialized widget visibility map to browser localStorage
+
+    const sheetWin = document.getElementById('characterSheetWindow');
+    if (sheetWin) {
+      const prevSheet = existingLayout.characterSheetWindow || {};
+      existingLayout.characterSheetWindow = {
+        left: sheetWin.style.left || prevSheet.left || null,
+        top: sheetWin.style.top || prevSheet.top || null,
+        width: sheetWin.style.width || prevSheet.width || null,
+        height: sheetWin.style.height || prevSheet.height || null
+      };
+    }
+
+    localStorage.setItem(storageKey, JSON.stringify(existingLayout));
+    localStorage.setItem('vtm_widget_layout_v1', JSON.stringify(existingLayout));
     localStorage.setItem('vtm_widget_vis', JSON.stringify(widgetVisibilityStates));
+  } catch (err) {
+    console.warn('Could not persist widget layout state:', err);
+  }
+}
+
+function restoreWidgetLayoutState() {
+  try {
+    const storageKey = getWidgetLayoutStorageKey();
+    const rawLayout = localStorage.getItem(storageKey) || localStorage.getItem('vtm_widget_layout_v1');
+    const savedVisRaw = localStorage.getItem('vtm_widget_vis');
+    const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+
+    if (rawLayout) {
+      const layoutMap = JSON.parse(rawLayout);
+      if (layoutMap && typeof layoutMap === 'object') {
+        const vw = window.innerWidth || 1920;
+        const vh = window.innerHeight || 1080;
+
+        document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
+          const id = widgetElement.id;
+          if (!id || !layoutMap[id]) return;
+          const entry = layoutMap[id];
+
+          // Restore position & dimensions (even if currently closed, so reopening places it where the user left it)
+          if (entry.left) {
+            const parsedLeft = parseFloat(entry.left);
+            if (!Number.isNaN(parsedLeft)) {
+              const clampedLeft = Math.max(0, Math.min(parsedLeft, Math.max(40, vw - 160)));
+              widgetElement.style.left = `${clampedLeft}px`;
+            }
+          }
+          if (entry.top) {
+            const parsedTop = parseFloat(entry.top);
+            if (!Number.isNaN(parsedTop)) {
+              const clampedTop = Math.max(0, Math.min(parsedTop, Math.max(40, vh - 80)));
+              widgetElement.style.top = `${clampedTop}px`;
+            }
+          }
+          if (entry.width) {
+            const parsedW = parseFloat(entry.width);
+            if (!Number.isNaN(parsedW) && parsedW >= 180) {
+              widgetElement.style.width = `${Math.min(parsedW, vw - 16)}px`;
+            }
+          }
+          if (entry.height) {
+            const parsedH = parseFloat(entry.height);
+            if (!Number.isNaN(parsedH) && parsedH >= 120) {
+              widgetElement.style.height = `${Math.min(parsedH, vh - 56)}px`;
+            }
+          }
+          if (entry.zIndex) {
+            const zNum = parseInt(entry.zIndex, 10);
+            if (!Number.isNaN(zNum)) {
+              widgetElement.style.zIndex = String(zNum);
+              if (zNum > highestDesktopWidgetZIndex && zNum < 100000) {
+                highestDesktopWidgetZIndex = zNum;
+              }
+            }
+          }
+
+          const bodyEl = widgetElement.querySelector('.widget-body');
+          if (bodyEl) {
+            if (entry.collapsed) {
+              bodyEl.style.display = 'none';
+              widgetElement.style.minHeight = '38px';
+            } else {
+              bodyEl.style.display = '';
+              widgetElement.style.minHeight = '';
+            }
+          }
+
+          if (PERSISTENT_VISIBILITY_WIDGET_IDS.has(id) && entry.display !== undefined) {
+            if (widgetElement.classList.contains('gm-only-control') && !isStoryteller && activeChronicleRole) {
+              widgetElement.style.display = 'none';
+            } else {
+              widgetElement.style.display = entry.display === 'none' ? 'none' : 'flex';
+              if (entry.display !== 'none' && id === 'widget-quick-rules') {
+                if (typeof allRules !== 'undefined' && allRules.length > 0) {
+                  if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
+                } else if (typeof loadRulesCodex === 'function') {
+                  loadRulesCodex().then(() => {
+                    if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
+                  });
+                }
+              }
+            }
+          }
+        });
+
+        const sheetWin = document.getElementById('characterSheetWindow');
+        if (sheetWin && layoutMap.characterSheetWindow) {
+          const sw = layoutMap.characterSheetWindow;
+          if (sw.left) sheetWin.style.left = sw.left;
+          if (sw.top) sheetWin.style.top = sw.top;
+          if (sw.width) sheetWin.style.width = sw.width;
+          if (sw.height) sheetWin.style.height = sw.height;
+        }
+        return true;
+      }
+    }
+
+    if (savedVisRaw) {
+      const visMap = JSON.parse(savedVisRaw);
+      if (visMap && typeof visMap === 'object') {
+        document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
+          const id = widgetElement.id;
+          if (PERSISTENT_VISIBILITY_WIDGET_IDS.has(id) && visMap[id] !== undefined) {
+            if (widgetElement.classList.contains('gm-only-control') && !isStoryteller && activeChronicleRole) {
+              widgetElement.style.display = 'none';
+            } else {
+              widgetElement.style.display = visMap[id] === 'none' ? 'none' : 'flex';
+            }
+          }
+        });
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to restore widget layout state:', e);
+  }
+  return false;
 }
 
 let currentMapPins = [];
@@ -248,18 +440,53 @@ socket.on('coterie:request_approved', approvalData => {
     }
   }
 });
+function evictRemovedPlayerToHub(reasonMessage) {
+  // Close any open modal or character sheet overlay immediately
+  document.querySelectorAll('.vtm-modal.active, .modal-backdrop.active, .modal.active').forEach(modalElement => {
+    modalElement.classList.remove('active');
+    modalElement.style.display = '';
+  });
+  const sheetModal = document.getElementById('characterSheetModal');
+  if (sheetModal) {
+    sheetModal.classList.remove('active');
+    sheetModal.style.display = '';
+  }
+  localStorage.removeItem('vtm_last_chronicle_id');
+  localStorage.removeItem('vtm_last_chronicle_role');
+  localStorage.setItem('vtm_active_tab', 'chronicle-hub');
+  if (reasonMessage) {
+    alert(reasonMessage);
+  }
+  returnToChronicleHub();
+}
+window.evictRemovedPlayerToHub = evictRemovedPlayerToHub;
+
 // Listen for coterie member removal or request denial broadcast by the server via Socket.IO
 socket.on('coterie:member_removed', removalData => {
   const removedUid = Number(removalData && (removalData.user_id || removalData.userId));
   const targetChronId = Number(removalData && (removalData.chronicle_id || removalData.campaign_id || removalData.chronicleId));
   if (currentUser && Number(currentUser.id) === removedUid) {
     if (activeChronicleId && (!targetChronId || Number(activeChronicleId) === targetChronId)) {
-      alert('Storyteller approval is required to access this Chronicle. Returning to the Chronicle Hub.');
-      returnToChronicleHub();
+      evictRemovedPlayerToHub('You have been removed from this Chronicle by the Storyteller. Returning to the Chronicle Hub.');
     } else {
       const lobbyViewElement = document.getElementById('tab-chronicle-hub');
       if (lobbyViewElement && lobbyViewElement.classList.contains('active')) {
         renderChronicleHub();
+      }
+    }
+  } else if (removedUid) {
+    // Update the active player roster and coterie management views immediately for the Storyteller and other players
+    if (Array.isArray(currentChronicleActiveUsers)) {
+      currentChronicleActiveUsers = currentChronicleActiveUsers.filter(u => Number(u.userId || u.id) !== removedUid);
+      if (typeof renderActivePlayersBar === 'function') {
+        renderActivePlayersBar(currentChronicleActiveUsers);
+      }
+    }
+    if (typeof loadCoterieManagement === 'function') loadCoterieManagement();
+    if (typeof loadCoterieModalData === 'function') {
+      const coterieModal = document.getElementById('coterieManagementModal');
+      if (coterieModal && (coterieModal.classList.contains('active') || coterieModal.style.display === 'flex')) {
+        loadCoterieModalData();
       }
     }
   }
@@ -276,32 +503,38 @@ document.addEventListener('DOMContentLoaded', () => {
   initDesktopWidgetsDragAndResize();
   initDiceWidgetDisplay();
   try {
-      // Read the user's configured startup widgets list from browser localStorage
-      let startupList = localStorage.getItem('vtm_startup_widgets');
-      if (!startupList) {
-          startupList = ['widget-chat', 'widget-dice', 'widget-city-map', 'widget-character-dossier'];
-      } else {
-          startupList = JSON.parse(startupList).map(normalizeWidgetId);
-      }
-      
-      // Query all Elysium widget elements in the DOM to set their initial startup visibility
-      document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
-          if (startupList.includes(widgetElement.id)) {
-              widgetElement.style.display = 'flex';
-              if (widgetElement.id === 'widget-quick-rules') {
-                  if (typeof allRules !== 'undefined' && allRules.length > 0) {
-                      if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
-                  } else {
-                      loadRulesCodex().then(() => {
-                          if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
-                      });
-                  }
-              }
+      const restoredSavedLayout = restoreWidgetLayoutState();
+      if (!restoredSavedLayout) {
+          // Read the user's configured startup widgets list from browser localStorage
+          let startupList = localStorage.getItem('vtm_startup_widgets');
+          if (!startupList) {
+              startupList = ['widget-chat', 'widget-dice', 'widget-city-map', 'widget-character-dossier'];
           } else {
-              widgetElement.style.display = 'none';
+              startupList = JSON.parse(startupList).map(normalizeWidgetId);
           }
-      });
+          
+          // Query all Elysium widget elements in the DOM to set their initial startup visibility
+          document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
+              if (startupList.includes(widgetElement.id)) {
+                  widgetElement.style.display = 'flex';
+                  if (widgetElement.id === 'widget-quick-rules') {
+                      if (typeof allRules !== 'undefined' && allRules.length > 0) {
+                          if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
+                      } else {
+                          loadRulesCodex().then(() => {
+                              if (typeof renderWidgetRulebookHierarchy === 'function') renderWidgetRulebookHierarchy(allRules);
+                          });
+                      }
+                  }
+              } else {
+                  widgetElement.style.display = 'none';
+              }
+          });
+      }
   } catch(startupError) { console.error('Startup widget error:', startupError); }
+  window.addEventListener('beforeunload', () => {
+    try { saveWidgetVisibility(); } catch (e) {}
+  });
   // Read the saved widget opacity percentage from browser localStorage
   const savedOpacity = localStorage.getItem('vtm_widget_opacity');
   if (savedOpacity) {
@@ -608,6 +841,14 @@ function authFetch(url, options = {}) {
                   alert(errorResponseData.error + "\n\nThis incident has been logged. Please notify your Storyteller or Administrator.");
               }
           } catch(jsonParseError) {}
+      } else if (fetchResponse.status === 403 && activeChronicleId && activeChronicleRole !== 'gm' && activeChronicleRole !== 'storyteller') {
+          const clonedResponse = fetchResponse.clone();
+          try {
+              const errorResponseData = await clonedResponse.json();
+              if (errorResponseData && errorResponseData.error && (errorResponseData.error.includes('Access denied') || errorResponseData.error.includes('approval is required') || errorResponseData.error.includes('no longer an active member'))) {
+                  evictRemovedPlayerToHub(errorResponseData.error);
+              }
+          } catch (jsonParseError) {}
       }
       return fetchResponse;
   });
@@ -899,6 +1140,8 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
   document.querySelectorAll('.player-only-display').forEach(targetElement => {
      targetElement.style.display = role === 'player' ? '' : 'none';
   });
+  // Restore user-specific widget positions, dimensions, and open/closed states for this user/role
+  restoreWidgetLayoutState();
   // Query the DOM for the header time label, divider, and dice roller name input elements
   const headerTime = document.getElementById('headerTimeLabel');
   if (headerTime) {
@@ -1058,6 +1301,7 @@ function toggleWidgetCollapse(widgetId) {
     widgetBodyElement.style.display = 'none';
     widgetElement.style.minHeight = '38px';
   }
+  saveWidgetVisibility();
 }
 
 function toggleWidgetClose(widgetId) {
@@ -1081,6 +1325,7 @@ function restoreWidget(widgetId) {
     if (widgetBodyElement) widgetBodyElement.style.display = '';
     widgetElement.style.minHeight = '';
     bringDesktopWidgetToFront(widgetElement);
+    saveWidgetVisibility();
     if (widgetId === 'widget-clue-board') {
       // Schedule a brief timer to redraw the SVG clue cords after the clue board widget becomes visible
       setTimeout(() => renderClueCords(), 50);
@@ -1162,6 +1407,7 @@ function shrinkWidgetToFitViewport(containerElement) {
   containerElement.style.width = `${newWidth}px`;
   containerElement.style.height = `${newHeight}px`;
   containerElement.dataset.isMaximized = 'false';
+  saveWidgetVisibility();
   if (containerElement.id === 'widget-clue-board' || containerElement.classList.contains('widget-matrix-popup')) {
     renderClueCords();
   }
@@ -1534,12 +1780,16 @@ function initDesktopWidgetsDragAndResize() {
       // Attach a global mouseup listener to the window to end active widget dragging or resizing
       window.addEventListener('mouseup', () => {
         document.body.classList.remove('vtm-dragging-or-resizing');
+        const didDragOrResize = Boolean(activeWidgetDrag || activeWidgetResize);
         if (activeWidgetDrag) {
           activeWidgetDrag = null;
         }
         if (activeWidgetResize) {
           activeWidgetResize = null;
           renderClueCords();
+        }
+        if (didDragOrResize) {
+          saveWidgetVisibility();
         }
       });
       // Attach a global resize listener to the window to redraw clue cords when the browser window resizes

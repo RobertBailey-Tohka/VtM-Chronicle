@@ -78,16 +78,23 @@ function renderActivePlayersBar(activeUsers) {
           restoreWidget('widget-character-dossier');
         }
       };
+      const isStorytellerUser = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+      const targetUserId = Number(userObject.userId || userObject.id || 0);
+      const canKickPlayer = isStorytellerUser && !isSelf && targetUserId > 0 && userObject.role !== 'gm' && userObject.role !== 'storyteller';
+      const kickBtnHtml = canKickPlayer
+        ? `<button type="button" class="btn-text-danger" onclick="kickPlayerFromDrawer(event, ${targetUserId}, '${escapeHtml(primaryName).replace(/'/g, "\\'")}')" title="Remove ${escapeHtml(primaryName)} from Chronicle immediately" style="margin-left:auto; padding:4px 8px; font-size:11px; border-radius:4px; border:1px solid rgba(239,68,68,0.35); background:rgba(239,68,68,0.12); color:#f87171; cursor:pointer; flex-shrink:0;"><i class="fa-solid fa-user-xmark"></i></button>`
+        : '';
       tokenItemElement.innerHTML = `
                 <div class="coterie-token-avatar-wrap">
                     <img src="${avatarSrc}" alt="${escapeHtml(primaryName)}" class="coterie-token-img">
                     ${hungerBadge}
                     <span class="coterie-token-status-dot dot-active" style="position:absolute; bottom:-2px; right:-2px; width:10px; height:10px; border-radius:50%; background:#22c55e; border:2px solid #10171f;"></span>
                 </div>
-                <div class="player-drawer-info">
+                <div class="player-drawer-info" style="flex:1; min-width:0;">
                     <div class="player-drawer-name">${escapeHtml(primaryName)}</div>
                     <div class="player-drawer-role">${escapeHtml(secondaryName)}</div>
                 </div>
+                ${kickBtnHtml}
             `;
       coterieContainer.appendChild(tokenItemElement);
     });
@@ -95,6 +102,40 @@ function renderActivePlayersBar(activeUsers) {
   createGroup('Storytellers', storytellers, 'fa-solid fa-crown');
   createGroup('Active Coterie', players, 'fa-solid fa-users');
 }
+
+async function kickPlayerFromDrawer(event, userId, playerName) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  if (!activeChronicleId || !userId) return;
+  const label = playerName || `Player #${userId}`;
+  const confirmed = typeof window.vtmConfirm === 'function'
+    ? await window.vtmConfirm(`Remove "${label}" from the Chronicle immediately? They will be evicted to the Chronicle Hub right away.`)
+    : confirm(`Remove "${label}" from the Chronicle immediately?`);
+  if (!confirmed) return;
+  try {
+    const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/members/${userId}`, {
+      method: 'DELETE'
+    });
+    if (fetchResponse.ok) {
+      if (Array.isArray(currentChronicleActiveUsers)) {
+        currentChronicleActiveUsers = currentChronicleActiveUsers.filter(u => Number(u.userId || u.id) !== Number(userId));
+        renderActivePlayersBar(currentChronicleActiveUsers);
+      }
+      loadCoterieManagement();
+      loadCoterieModalData();
+      loadCharacters();
+      loadGameboardState();
+    } else {
+      const errData = await fetchResponse.json().catch(() => ({}));
+      alert(errData.error || 'Failed to remove player.');
+    }
+  } catch (err) {
+    console.error('Error kicking player from drawer:', err);
+  }
+}
+window.kickPlayerFromDrawer = kickPlayerFromDrawer;
 
 
 let allChroniclesData = [];
@@ -230,14 +271,21 @@ async function invitePlayerSubmit() {
 }
 
 async function removeCoterieMember(userId) {
-  // Prompt the user with a browser confirmation dialog before removing the member
-  if (!confirm('Remove this player from the chronicle table?')) return;
+  // Prompt the user with a confirmation dialog before removing the member
+  const confirmed = typeof window.vtmConfirm === 'function'
+    ? await window.vtmConfirm('Remove this player from the chronicle table immediately?')
+    : confirm('Remove this player from the chronicle table?');
+  if (!confirmed) return;
   try {
     // Send an authenticated HTTP DELETE request to remove the member from the chronicle
     const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/members/${userId}`, {
       method: 'DELETE'
     });
     if (fetchResponse.ok) {
+      if (Array.isArray(currentChronicleActiveUsers)) {
+        currentChronicleActiveUsers = currentChronicleActiveUsers.filter(u => Number(u.userId || u.id) !== Number(userId));
+        renderActivePlayersBar(currentChronicleActiveUsers);
+      }
       loadCoterieManagement();
       loadCharacters();
       loadGameboardState();
@@ -464,8 +512,11 @@ async function invitePlayerFromModal() {
 }
 
 async function removeCoterieMemberFromModal(userId) {
-  // Prompt the user with a browser confirmation dialog before removing the player
-  if (!confirm('Are you sure you want to remove this player from the chronicle?')) return;
+  // Prompt the user with a confirmation dialog before removing the player
+  const confirmed = typeof window.vtmConfirm === 'function'
+    ? await window.vtmConfirm('Are you sure you want to remove this player from the chronicle immediately?')
+    : confirm('Are you sure you want to remove this player from the chronicle?');
+  if (!confirmed) return;
   try {
     // Send an authenticated HTTP DELETE request to remove the player from the chronicle
     const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/members/${userId}`, {
@@ -474,6 +525,10 @@ async function removeCoterieMemberFromModal(userId) {
     // Parse the JSON response payload from the server
     const responseData = await fetchResponse.json();
     if (fetchResponse.ok && responseData.success) {
+      if (Array.isArray(currentChronicleActiveUsers)) {
+        currentChronicleActiveUsers = currentChronicleActiveUsers.filter(u => Number(u.userId || u.id) !== Number(userId));
+        renderActivePlayersBar(currentChronicleActiveUsers);
+      }
       loadCoterieModalData();
       loadCoterieManagement();
       loadGameboardState();

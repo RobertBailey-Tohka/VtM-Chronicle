@@ -2591,6 +2591,9 @@
     // 3. Gameboard State, Map, Scene, Canvas, Relationship Map
     if (path === '/api/gameboard/state' && method === 'GET') {
       const chronicleId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
+      if (!isApprovedChronicleMember(chronicleId, user.id)) {
+        return jsonResponse({ error: 'Access denied: You are no longer an active member of this Chronicle.' }, 403);
+      }
       const gs =
         (db.gameboard_state || []).find((g) => Number(g.chronicle_id) === chronicleId) ||
         (db.gameboard_state || [])[0] ||
@@ -3694,6 +3697,9 @@
     const chronCharsMatch = path.match(/^\/api\/chronicles\/(\d+)\/characters$/);
     if (chronCharsMatch && method === 'GET') {
       const cId = Number(chronCharsMatch[1]);
+      if (!isApprovedChronicleMember(cId, user.id)) {
+        return jsonResponse({ error: 'Access denied: You are no longer an active member of this Chronicle.' }, 403);
+      }
       const isGm = isChronicleGM(cId, user.id);
       const list = (db.characters || [])
         .filter((c) => Number(c.chronicle_id) === cId)
@@ -3711,6 +3717,9 @@
 
     if (path === '/api/characters' && method === 'GET') {
       const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
+      if (!isApprovedChronicleMember(cId, user.id)) {
+        return jsonResponse({ error: 'Access denied: You are no longer an active member of this Chronicle.' }, 403);
+      }
       const cat = q.get('category');
       const isGm = isChronicleGM(cId, user.id);
       const list = (db.characters || [])
