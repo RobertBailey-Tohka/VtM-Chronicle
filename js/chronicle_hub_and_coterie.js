@@ -101,6 +101,7 @@ function renderActivePlayersBar(activeUsers) {
   };
   createGroup('Storytellers', storytellers, 'fa-solid fa-crown');
   createGroup('Active Coterie', players, 'fa-solid fa-users');
+  if (typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();
 }
 
 async function kickPlayerFromDrawer(event, userId, playerName) {
@@ -812,9 +813,392 @@ function togglePlayerDrawer() {
     playerRosterDrawerElement.classList.toggle('open');
     if (playerRosterDrawerElement.classList.contains('open')) {
       syncAutoAcceptToggleUi();
+      renderTurnTrackerStates();
     }
   }
 }
+
+let draggedTurnEntryIndex = null;
+
+function buildDefaultTurnOrderFromRoster() {
+  const entries = [];
+  const seenKeys = new Set();
+  const activeUsers = Array.isArray(currentChronicleActiveUsers) ? currentChronicleActiveUsers : [];
+  const allChars = Array.isArray(chronicleCharactersList) ? chronicleCharactersList : [];
+
+  // 1. Add active players first
+  activeUsers.forEach(u => {
+    const isSt = u.role === 'gm' || u.role === 'storyteller';
+    if (isSt) return;
+    const uid = Number(u.userId || u.id || 0);
+    let charRec = u.characterId ? allChars.find(c => Number(c.id) === Number(u.characterId)) : null;
+    if (!charRec && uid) {
+      charRec = allChars.find(c => Number(c.user_id) === uid);
+    }
+    const entryId = charRec ? `char_${charRec.id}` : `user_${uid || u.username}`;
+    if (seenKeys.has(entryId)) return;
+    seenKeys.add(entryId);
+    const avatarUrl = (charRec && charRec.avatar_url && !charRec.avatar_url.includes('bg_page_1.png'))
+      ? charRec.avatar_url
+      : (u.avatar || '/images/caine_portrait.jpg?v=2');
+    entries.push({
+      id: entryId,
+      userId: uid || null,
+      characterId: charRec ? Number(charRec.id) : null,
+      name: charRec ? charRec.name : (u.displayName || u.username || 'Player'),
+      subtitle: charRec ? `Player: ${u.displayName || u.username}` : 'Coterie Player',
+      avatar: avatarUrl
+    });
+  });
+
+  // 2. Also include any PCs in the chronicle not yet in the list
+  allChars.filter(c => String(c.category || '').toLowerCase() === 'pc').forEach(charRec => {
+    const entryId = `char_${charRec.id}`;
+    if (seenKeys.has(entryId)) return;
+    seenKeys.add(entryId);
+    const avatarUrl = (charRec.avatar_url && !charRec.avatar_url.includes('bg_page_1.png'))
+      ? charRec.avatar_url
+      : '/images/caine_portrait.jpg?v=2';
+    entries.push({
+      id: entryId,
+      userId: charRec.user_id ? Number(charRec.user_id) : null,
+      characterId: Number(charRec.id),
+      name: charRec.name || 'Kindred',
+      subtitle: charRec.player_name ? `Player: ${charRec.player_name}` : (charRec.clan || 'PC'),
+      avatar: avatarUrl
+    });
+  });
+
+  return entries;
+}
+
+function getTurnTrackerState() {
+  if (typeof chronicleUiSettings === 'undefined' || !chronicleUiSettings || typeof chronicleUiSettings !== 'object') {
+    chronicleUiSettings = {};
+  }
+  let tracker = chronicleUiSettings.turn_tracker;
+  if (!tracker || typeof tracker !== 'object') {
+    tracker = { round: 1, active_entry_id: null, order: [] };
+  }
+  if (!Array.isArray(tracker.order) || tracker.order.length === 0) {
+    const defaultOrder = buildDefaultTurnOrderFromRoster();
+    tracker = {
+      round: Number(tracker.round) || 1,
+      active_entry_id: tracker.active_entry_id || (defaultOrder[0] ? defaultOrder[0].id : null),
+      order: defaultOrder
+    };
+  }
+  return tracker;
+}
+
+async function saveTurnTrackerState(updatedTracker) {
+  if (!activeChronicleId) return;
+  if (typeof chronicleUiSettings === 'undefined' || !chronicleUiSettings || typeof chronicleUiSettings !== 'object') {
+    chronicleUiSettings = {};
+  }
+  chronicleUiSettings.turn_tracker = updatedTracker;
+  renderTurnTrackerStates();
+  try {
+    await authFetch(`/api/chronicles/${activeChronicleId}/ui_settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_settings: chronicleUiSettings })
+    });
+  } catch (err) {
+    console.error('Failed to persist turn tracker state:', err);
+  }
+}
+
+function setActiveTurnEntry(entryId) {
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const tracker = getTurnTrackerState();
+  tracker.active_entry_id = String(entryId);
+  saveTurnTrackerState(tracker);
+}
+window.setActiveTurnEntry = setActiveTurnEntry;
+
+function stepTurnTracker(delta) {
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const tracker = getTurnTrackerState();
+  if (!Array.isArray(tracker.order) || tracker.order.length === 0) return;
+  let currentIndex = tracker.order.findIndex(item => String(item.id) === String(tracker.active_entry_id));
+  if (currentIndex === -1) {
+    currentIndex = 0;
+  } else {
+    currentIndex += Number(delta || 1);
+    if (currentIndex >= tracker.order.length) {
+      currentIndex = 0;
+      tracker.round = (Number(tracker.round) || 1) + 1;
+    } else if (currentIndex < 0) {
+      currentIndex = tracker.order.length - 1;
+      tracker.round = Math.max(1, (Number(tracker.round) || 1) - 1);
+    }
+  }
+  tracker.active_entry_id = tracker.order[currentIndex].id;
+  saveTurnTrackerState(tracker);
+}
+window.stepTurnTracker = stepTurnTracker;
+
+function moveTurnTrackerEntry(index, direction, event) {
+  if (event) event.stopPropagation();
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const tracker = getTurnTrackerState();
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= tracker.order.length) return;
+  const temp = tracker.order[index];
+  tracker.order[index] = tracker.order[targetIndex];
+  tracker.order[targetIndex] = temp;
+  saveTurnTrackerState(tracker);
+}
+window.moveTurnTrackerEntry = moveTurnTrackerEntry;
+
+function removeTurnTrackerEntry(entryId, event) {
+  if (event) event.stopPropagation();
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const tracker = getTurnTrackerState();
+  tracker.order = tracker.order.filter(item => String(item.id) !== String(entryId));
+  if (String(tracker.active_entry_id) === String(entryId)) {
+    tracker.active_entry_id = tracker.order[0] ? tracker.order[0].id : null;
+  }
+  saveTurnTrackerState(tracker);
+}
+window.removeTurnTrackerEntry = removeTurnTrackerEntry;
+
+function syncTurnTrackerWithCoterie() {
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const tracker = getTurnTrackerState();
+  const existingOrder = Array.isArray(tracker.order) ? [...tracker.order] : [];
+  const defaultRoster = buildDefaultTurnOrderFromRoster();
+  defaultRoster.forEach(candidate => {
+    const exists = existingOrder.some(item => String(item.id) === String(candidate.id));
+    if (!exists) existingOrder.push(candidate);
+  });
+  tracker.order = existingOrder;
+  if (!tracker.active_entry_id && tracker.order[0]) {
+    tracker.active_entry_id = tracker.order[0].id;
+  }
+  saveTurnTrackerState(tracker);
+}
+window.syncTurnTrackerWithCoterie = syncTurnTrackerWithCoterie;
+
+function addSelectedToTurnTracker() {
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const selectEl = document.getElementById('turnTrackerAddSelect');
+  if (!selectEl || !selectEl.value) return;
+  const val = selectEl.value;
+  const tracker = getTurnTrackerState();
+  if (!Array.isArray(tracker.order)) tracker.order = [];
+
+  if (val === 'storyteller_enemy') {
+    const stEntryId = `st_${Date.now()}`;
+    tracker.order.push({
+      id: stEntryId,
+      name: 'Storyteller / Antagonist',
+      subtitle: 'NPC Action',
+      avatar: '/images/st_avatar.png',
+      isStoryteller: true
+    });
+  } else if (val.startsWith('char_')) {
+    const charId = Number(val.replace('char_', ''));
+    const charRec = (chronicleCharactersList || []).find(c => Number(c.id) === charId);
+    if (charRec && !tracker.order.some(item => String(item.id) === val)) {
+      const avatarUrl = (charRec.avatar_url && !charRec.avatar_url.includes('bg_page_1.png'))
+        ? charRec.avatar_url
+        : '/images/caine_portrait.jpg?v=2';
+      tracker.order.push({
+        id: val,
+        userId: charRec.user_id ? Number(charRec.user_id) : null,
+        characterId: Number(charRec.id),
+        name: charRec.name || 'Kindred',
+        subtitle: charRec.player_name ? `Player: ${charRec.player_name}` : (charRec.clan || 'NPC'),
+        avatar: avatarUrl
+      });
+    }
+  }
+  if (!tracker.active_entry_id && tracker.order[0]) {
+    tracker.active_entry_id = tracker.order[0].id;
+  }
+  selectEl.value = '';
+  saveTurnTrackerState(tracker);
+}
+window.addSelectedToTurnTracker = addSelectedToTurnTracker;
+
+function clearTurnTrackerOrder() {
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (!isStoryteller) return;
+  const defaultOrder = buildDefaultTurnOrderFromRoster();
+  const resetTracker = {
+    round: 1,
+    active_entry_id: defaultOrder[0] ? defaultOrder[0].id : null,
+    order: defaultOrder
+  };
+  saveTurnTrackerState(resetTracker);
+}
+window.clearTurnTrackerOrder = clearTurnTrackerOrder;
+
+function handleTurnRowDragStart(event, index) {
+  draggedTurnEntryIndex = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+  }
+}
+window.handleTurnRowDragStart = handleTurnRowDragStart;
+
+function handleTurnRowDragOver(event) {
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+}
+window.handleTurnRowDragOver = handleTurnRowDragOver;
+
+function handleTurnRowDrop(event, targetIndex) {
+  event.preventDefault();
+  if (draggedTurnEntryIndex === null || draggedTurnEntryIndex === targetIndex) return;
+  const tracker = getTurnTrackerState();
+  if (!Array.isArray(tracker.order)) return;
+  const [movedItem] = tracker.order.splice(draggedTurnEntryIndex, 1);
+  if (movedItem) {
+    tracker.order.splice(targetIndex, 0, movedItem);
+    draggedTurnEntryIndex = null;
+    saveTurnTrackerState(tracker);
+  }
+}
+window.handleTurnRowDrop = handleTurnRowDrop;
+
+function renderTurnTrackerStates() {
+  const tracker = getTurnTrackerState();
+  const orderList = Array.isArray(tracker.order) ? tracker.order : [];
+  const activeEntry = orderList.find(item => String(item.id) === String(tracker.active_entry_id)) || orderList[0] || null;
+  const activeEntryId = activeEntry ? String(activeEntry.id) : null;
+  const roundNum = Number(tracker.round) || 1;
+
+  // 1. Render inside the Players (X) Drawer (#drawerTurnTrackerContainer) — visible to BOTH Players and Storyteller
+  const drawerContainer = document.getElementById('drawerTurnTrackerContainer');
+  if (drawerContainer) {
+    if (orderList.length === 0) {
+      drawerContainer.innerHTML = `
+        <div style="font-size:11px; color:#9ca3af; font-style:italic; text-align:center; padding:6px 0;">
+          No turn order active yet.
+        </div>
+      `;
+    } else {
+      const rowsHtml = orderList.map((entry, idx) => {
+        const isCurrentTurn = String(entry.id) === activeEntryId;
+        const isMyTurn = isCurrentTurn && currentUser && Number(entry.userId) === Number(currentUser.id);
+        const turnBadge = isCurrentTurn
+          ? `<span style="margin-left:auto; padding:2px 7px; border-radius:999px; font-size:9.5px; font-weight:800; letter-spacing:0.6px; background:#ef4444; color:#fff; box-shadow:0 0 8px rgba(239,68,68,0.65);">${isMyTurn ? 'YOUR TURN' : 'ACTING'}</span>`
+          : `<span style="margin-left:auto; font-size:10px; color:#6b7280; font-family:monospace;">#${idx + 1}</span>`;
+        return `
+          <div class="turn-tracker-row ${isCurrentTurn ? 'active-turn' : ''}" style="padding:6px 8px;">
+            <span style="width:18px; height:18px; border-radius:50%; background:${isCurrentTurn ? '#ef4444' : 'rgba(255,255,255,0.08)'}; color:#fff; font-size:10px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">${idx + 1}</span>
+            <img src="${escapeHtml(entry.avatar || '/images/caine_portrait.jpg?v=2')}" onerror="this.onerror=null;this.src='/images/caine_portrait.jpg';" alt="" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid ${isCurrentTurn ? '#ef4444' : 'rgba(255,255,255,0.2)'}; flex-shrink:0;">
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:12px; font-weight:700; color:${isCurrentTurn ? '#fff' : '#e2e8f0'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.name)}</div>
+              <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.subtitle || '')}</div>
+            </div>
+            ${turnBadge}
+          </div>
+        `;
+      }).join('');
+
+      drawerContainer.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#f8fafc;">
+            <i class="fa-solid fa-hourglass-half" style="color:#ef4444; margin-right:5px;"></i> Turn Order
+          </span>
+          <span style="font-size:10.5px; font-weight:800; color:#fbbf24; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); padding:2px 8px; border-radius:999px;">
+            Round ${roundNum}
+          </span>
+        </div>
+        ${activeEntry ? `
+          <div style="margin-bottom:8px; padding:6px 9px; background:rgba(239,68,68,0.14); border:1px solid rgba(239,68,68,0.4); border-radius:6px; font-size:11px; color:#fecdd3; display:flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-bolt" style="color:#ef4444;"></i>
+            <span>Now Acting: <strong style="color:#fff;">${escapeHtml(activeEntry.name)}</strong></span>
+          </div>
+        ` : ''}
+        <div style="display:flex; flex-direction:column; gap:5px; max-height:240px; overflow-y:auto;">
+          ${rowsHtml}
+        </div>
+      `;
+    }
+  }
+
+  // 2. Render inside the GM-only Turn Tracker Widget (#widget-turn-tracker)
+  const roundLabelEl = document.getElementById('turnTrackerRoundLabel');
+  if (roundLabelEl) roundLabelEl.innerText = `Round ${roundNum}`;
+
+  const addSelectEl = document.getElementById('turnTrackerAddSelect');
+  if (addSelectEl) {
+    const existingIds = new Set(orderList.map(item => String(item.id)));
+    let optionsHtml = `<option value="">+ Add Kindred / NPC to Turn Order...</option>`;
+    optionsHtml += `<option value="storyteller_enemy">+ Storyteller / Antagonist Turn</option>`;
+    (chronicleCharactersList || []).forEach(charRec => {
+      const cid = `char_${charRec.id}`;
+      if (!existingIds.has(cid)) {
+        const tag = String(charRec.category || '').toLowerCase() === 'pc' ? 'PC' : (charRec.clan || 'NPC');
+        optionsHtml += `<option value="${cid}">${escapeHtml(charRec.name)} (${escapeHtml(tag)})</option>`;
+      }
+    });
+    addSelectEl.innerHTML = optionsHtml;
+  }
+
+  const widgetListEl = document.getElementById('turnTrackerWidgetList');
+  if (widgetListEl) {
+    if (orderList.length === 0) {
+      widgetListEl.innerHTML = `
+        <div style="padding:16px; text-align:center; color:#9ca3af; font-size:12px; font-style:italic;">
+          No combatants in turn order. Click the sync icon above or add a character.
+        </div>
+      `;
+    } else {
+      widgetListEl.innerHTML = orderList.map((entry, idx) => {
+        const isCurrentTurn = String(entry.id) === activeEntryId;
+        const canMoveUp = idx > 0;
+        const canMoveDown = idx < orderList.length - 1;
+        return `
+          <div class="turn-tracker-row ${isCurrentTurn ? 'active-turn' : ''}"
+               draggable="true"
+               ondragstart="handleTurnRowDragStart(event, ${idx})"
+               ondragover="handleTurnRowDragOver(event)"
+               ondrop="handleTurnRowDrop(event, ${idx})"
+               onclick="setActiveTurnEntry('${escapeHtml(String(entry.id)).replace(/'/g, "\\'")}')"
+               title="Click to mark as ${escapeHtml(entry.name)}'s turn (or drag to reorder)"
+               style="cursor:pointer;">
+            <span style="width:20px; height:20px; border-radius:50%; background:${isCurrentTurn ? '#ef4444' : 'rgba(255,255,255,0.08)'}; color:#fff; font-size:10.5px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+              ${idx + 1}
+            </span>
+            <img src="${escapeHtml(entry.avatar || '/images/caine_portrait.jpg?v=2')}" onerror="this.onerror=null;this.src='/images/caine_portrait.jpg';" alt="" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid ${isCurrentTurn ? '#ef4444' : 'rgba(255,255,255,0.2)'}; flex-shrink:0;">
+            <div style="min-width:0; flex:1;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:12.5px; font-weight:700; color:${isCurrentTurn ? '#fff' : '#e2e8f0'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.name)}</span>
+                ${isCurrentTurn ? `<span style="padding:1px 6px; border-radius:999px; font-size:9px; font-weight:800; background:#ef4444; color:#fff; letter-spacing:0.5px;">TURN</span>` : ''}
+              </div>
+              <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.subtitle || '')}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;" onclick="event.stopPropagation();">
+              <button type="button" class="turn-reorder-btn" onclick="moveTurnTrackerEntry(${idx}, -1, event)" ${!canMoveUp ? 'disabled style="opacity:0.3;cursor:default;"' : ''} title="Move Up">
+                <img src="images/vtm_arrow_up.svg" alt="Up" draggable="false">
+              </button>
+              <button type="button" class="turn-reorder-btn" onclick="moveTurnTrackerEntry(${idx}, 1, event)" ${!canMoveDown ? 'disabled style="opacity:0.3;cursor:default;"' : ''} title="Move Down">
+                <img src="images/vtm_arrow_down.svg" alt="Down" draggable="false">
+              </button>
+              <button type="button" class="turn-reorder-btn" onclick="removeTurnTrackerEntry('${escapeHtml(String(entry.id)).replace(/'/g, "\\'")}', event)" title="Remove from Turn Order" style="color:#f87171;">
+                <i class="fa-solid fa-xmark" style="font-size:11px;"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+window.renderTurnTrackerStates = renderTurnTrackerStates;
 
 async function changeMemberRole(userId, newRole) {
   if (!activeChronicleId) return;

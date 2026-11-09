@@ -540,3 +540,13 @@ function toggleFloatingDiceTray() {
   const floatingDiceModalElement = document.getElementById('floatingDiceModal');
   if (floatingDiceModalElement) floatingDiceModalElement.classList.toggle('active');
 }
+
+function stepDiceInput(inputId, delta, minVal = 0, maxVal = 25) {
+  const inputElement = document.getElementById(inputId);
+  if (!inputElement) return;
+  const currentVal = parseInt(inputElement.value, 10);
+  const baseVal = Number.isNaN(currentVal) ? minVal : currentVal;
+  const nextVal = Math.max(minVal, Math.min(maxVal, baseVal + Number(delta || 0)));
+  inputElement.value = String(nextVal);
+}
+window.stepDiceInput = stepDiceInput;

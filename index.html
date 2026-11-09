@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <script src="js/github-cloud-adapter.js?v=20261109_v22"></script>
+    <script src="js/github-cloud-adapter.js?v=20261109_v23"></script>
 
     <script>
     
@@ -28,7 +28,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vampire: The Masquerade — Elysium Virtual Tabletop</title>
     <link rel="stylesheet" href="css/all.min.css">
-    <link rel="stylesheet" href="css/app.css?v=20261109_v22">
+    <link rel="stylesheet" href="css/app.css?v=20261109_v23">
 
     <!-- Cropper.js -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
@@ -201,6 +201,7 @@
                 <i class="fa-solid fa-triangle-exclamation"></i> Warning: Do NOT turn this on unless actively expecting players. Anyone can join without approval while enabled.
             </div>
         </div>
+        <div id="drawerTurnTrackerContainer" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(14,8,12,0.85);"></div>
         <div id="playerTokens" class="player-tokens-column">
             <!-- Avatars injected here -->
         </div>
@@ -272,7 +273,7 @@
                 <!-- 2. LEFT BOTTOM WIDGET: BLOOD & BONE DICE ROLLER -->
                 <div class="elysium-widget widget-dice" id="widget-dice" style="top: 412px; left: 16px; width: 330px; height: auto; z-index: 20;">
                     <div class="widget-header" id="dragHeader-dice">
-                        <span class="widget-title">DICE ROLLER</span>
+                        <span class="widget-title"><i class="fa-solid fa-dice-d10" style="color:#ef4444;margin-right:6px;"></i> DICE ROLLER</span>
                         <div class="widget-actions">
                             <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-dice')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
                         </div>
@@ -283,32 +284,39 @@
 
                         <!-- Persona Selection (Who is rolling) -->
                         <div class="dice-persona-selector-wrap">
-                            <label><i class="fa-solid fa-masks-theater"></i> Rolling For:</label>
-                            <select id="dicePersonaSelect" onchange="handleDicePersonaChange(this.value)"><option value="storyteller_world">Storyteller / World (Pure RNG)</option></select>
+                            <label><i class="fa-solid fa-masks-theater" style="color:#ef4444;"></i> Rolling For:</label>
+                            <div class="vtm-custom-select-wrap">
+                                <select id="dicePersonaSelect" class="vtm-themed-select" onchange="handleDicePersonaChange(this.value)">
+                                    <option value="storyteller_world">Storyteller / World (Pure RNG)</option>
+                                </select>
+                                <img src="images/vtm_arrow_down.svg" alt="" class="vtm-select-custom-arrow" draggable="false">
+                            </div>
                         </div>
 
-                        <!-- Dice Pool Inputs (Pool & Hunger Only) -->
+                        <!-- Dice Pool Inputs: "-" Left, Number Center, "+" Right -->
                         <div class="dice-pool-inputs dice-pool-inputs-v5">
-                            <div class="dice-input-item">
-                                <label>Pool</label>
-                                
-                                <div style="display:flex; width: 100%; align-items:center;">
-                                    <input type="number" id="diceCount" class="vtm-input-no-arrows" value="6" min="1" max="25" style="width: 100%; background: transparent; border: none; text-align: center; color: #f3f4f6; font-size: 13px; font-weight: 800; outline: none;">
-                                    <div style="display:flex; flex-direction:column; margin-left: 2px;">
-                                        <button onclick="document.getElementById('diceCount').stepUp();" style="background:none; border:none; color:#ef4444; padding:0 2px; cursor:pointer; font-size:8px;"><i class="fa-solid fa-chevron-up"></i></button>
-                                        <button onclick="document.getElementById('diceCount').stepDown();" style="background:none; border:none; color:#ef4444; padding:0 2px; cursor:pointer; font-size:8px;"><i class="fa-solid fa-chevron-down"></i></button>
-                                    </div>
+                            <div class="dice-input-item dice-input-card-v5">
+                                <label class="dice-card-label">Pool</label>
+                                <div class="dice-stepper-row-v5">
+                                    <button type="button" class="dice-step-btn-v5" onclick="stepDiceInput('diceCount', -1, 1, 25)" title="Decrease Dice Pool">
+                                        <img src="images/vtm_step_minus.svg" alt="−" draggable="false">
+                                    </button>
+                                    <input type="number" id="diceCount" class="vtm-input-no-arrows dice-number-display-v5" value="6" min="1" max="25">
+                                    <button type="button" class="dice-step-btn-v5" onclick="stepDiceInput('diceCount', 1, 1, 25)" title="Increase Dice Pool">
+                                        <img src="images/vtm_step_plus.svg" alt="+" draggable="false">
+                                    </button>
                                 </div>
                             </div>
-                            <div class="dice-input-item">
-                                <label style="color:#ef4444;">Hunger</label>
-                                
-                                <div style="display:flex; width: 100%; align-items:center;">
-                                    <input type="number" id="diceHunger" class="vtm-input-no-arrows" value="1" min="0" max="5" style="width: 100%; background: transparent; border: none; text-align: center; color: #f3f4f6; font-size: 13px; font-weight: 800; outline: none;">
-                                    <div style="display:flex; flex-direction:column; margin-left: 2px;">
-                                        <button onclick="document.getElementById('diceHunger').stepUp();" style="background:none; border:none; color:#ef4444; padding:0 2px; cursor:pointer; font-size:8px;"><i class="fa-solid fa-chevron-up"></i></button>
-                                        <button onclick="document.getElementById('diceHunger').stepDown();" style="background:none; border:none; color:#ef4444; padding:0 2px; cursor:pointer; font-size:8px;"><i class="fa-solid fa-chevron-down"></i></button>
-                                    </div>
+                            <div class="dice-input-item dice-input-card-v5 dice-input-card-hunger">
+                                <label class="dice-card-label" style="color:#f87171;">Hunger</label>
+                                <div class="dice-stepper-row-v5">
+                                    <button type="button" class="dice-step-btn-v5" onclick="stepDiceInput('diceHunger', -1, 0, 5)" title="Decrease Hunger">
+                                        <img src="images/vtm_step_minus.svg" alt="−" draggable="false">
+                                    </button>
+                                    <input type="number" id="diceHunger" class="vtm-input-no-arrows dice-number-display-v5" value="1" min="0" max="5" style="color:#fca5a5;">
+                                    <button type="button" class="dice-step-btn-v5" onclick="stepDiceInput('diceHunger', 1, 0, 5)" title="Increase Hunger">
+                                        <img src="images/vtm_step_plus.svg" alt="+" draggable="false">
+                                    </button>
                                 </div>
                             </div>
                             <input type="hidden" id="diceRollerName" value="Storyteller">
@@ -324,24 +332,27 @@
                             </button>
                         </div>
 
-                        <!-- Secret GM Check Option -->
-                        
-<div style="margin-bottom: 8px; text-align: center;">
-    <button type="button" class="btn-action-outline" onclick="openTrayEditor()" style="font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #9ca3af; cursor: pointer; transition: 0.2s;">
-        <i class="fa-solid fa-up-down-left-right"></i> Move/Resize Animation Tray
-    </button>
-</div>
-<div class="dice-secret-row" id="diceSecretOptionWrap">
-
-                            <label class="checkbox-label" style="font-size:11px;color:#9ca3af;cursor:pointer;">
+                        <!-- Compact Utility Row: Secret Roll + Tray Setup -->
+                        <div class="dice-utility-row-v5" id="diceSecretOptionWrap">
+                            <label class="dice-secret-pill-v5" title="Hide this roll from players">
                                 <input type="checkbox" id="diceSecret">
-                                <span><i class="fa-solid fa-user-secret"></i> Secret Roll</span>
+                                <span class="dice-secret-check-box"></span>
+                                <span><i class="fa-solid fa-user-secret" style="color:#f87171;margin-right:3px;"></i> Secret Roll</span>
                             </label>
+                            <button type="button" class="btn-tray-setup-v5" onclick="openTrayEditor()" title="Move or resize the 3D dice animation tray">
+                                <i class="fa-solid fa-up-down-left-right"></i> Tray Setup
+                            </button>
                         </div>
 
-                        <!-- Live Roll Summary Bar -->
-                        <div class="dice-result-banner" id="diceResultBanner">
-                            Roll: <strong id="diceResultDiceList">6, 2, 2, 6, 7, 8 (Hunger)</strong> → <span class="badge-success-count badge-success" id="diceResultSuccessCount">4 Successes (SUCCESS)</span>
+                        <!-- Clean 2-Line Live Roll Summary Card -->
+                        <div class="dice-result-banner dice-result-banner-v5" id="diceResultBanner">
+                            <div class="dice-result-top-row">
+                                <span class="dice-result-label">LAST ROLL</span>
+                                <span class="badge-success-count badge-success" id="diceResultSuccessCount">4 Successes (SUCCESS)</span>
+                            </div>
+                            <div class="dice-result-bottom-row">
+                                <strong id="diceResultDiceList">6, 2, 2, 6, 7, 8 (Hunger)</strong>
+                            </div>
                         </div>
 
                         <!-- Ledger Feed (Compact) -->
@@ -773,6 +784,53 @@
                     <div class="widget-resize-handle"></div>
                 </div>
 
+                <!-- 13. STORYTELLER TURN & INITIATIVE TRACKER WIDGET (GM ONLY) -->
+                <div class="elysium-widget widget-turn-tracker gm-only-control" id="widget-turn-tracker" style="top: 90px; left: 560px; width: 350px; height: auto; z-index: 56; display: none;">
+                    <div class="widget-header" id="dragHeader-turn-tracker">
+                        <span class="widget-title"><i class="fa-solid fa-hourglass-half" style="color:#ef4444;margin-right:6px;"></i> TURN TRACKER</span>
+                        <div class="widget-actions">
+                            <button class="btn-w-ctrl" onclick="syncTurnTrackerWithCoterie()" title="Sync Active Players into Turn Order"><i class="fa-solid fa-rotate"></i></button>
+                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-turn-tracker')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                        </div>
+                    </div>
+                    <div class="widget-body turn-tracker-widget-body" id="turnTrackerWidgetBody" style="padding:12px;">
+                        <div id="turnTrackerControlsBar" style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:10px; padding:8px 10px; background:rgba(16,9,13,0.9); border:1px solid rgba(239,68,68,0.28); border-radius:6px;">
+                            <button type="button" class="btn-action-outline btn-sm" onclick="stepTurnTracker(-1)" title="Previous Turn" style="padding:4px 8px; font-size:11px;">
+                                <i class="fa-solid fa-backward-step"></i> Prev
+                            </button>
+                            <div style="text-align:center;">
+                                <div style="font-size:9px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;">Current Round</div>
+                                <strong id="turnTrackerRoundLabel" style="font-size:14px; color:#fbbf24; font-family:'Cinzel',serif;">Round 1</strong>
+                            </div>
+                            <button type="button" class="btn-action btn-sm" onclick="stepTurnTracker(1)" title="Advance to Next Turn" style="padding:4px 10px; font-size:11px;">
+                                Next <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                        </div>
+
+                        <div id="turnTrackerAddBar" style="display:flex; gap:6px; margin-bottom:10px;">
+                            <div class="vtm-custom-select-wrap" style="flex:1;">
+                                <select id="turnTrackerAddSelect" class="vtm-themed-select" style="padding:5px 26px 5px 8px; font-size:11px;">
+                                    <option value="">+ Add Kindred / NPC to Turn Order...</option>
+                                </select>
+                                <img src="images/vtm_arrow_down.svg" alt="" class="vtm-select-custom-arrow" draggable="false">
+                            </div>
+                            <button type="button" class="btn-action-outline btn-sm" onclick="addSelectedToTurnTracker()" style="padding:4px 10px; font-size:11px; white-space:nowrap;">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.8px;">Click a row to mark active turn • Reorder with arrows</span>
+                            <button type="button" class="btn-text-danger" onclick="clearTurnTrackerOrder()" title="Reset / Clear Turn Order" style="font-size:10px; background:none; border:none; color:#f87171; cursor:pointer; padding:2px 4px;">
+                                <i class="fa-solid fa-trash-can"></i> Reset
+                            </button>
+                        </div>
+
+                        <div id="turnTrackerWidgetList" style="display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto;"></div>
+                    </div>
+                    <div class="widget-resize-handle"></div>
+                </div>
+
                 <nav class="elysium-floating-dock">
                     <button class="dock-btn" onclick="toggleWidget('widget-chat')" title="Crimson Revelry Chat">
                         <i class="fa-solid fa-comments"></i> <span>Chat</span>
@@ -806,6 +864,9 @@
                     </button>
                     <button class="dock-btn" onclick="toggleWidget('widget-quick-rules')" title="Quick Rules Reference">
                         <i class="fa-solid fa-scale-balanced"></i> <span>Rules</span>
+                    </button>
+                    <button class="dock-btn gm-only-control" onclick="toggleWidget('widget-turn-tracker'); if(typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();" title="Turn &amp; Initiative Tracker">
+                        <i class="fa-solid fa-hourglass-half"></i> <span>Turns</span>
                     </button>
                     <button class="dock-btn gm-only-control" onclick="toggleWidget('widget-storyteller-omni'); if(document.getElementById('widget-storyteller-omni').style.display !== 'none') { loadOmniUnrevealedClues(); loadOmniUnrevealedLore(); loadOmniHookAndAgendas(); }" title="Storyteller Omni">
                         <i class="fa-solid fa-user-secret"></i> <span>Omni</span>
@@ -2923,18 +2984,18 @@
     </div>
 
     <script src="socket.io/socket.io.js" onerror="console.log('[VtM] Using Serverless Socket.IO Engine')"></script>
-    <script src="js/v5_data.js?v=20261109_v22"></script>
-    <script src="js/character_wizard.js?v=20261109_v22"></script>
-    <script src="js/relationship_map.js?v=20261109_v22"></script>
-    <script src="js/dice_animations.js?v=20261109_v22"></script>
-    <script src="js/core_state_and_shell.js?v=20261109_v22"></script>
-    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v22"></script>
-    <script src="js/chat_and_dice.js?v=20261109_v22"></script>
-    <script src="js/city_map.js?v=20261109_v22"></script>
-    <script src="js/character_vault_and_dossier.js?v=20261109_v22"></script>
-    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v22"></script>
-    <script src="js/clues_and_lore.js?v=20261109_v22"></script>
-    <script src="js/rulebook_and_notes.js?v=20261109_v22"></script>
-    <script src="js/asset_library.js?v=20261109_v22"></script>
+    <script src="js/v5_data.js?v=20261109_v23"></script>
+    <script src="js/character_wizard.js?v=20261109_v23"></script>
+    <script src="js/relationship_map.js?v=20261109_v23"></script>
+    <script src="js/dice_animations.js?v=20261109_v23"></script>
+    <script src="js/core_state_and_shell.js?v=20261109_v23"></script>
+    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v23"></script>
+    <script src="js/chat_and_dice.js?v=20261109_v23"></script>
+    <script src="js/city_map.js?v=20261109_v23"></script>
+    <script src="js/character_vault_and_dossier.js?v=20261109_v23"></script>
+    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v23"></script>
+    <script src="js/clues_and_lore.js?v=20261109_v23"></script>
+    <script src="js/rulebook_and_notes.js?v=20261109_v23"></script>
+    <script src="js/asset_library.js?v=20261109_v23"></script>
 </body>
 </html>

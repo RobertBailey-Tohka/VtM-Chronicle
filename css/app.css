@@ -1030,7 +1030,12 @@ html, body {
     align-items: center;
     gap: 8px;
     margin-bottom: 12px;
-    min-height: 56px;
+    min-height: 64px;
+    padding: 10px 8px;
+    background: radial-gradient(ellipse at center, rgba(38, 12, 22, 0.85) 0%, rgba(10, 5, 8, 0.94) 100%);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    border-radius: 8px;
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.75);
 }
 
 .v5-d10-die-wrapper {
@@ -1184,9 +1189,248 @@ html, body {
     align-items: center;
 }
 
+.dice-result-banner-v5 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, rgba(24, 11, 17, 0.95) 0%, rgba(12, 6, 9, 0.98) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 7px;
+    box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.dice-result-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 5px;
+}
+
+.dice-result-label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #9ca3af;
+}
+
+.dice-result-bottom-row {
+    font-size: 11.5px;
+    color: #f3f4f6;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.vtm-custom-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.vtm-themed-select {
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: linear-gradient(180deg, rgba(24, 12, 18, 0.95) 0%, rgba(14, 7, 11, 0.98) 100%) !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+    color: #f3f4f6 !important;
+    padding: 7px 30px 7px 10px !important;
+    border-radius: 6px !important;
+    font-size: 11.5px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    outline: none;
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.65);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vtm-themed-select:hover,
+.vtm-themed-select:focus {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.25), inset 0 1px 4px rgba(0, 0, 0, 0.65);
+}
+
+.vtm-select-custom-arrow {
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+.dice-input-card-v5 {
+    padding: 7px 8px !important;
+    background: linear-gradient(180deg, rgba(26, 13, 19, 0.88) 0%, rgba(14, 7, 11, 0.95) 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 7px !important;
+    box-shadow: inset 0 1px 5px rgba(0, 0, 0, 0.6);
+}
+
+.dice-input-card-hunger {
+    border-color: rgba(239, 68, 68, 0.32) !important;
+}
+
+.dice-card-label {
+    font-size: 9.5px !important;
+    font-weight: 800 !important;
+    letter-spacing: 1px;
+    margin-bottom: 5px !important;
+    color: #cbd5e1;
+}
+
+.dice-stepper-row-v5 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 4px;
+}
+
+.dice-step-btn-v5 {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.dice-step-btn-v5 img {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
+
+.dice-step-btn-v5:hover {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.75));
+}
+
+.dice-step-btn-v5:active {
+    transform: scale(0.95);
+}
+
+.dice-number-display-v5 {
+    font-size: 17px !important;
+    font-weight: 800 !important;
+    color: #f8fafc !important;
+    text-align: center !important;
+    width: 44px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.dice-utility-row-v5 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 5px 8px;
+    background: rgba(16, 9, 13, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+}
+
+.dice-secret-pill-v5 {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+}
+
+.dice-secret-pill-v5 input[type="checkbox"] {
+    accent-color: #ef4444;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.btn-tray-setup-v5 {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-tray-setup-v5:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: #ef4444;
+    color: #fff;
+}
+
+/* Turn Tracker Row Styling */
+.turn-tracker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    background: rgba(18, 11, 15, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.turn-tracker-row.active-turn {
+    background: linear-gradient(90deg, rgba(220, 38, 38, 0.28) 0%, rgba(28, 12, 18, 0.95) 100%);
+    border-color: #ef4444;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.35), inset 3px 0 0 #ef4444;
+}
+
+.turn-reorder-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.turn-reorder-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+}
+
+.turn-reorder-btn img {
+    width: 13px;
+    height: 13px;
+    display: block;
+}
+
 .badge-success-count {
     color: #10b981;
     font-weight: 800;
+    white-space: nowrap;
 }
 
 /* ---------------- WIDGET 3: CITY MAP (Center) ---------------- */

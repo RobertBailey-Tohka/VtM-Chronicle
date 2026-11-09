@@ -918,6 +918,16 @@
       .map((cm) => Number(cm.user_id));
     const deletedEpisodeIds =
       db._deleted && Array.isArray(db._deleted.episodes) ? db._deleted.episodes.map(Number) : [];
+    const activeChron = (db.chronicles || []).find((c) => Number(c.id) === defaultChronicleId());
+    let chronUiSettings = null;
+    if (activeChron && activeChron.ui_settings) {
+      try {
+        chronUiSettings =
+          typeof activeChron.ui_settings === 'string'
+            ? JSON.parse(activeChron.ui_settings)
+            : activeChron.ui_settings;
+      } catch (e) {}
+    }
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
@@ -927,6 +937,7 @@
       discovered_lore_ids: discoveredLoreIds,
       active_member_ids: activeMemberIds,
       deleted_episode_ids: deletedEpisodeIds,
+      ui_settings: chronUiSettings,
     });
     setTimeout(() => {
       if (!db) return;
@@ -1392,6 +1403,14 @@
               user_id: Number(authUser.id),
             });
           }
+        }
+      }
+      if (pkt.ui_settings && typeof pkt.ui_settings === 'object' && Array.isArray(db.chronicles)) {
+        const defChron = db.chronicles.find((c) => Number(c.id) === defChronId);
+        if (defChron) {
+          defChron.ui_settings = JSON.stringify(pkt.ui_settings);
+          anyChanged = true;
+          emitToLocalSockets('chronicle:ui_settings_updated', pkt.ui_settings);
         }
       }
       if (anyChanged || clueOrLoreChanged) {

@@ -353,6 +353,8 @@ socket.on('gameboard:lore_hidden', hiddenLoreData => {
 // Listen for chronicle UI setting updates broadcast by the server via Socket.IO
 socket.on('chronicle:ui_settings_updated', (uiSettingsData) => {
     chronicleUiSettings = (uiSettingsData && uiSettingsData.ui_settings) ? uiSettingsData.ui_settings : uiSettingsData;
+    if (typeof syncAutoAcceptToggleUi === 'function') syncAutoAcceptToggleUi();
+    if (typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();
     if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId) {
         renderWidgetClueCards(activeWidgetMatrixId);
     }
@@ -1192,6 +1194,7 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
             if (parsedUiSettings && typeof parsedUiSettings === 'object') {
                 chronicleUiSettings = parsedUiSettings;
                 if (typeof syncAutoAcceptToggleUi === 'function') syncAutoAcceptToggleUi();
+                if (typeof renderTurnTrackerStates === 'function') renderTurnTrackerStates();
                 // Re-render clues now that settings are loaded
                 if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId) {
                     renderWidgetClueCards(activeWidgetMatrixId);
