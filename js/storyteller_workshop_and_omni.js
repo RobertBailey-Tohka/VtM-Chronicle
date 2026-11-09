@@ -77,16 +77,16 @@ async function renameChronicle() {
   if (!activeChronicleId) return;
   const chronicleRecord = allChroniclesData.find(candidateChronicle => candidateChronicle.id === activeChronicleId);
   if (!chronicleRecord) return;
-  // Display a native browser prompt dialog asking the user for a new chronicle name
-  const promptedChronicleName = prompt('Enter new name for the Chronicle:', chronicleRecord.title);
+  // Display a styled VTM prompt dialog asking the user for a new chronicle name
+  const promptedChronicleName = await vtmPrompt('Enter new name for the Chronicle:', 'Rename Chronicle', chronicleRecord.title || '');
   if (promptedChronicleName === null) return;
   
-  // Display a native browser prompt dialog asking the user for the setting city
-  const promptedSettingCity = prompt('Enter setting location/city:', chronicleRecord.setting_city || '');
+  // Display a styled VTM prompt dialog asking the user for the setting city
+  const promptedSettingCity = await vtmPrompt('Enter setting location/city:', 'Chronicle Setting City', chronicleRecord.setting_city || '');
   if (promptedSettingCity === null) return;
   
-  // Display a native browser prompt dialog asking the user for the setting year
-  const promptedSettingYear = prompt('Enter setting year:', chronicleRecord.setting_year || '');
+  // Display a styled VTM prompt dialog asking the user for the setting year
+  const promptedSettingYear = await vtmPrompt('Enter setting year:', 'Chronicle Setting Year', chronicleRecord.setting_year || '');
   if (promptedSettingYear === null) return;
   
   const finalChronicleTitle = promptedChronicleName.trim() || chronicleRecord.title;
@@ -143,8 +143,8 @@ async function renameCampaign() {
   const campaignRecord = chronicleRecord.campaigns.find(candidateCampaign => candidateCampaign.id === activeSubCampaignId);
   if (!campaignRecord) return;
   
-  // Display a native browser prompt dialog asking the user for a new campaign name
-  const promptedCampaignName = prompt('Enter new name for the Campaign (Arc):', campaignRecord.title);
+  // Display a styled VTM prompt dialog asking the user for a new campaign name
+  const promptedCampaignName = await vtmPrompt('Enter new name for the Campaign (Arc):', 'Rename Campaign / Arc', campaignRecord.title || '');
   if (!promptedCampaignName || promptedCampaignName.trim() === '' || promptedCampaignName === campaignRecord.title) return;
   
   try {
@@ -1210,8 +1210,10 @@ async function updatePin(pinId, fieldName, newFieldValue) {
 }
 
 async function deletePin(pinId) {
-  // Display a native browser confirmation dialog before deleting the location pin
-  if (!confirm('Delete this location pin?')) return;
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Delete this location pin?', 'Delete Location Pin')
+    : true;
+  if (!isConfirmed) return;
   try {
     // Perform an authenticated HTTP DELETE request to remove the pin from the server
     await authFetch(`/api/chronicles/${activeChronicleId}/pins/${pinId}`, {
@@ -1255,9 +1257,11 @@ function updateEpisodeMap(mapIndex, fieldName, newFieldValue) {
     saveEpisodeDetails();
 }
 
-function removeMapFromEpisode(mapIndex) {
-  // Display a native browser confirmation dialog before removing the map from the episode
-  if (!confirm('Remove this map from the episode?')) return;
+async function removeMapFromEpisode(mapIndex) {
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Remove this map from the episode?', 'Remove Episode Map')
+    : true;
+  if (!isConfirmed) return;
   currentEpisodeData.maps.splice(mapIndex, 1);
   renderEpisodeMaps();
   saveEpisodeDetails();

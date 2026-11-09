@@ -100,8 +100,10 @@ window.handleRulebookJsonUpload = async function(changeEvent) {
     const selectedFile = changeEvent.target.files[0];
     if (!selectedFile) return;
 
-    // Ask the user for confirmation via a browser confirm dialog before importing the JSON rulebook
-    if (!confirm('Are you sure you want to import this JSON rulebook? This will create multiple rules and chapters.')) {
+    const isConfirmed = typeof vtmConfirm === 'function'
+      ? await vtmConfirm('Are you sure you want to import this JSON rulebook? This will create multiple rules and chapters.', 'Import JSON Rulebook')
+      : true;
+    if (!isConfirmed) {
         changeEvent.target.value = '';
         return;
     }
@@ -443,9 +445,13 @@ async function deleteRuleArticle(ruleId) {
         targetCheckboxElement.checked = true;
         openMassDeleteModal();
     } else {
-        // Fallback if they are deleting something not in the hierarchy: ask via browser confirm dialogs
-        if (!confirm('Are you sure you want to delete this rule article?')) return;
-        const shouldCascadeDelete = confirm('Would you also like to delete all sub-articles nested inside this one? (Click OK to delete all contents, or Cancel to only delete this parent and keep the children as orphans)');
+        const isConfirmed = typeof vtmConfirm === 'function'
+          ? await vtmConfirm('Are you sure you want to delete this rule article?', 'Delete Rule Article')
+          : true;
+        if (!isConfirmed) return;
+        const shouldCascadeDelete = typeof vtmConfirm === 'function'
+          ? await vtmConfirm('Would you also like to delete all sub-articles nested inside this one? (Confirm to delete all nested contents, or Cancel to keep children)', 'Delete Nested Articles')
+          : false;
         try {
             // Perform an authenticated HTTP DELETE request to delete the rule article
             const fetchResponse = await authFetch(`/api/rules/${ruleId}${shouldCascadeDelete ? '?cascade=true' : ''}`, { method: 'DELETE' });
@@ -1278,8 +1284,10 @@ async function createNewPersonalNote() {
 
 async function deletePersonalNote() {
     if (!activeNoteId) return;
-    // Ask the user for confirmation via a browser confirm dialog before deleting the personal note
-    if (!confirm('Are you sure you want to delete this note?')) return;
+    const isConfirmed = typeof vtmConfirm === 'function'
+      ? await vtmConfirm('Are you sure you want to delete this note?', 'Delete Personal Note')
+      : true;
+    if (!isConfirmed) return;
     
     const noteIdToDelete = activeNoteId;
     activeNoteId = null;

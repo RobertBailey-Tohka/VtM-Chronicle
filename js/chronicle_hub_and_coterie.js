@@ -313,6 +313,7 @@ async function loadCoterieModalData() {
     // Parse the JSON array of members from the HTTP response
     const allMembers = await fetchResponse.json();
     chronicleMembersList = allMembers;
+    if (typeof syncAutoAcceptToggleUi === 'function') syncAutoAcceptToggleUi();
     const pendingRequests = allMembers.filter(memberRow => memberRow.status === 'pending');
     const activeMembers = allMembers.filter(memberRow => memberRow.status === 'active');
     // Query the DOM for the pending requests badge element by its ID
@@ -448,8 +449,10 @@ async function approveCoterieRequest(userId) {
 }
 
 async function denyCoterieRequest(userId) {
-  // Prompt the user with a browser confirmation dialog before denying the join request
-  if (!confirm('Are you sure you want to deny this join request?')) return;
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Are you sure you want to deny this join request?', 'Deny Join Request')
+    : true;
+  if (!isConfirmed) return;
   try {
     // Send an authenticated HTTP POST request to deny a user's pending join request
     const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/deny-join`, {
@@ -671,8 +674,11 @@ async function requestJoinCampaign(campaignId) {
     // Parse the JSON response payload from the server
     const responseData = await fetchResponse.json();
     if (fetchResponse.ok && responseData.success) {
-      // Display a confirmation alert notification to the user
-      alert('Your request to join this chronicle has been submitted to the Storyteller!');
+      if (responseData.status === 'active') {
+        alert('Auto-Accept is enabled on this Chronicle — you have joined the Coterie!');
+      } else {
+        alert('Your request to join this chronicle has been submitted to the Storyteller!');
+      }
       renderChronicleHub();
     } else {
       // Display an error alert notification to the user
@@ -755,11 +761,58 @@ function createChronicleSubmit() {
 }
 
 
+function syncAutoAcceptToggleUi() {
+  const isAutoAcceptEnabled = !!(typeof chronicleUiSettings !== 'undefined' && chronicleUiSettings && chronicleUiSettings.auto_approve_join);
+  const modalCheckbox = document.getElementById('modalAutoAcceptInvitesToggle');
+  if (modalCheckbox) modalCheckbox.checked = isAutoAcceptEnabled;
+  const drawerCheckbox = document.getElementById('drawerAutoAcceptInvitesToggle');
+  if (drawerCheckbox) drawerCheckbox.checked = isAutoAcceptEnabled;
+  const statusLabel = document.getElementById('modalAutoAcceptStatusLabel');
+  if (statusLabel) {
+    statusLabel.innerText = isAutoAcceptEnabled ? 'ON' : 'OFF';
+    statusLabel.style.color = isAutoAcceptEnabled ? '#f87171' : '#9ca3af';
+  }
+}
+window.syncAutoAcceptToggleUi = syncAutoAcceptToggleUi;
+
+async function toggleAutoAcceptJoinRequests(checkboxElement) {
+  if (!activeChronicleId) return;
+  const wantsToEnable = !!(checkboxElement && checkboxElement.checked);
+  if (wantsToEnable && typeof vtmConfirm === 'function') {
+    const confirmed = await vtmConfirm(
+      'WARNING: You should NOT turn this on unless you are actively expecting players right now.\n\nWhile Auto-Accept is enabled, ANY visitor can bypass Storyteller approval and immediately enter and view your Chronicle.\n\nAre you sure you want to enable Auto-Accept Join Requests?',
+      'Security Warning — Auto-Accept Invitations'
+    );
+    if (!confirmed) {
+      syncAutoAcceptToggleUi();
+      return;
+    }
+  }
+  if (typeof chronicleUiSettings === 'undefined' || !chronicleUiSettings || typeof chronicleUiSettings !== 'object') {
+    chronicleUiSettings = {};
+  }
+  chronicleUiSettings.auto_approve_join = wantsToEnable;
+  syncAutoAcceptToggleUi();
+  try {
+    await authFetch(`/api/chronicles/${activeChronicleId}/ui_settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_settings: chronicleUiSettings })
+    });
+  } catch (err) {
+    console.error('Failed to save auto_approve_join setting:', err);
+  }
+}
+window.toggleAutoAcceptJoinRequests = toggleAutoAcceptJoinRequests;
+
 function togglePlayerDrawer() {
   // Query the DOM for the player roster drawer element by its ID
   const playerRosterDrawerElement = document.getElementById('playerRosterDrawer');
   if (playerRosterDrawerElement) {
     playerRosterDrawerElement.classList.toggle('open');
+    if (playerRosterDrawerElement.classList.contains('open')) {
+      syncAutoAcceptToggleUi();
+    }
   }
 }
 

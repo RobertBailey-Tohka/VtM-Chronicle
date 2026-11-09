@@ -2968,9 +2968,10 @@
       const cId = Number(chronUiSettingsMatch[1]);
       const chron = (db.chronicles || []).find((c) => Number(c.id) === cId);
       if (chron) {
-        chron.ui_settings = typeof body === 'string' ? body : JSON.stringify(body || {});
+        const unwrappedSettings = body && body.ui_settings && typeof body.ui_settings === 'object' ? body.ui_settings : body;
+        chron.ui_settings = typeof unwrappedSettings === 'string' ? unwrappedSettings : JSON.stringify(unwrappedSettings || {});
         persistDb({ table: 'chronicles', row: chron });
-        emitToLocalSockets('chronicle:ui_settings_updated', { chronicle_id: cId, ui_settings: body });
+        emitToLocalSockets('chronicle:ui_settings_updated', unwrappedSettings);
       }
       return jsonResponse({ success: true });
     }
@@ -3200,21 +3201,32 @@
           (id) => Number(id) !== deterministicMemId && (!mem || Number(id) !== Number(mem.id))
         );
       }
+      const chron = (db.chronicles || []).find((c) => Number(c.id) === cId);
+      let isAutoApproveEnabled = false;
+      if (chron && chron.ui_settings) {
+        try {
+          const parsedUi = typeof chron.ui_settings === 'string' ? JSON.parse(chron.ui_settings) : chron.ui_settings;
+          if (parsedUi && parsedUi.auto_approve_join) isAutoApproveEnabled = true;
+        } catch (e) {}
+      }
+      const shouldApproveImmediately = action !== 'request-join' || isAutoApproveEnabled;
       if (!mem) {
         mem = {
           id: deterministicMemId,
           chronicle_id: cId,
           user_id: targetUserId,
           joined_at: new Date().toISOString(),
-          status: action === 'request-join' ? 'pending' : 'active',
+          status: shouldApproveImmediately ? 'active' : 'pending',
           role: 'player',
-          approved_by_gm: action !== 'request-join',
+          approved_by_gm: shouldApproveImmediately,
         };
         db.chronicle_members.push(mem);
       } else {
-        mem.status = action === 'request-join' ? (mem.status === 'active' && mem.approved_by_gm ? 'active' : 'pending') : 'active';
-        if (action !== 'request-join') {
+        if (shouldApproveImmediately) {
+          mem.status = 'active';
           mem.approved_by_gm = true;
+        } else {
+          mem.status = mem.status === 'active' && mem.approved_by_gm ? 'active' : 'pending';
         }
       }
       let userRecord = (db.users || []).find((u) => Number(u.id) === targetUserId);
@@ -3229,7 +3241,7 @@
         db.users.push(userRecord);
       }
       persistDb({ table: 'chronicle_members', row: mem });
-      if (action === 'request-join') {
+      if (action === 'request-join' && !shouldApproveImmediately) {
         publishRealtimeEvent('coterie:request_received', {
           chronicle_id: cId,
           campaign_id: cId,
@@ -3867,6 +3879,13 @@
       const charId = Number(charVitalsMatch[1]);
       const char = (db.characters || []).find((c) => Number(c.id) === charId);
       if (!char) return jsonResponse({ error: 'Character not found' }, 404);
+      const isGM = isChronicleGM(char.chronicle_id || defaultChronicleId(), user.id);
+      const isOwner = Number(char.user_id) === Number(user.id);
+      const authUserIds = safeParseJsonArray(char.authorized_user_ids).map(Number);
+      const isAuthorized = authUserIds.includes(Number(user.id));
+      if (!isGM && !isOwner && !isAuthorized) {
+        return jsonResponse({ error: "Only the Storyteller or this character's assigned player can modify their vitals." }, 403);
+      }
       let sheet = {};
       try {
         sheet = typeof char.sheet_data === 'string' ? JSON.parse(char.sheet_data || '{}') : char.sheet_data || {};

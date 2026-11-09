@@ -913,8 +913,10 @@ function toggleSelectAllAssets() {
 
 
 async function deleteAssetCategory(categoryId, categoryName) {
-    // Ask the user for confirmation via a browser confirm dialog before deleting the folder
-    if (!confirm('Delete folder "' + categoryName + '"?\n\nAny child folders or images inside it will automatically be moved up into its parent folder (or Uncategorized if it has no parent).')) return;
+    const isConfirmed = typeof vtmConfirm === 'function'
+      ? await vtmConfirm('Delete folder "' + categoryName + '"?\n\nAny child folders or images inside it will automatically be moved up into its parent folder (or Uncategorized if it has no parent).', 'Delete Asset Folder')
+      : true;
+    if (!isConfirmed) return;
     try {
         // Perform an authenticated HTTP DELETE request to delete the asset category folder
         const fetchResponse = await authFetch('/api/asset-categories/' + categoryId, { method: 'DELETE' });
@@ -1151,9 +1153,10 @@ window.startInlineFolderEdit = function(categoryId, editIconElement) {
 };
 
 
-function handlePickerUrlInput() {
-    // Prompt the user for a direct image URL using the browser prompt dialog
-    const enteredImageUrl = prompt("Enter the direct URL to the image:");
+async function handlePickerUrlInput() {
+    const enteredImageUrl = typeof vtmPrompt === 'function'
+      ? await vtmPrompt("Enter the direct URL to the image:", "Insert Image by URL", "")
+      : null;
     if (enteredImageUrl && enteredImageUrl.trim()) {
         if (assetPickerCallback) {
             assetPickerCallback(enteredImageUrl.trim());

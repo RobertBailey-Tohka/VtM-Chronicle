@@ -757,14 +757,6 @@ const originalToggleWidget = toggleWidget;
     if (transformMatch) scale = parseFloat(transformMatch[1]);
     const pinCoordinateX = Math.round((clickEvent.clientX - stageBoundingRect.left) / scale);
     const pinCoordinateY = Math.round((clickEvent.clientY - stageBoundingRect.top) / scale);
-    // Prompt the user via a browser dialog to enter the title for the new map location pin
-    const pinLocationTitle = prompt("Enter location title:");
-    if (!pinLocationTitle) {
-      toggleMapPinMode();
-      return;
-    }
-    // Prompt the user via a browser dialog to enter an optional description for the map location pin
-    const pinLocationDescription = prompt("Enter location description (optional):") || "";
     // Query the active city map URL in normalized form
     const rawUrl = typeof getActiveCityMapUrl === 'function'
       ? getActiveCityMapUrl()
@@ -772,28 +764,40 @@ const originalToggleWidget = toggleWidget;
     const mapUrl = typeof normalizeCityMapUrl === 'function'
       ? normalizeCityMapUrl(rawUrl)
       : new URL(rawUrl, window.location.origin).pathname;
-    try {
-      // Send an authenticated HTTP POST request to save the new map pin to the server
-      const fetchResponse = await authFetch(`/api/chronicles/${activeChronicleId}/pins`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          map_url: mapUrl,
-          x: pinCoordinateX,
-          y: pinCoordinateY,
-          title: pinLocationTitle,
-          description: pinLocationDescription
-        })
-      });
-      if (fetchResponse.ok) {
-        loadMapPins();
-      }
-    } catch (errorObject) {
-      console.error(errorObject);
-    }
+
     toggleMapPinMode();
+
+    // Open the aesthetic VTM Drop Map Pin Modal (#newMapPinModal) instead of native browser prompt()
+    const modalElement = document.getElementById('newMapPinModal');
+    if (modalElement) {
+      modalElement.dataset.coordMode = 'stage';
+      modalElement.dataset.targetMapUrl = mapUrl;
+      const pinXInput = document.getElementById('newPinX');
+      const pinYInput = document.getElementById('newPinY');
+      const pinTitleInput = document.getElementById('newPinTitle');
+      const pinDescInput = document.getElementById('newPinDescription');
+      const pinSecInput = document.getElementById('newPinSecurity');
+      const pinInfInput = document.getElementById('newPinInfiltration');
+      if (pinXInput) pinXInput.value = String(pinCoordinateX);
+      if (pinYInput) pinYInput.value = String(pinCoordinateY);
+      if (pinTitleInput) {
+        pinTitleInput.value = '';
+        pinTitleInput.onkeydown = (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            if (typeof createMapPinSubmit === 'function') createMapPinSubmit();
+          }
+        };
+      }
+      if (pinDescInput) pinDescInput.value = '';
+      if (pinSecInput) pinSecInput.value = '';
+      if (pinInfInput) pinInfInput.value = '';
+      modalElement.classList.add('active');
+      modalElement.style.zIndex = '9999999';
+      setTimeout(() => {
+        if (pinTitleInput) pinTitleInput.focus();
+      }, 50);
+    }
   });
   // Listen for map pin updates broadcast by the server via Socket.IO
   socket.on('gameboard:pins_updated', () => {
@@ -1102,6 +1106,14 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
   localStorage.setItem('lastChronicleRole', role);
   activeChronicleId = campaignId;
   activeChronicleRole = role;
+  currentLoadedCharacterId = null;
+  activeControlledCharacterId = null;
+  activeNpcPersonaId = null;
+  if (role === 'gm' || role === 'storyteller') {
+    if (typeof renderStorytellerGodDossier === 'function') renderStorytellerGodDossier('widget-character-dossier');
+  } else {
+    if (typeof renderUnassignedPlayerDossier === 'function') renderUnassignedPlayerDossier('widget-character-dossier');
+  }
   document.body.className = `role-${role}`;
   const userDisplayName = currentUser ? currentUser.displayName || currentUser.username : 'Kindred';
   // Query the DOM for the profile display name, role badge, and user dropdown elements
@@ -1179,6 +1191,7 @@ async function enterChronicle(campaignId, role, targetTab = 'gameboard') {
             const parsedUiSettings = typeof chronicleRecord.ui_settings === 'string' ? JSON.parse(chronicleRecord.ui_settings) : chronicleRecord.ui_settings;
             if (parsedUiSettings && typeof parsedUiSettings === 'object') {
                 chronicleUiSettings = parsedUiSettings;
+                if (typeof syncAutoAcceptToggleUi === 'function') syncAutoAcceptToggleUi();
                 // Re-render clues now that settings are loaded
                 if (typeof activeWidgetMatrixId !== 'undefined' && activeWidgetMatrixId) {
                     renderWidgetClueCards(activeWidgetMatrixId);

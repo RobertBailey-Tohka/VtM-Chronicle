@@ -302,8 +302,10 @@ function selectNpcPersona(npcCharacterId) {
 function selectStorytellerDefaultPersona() {
   activeNpcPersonaId = null;
   activeControlledCharacterId = null;
+  currentLoadedCharacterId = null;
   renderCharacterCastWidget();
   if (typeof renderCharacterVaultCards === "function") renderCharacterVaultCards();
+  renderStorytellerGodDossier('widget-character-dossier');
   // Look up the dice persona select dropdown in the DOM by ID
   const dicePersonaSelectElement = document.getElementById('dicePersonaSelect');
   if (dicePersonaSelectElement) {
@@ -345,12 +347,43 @@ async function loadCharacters() {
     // Parse the JSON response into an array of character records
     const fetchedCharactersList = await fetchResponse.json();
     chronicleCharactersList = fetchedCharactersList;
-    const activePersonaCharacter = fetchedCharactersList.find(characterRecord => characterRecord.id === (activeNpcPersonaId || activeControlledCharacterId)) || fetchedCharactersList[0];
-    const currentlyViewedCharacter = fetchedCharactersList.find(characterRecord => characterRecord.id === currentLoadedCharacterId);
+
+    const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+    const ownedPlayerCharacter = !isStoryteller && currentUser
+      ? fetchedCharactersList.find(characterRecord => {
+          if (Number(characterRecord.user_id) === Number(currentUser.id)) return true;
+          const authIds = Array.isArray(characterRecord.authorized_user_ids)
+            ? characterRecord.authorized_user_ids.map(Number)
+            : [];
+          return authIds.includes(Number(currentUser.id));
+        })
+      : null;
+
+    if (!isStoryteller && !activeControlledCharacterId && ownedPlayerCharacter) {
+      activeControlledCharacterId = ownedPlayerCharacter.id;
+      const diceRollerNameInputElement = document.getElementById('diceRollerName');
+      if (diceRollerNameInputElement) diceRollerNameInputElement.value = ownedPlayerCharacter.name;
+      const chatSenderLabelElement = document.getElementById('chatSenderLabel');
+      if (chatSenderLabelElement) chatSenderLabelElement.innerText = `Speaking as: ${ownedPlayerCharacter.name}`;
+    }
+
+    const currentlyViewedCharacter = currentLoadedCharacterId
+      ? fetchedCharactersList.find(characterRecord => Number(characterRecord.id) === Number(currentLoadedCharacterId))
+      : null;
+    const activePersonaCharacter = (activeNpcPersonaId || activeControlledCharacterId)
+      ? fetchedCharactersList.find(characterRecord => Number(characterRecord.id) === Number(activeNpcPersonaId || activeControlledCharacterId))
+      : null;
+
     if (currentlyViewedCharacter) {
-        updateDossierWidget(currentlyViewedCharacter);
+      updateDossierWidget(currentlyViewedCharacter);
     } else if (activePersonaCharacter) {
-        updateDossierWidget(activePersonaCharacter);
+      updateDossierWidget(activePersonaCharacter);
+    } else if (isStoryteller) {
+      renderStorytellerGodDossier('widget-character-dossier');
+    } else if (ownedPlayerCharacter) {
+      updateDossierWidget(ownedPlayerCharacter);
+    } else {
+      renderUnassignedPlayerDossier('widget-character-dossier');
     }
     
     // Query all character dossier widget elements in the DOM to update any floating secondary dossier widgets
@@ -1221,10 +1254,28 @@ async function openMyCharacterDossier() {
   }
 }
 
+function canCurrentUserEditCharacterVitals(characterRecord) {
+  if (!characterRecord) return false;
+  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
+  if (isStoryteller) return true;
+  if (!currentUser) return false;
+  if (Number(characterRecord.user_id) === Number(currentUser.id)) return true;
+  const authorizedUserIdsList = Array.isArray(characterRecord.authorized_user_ids)
+    ? characterRecord.authorized_user_ids.map(Number)
+    : [];
+  return authorizedUserIdsList.includes(Number(currentUser.id));
+}
+
 async function adjustDossierVitals(vitalType, changeDelta, characterId = currentLoadedCharacterId) {
   if (!characterId) return;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === characterId);
   if (!characterRecord) return;
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their vitals.", 'Read-Only Dossier');
+    }
+    return;
+  }
   try {
     // Perform an authenticated HTTP POST request to adjust the character's vital tracker on the server
     const fetchResponse = await authFetch(`/api/characters/${characterRecord.id}/vitals`, {
@@ -1311,6 +1362,12 @@ async function adjustDossierCapacity(trackerName, capacityDelta) {
   if (!currentLoadedCharacterId) return;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
   if (!characterRecord) return;
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their vitals.", 'Read-Only Dossier');
+    }
+    return;
+  }
   const parsedSheetData = typeof characterRecord.sheet_data === 'object' && characterRecord.sheet_data !== null ? characterRecord.sheet_data : {};
   const isAlternateSheetTemplate = parsedSheetData.sheet_template === 'V5-Character-Sheet-ALT.html' && trackerName === 'health';
   const maximumTrackBoxes = (Array.isArray(parsedSheetData[trackerName + '_states']) && parsedSheetData[trackerName + '_states'].length === 15) || isAlternateSheetTemplate ? 15 : 10;
@@ -1360,6 +1417,12 @@ function clickDossierHunger(targetHungerLevel) {
   if (!currentLoadedCharacterId) return;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
   if (!characterRecord) return;
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their Hunger.", 'Read-Only Dossier');
+    }
+    return;
+  }
   let currentHungerLevel = characterRecord.hunger !== undefined ? Number(characterRecord.hunger) : 1;
   let updatedHungerLevel = targetHungerLevel;
   if (currentHungerLevel === targetHungerLevel) {
@@ -1373,13 +1436,10 @@ async function cycleDossierDamagePip(trackerName, boxIndex, characterId = curren
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === characterId);
   if (!characterRecord) return;
   
-  const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
-  const isCharacterOwner = currentUser && currentUser.id === characterRecord.user_id;
-  const authorizedUserIdsList = Array.isArray(characterRecord.authorized_user_ids) ? characterRecord.authorized_user_ids : [];
-  const isAuthorizedPilot = currentUser && authorizedUserIdsList.includes(currentUser.id);
-  if (!isStoryteller && !isCharacterOwner && !isAuthorizedPilot) {
-    // Display a native browser alert if the user lacks permission to edit vitals
-    alert("You do not have permission to edit this character's vitals.");
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their vitals.", 'Read-Only Dossier');
+    }
     return;
   }
   
@@ -1463,6 +1523,12 @@ async function setDossierPip(trackerName, targetPipValue) {
   if (!currentLoadedCharacterId) return;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
   if (!characterRecord) return;
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their vitals.", 'Read-Only Dossier');
+    }
+    return;
+  }
   try {
     const vitalUpdatePayload = trackerName === 'hunger' ? {
       hunger: targetPipValue
@@ -1499,11 +1565,235 @@ async function toggleDossierHumanityPip(pipIndex) {
   if (!currentLoadedCharacterId) return;
   const characterRecord = chronicleCharactersList.find(candidateCharacter => candidateCharacter.id === currentLoadedCharacterId);
   if (!characterRecord) return;
+  if (!canCurrentUserEditCharacterVitals(characterRecord)) {
+    if (typeof vtmAlert === 'function') {
+      vtmAlert("Only the Storyteller or this character's assigned player can modify their vitals.", 'Read-Only Dossier');
+    }
+    return;
+  }
   const currentHumanityRating = characterRecord.humanity !== undefined ? Number(characterRecord.humanity) : 7;
   if (pipIndex < currentHumanityRating) {
     return;
   }
   adjustDossierVitals('stain', 1);
+}
+
+function setDossierStepperButtonsVisible(widgetContainerId, isVisible) {
+  const widgetElement = document.getElementById(widgetContainerId);
+  if (!widgetElement) return;
+  widgetElement.querySelectorAll('.dossier-stepper .btn-step').forEach(btn => {
+    btn.style.display = isVisible ? '' : 'none';
+  });
+  const cameraOverlayBtn = widgetElement.querySelector('.btn-avatar-camera-overlay');
+  if (cameraOverlayBtn) {
+    cameraOverlayBtn.style.display = isVisible ? '' : 'none';
+  }
+}
+
+function renderStorytellerGodDossier(widgetContainerId = 'widget-character-dossier') {
+  try {
+    if (widgetContainerId === 'widget-character-dossier') {
+      currentLoadedCharacterId = null;
+    }
+    const elementIdSuffix = widgetContainerId === 'widget-character-dossier' ? '' : `-${widgetContainerId.replace('widget-character-dossier-', '')}`;
+    const getDossierElementById = (baseElementId) => document.getElementById(baseElementId + elementIdSuffix);
+
+    setDossierStepperButtonsVisible(widgetContainerId, false);
+    const visBtn = getDossierElementById('dossierQuickVisibilityBtn');
+    if (visBtn) visBtn.style.display = 'none';
+    const categoryWrapperElement = getDossierElementById('dossierCategoryWrap');
+    if (categoryWrapperElement) categoryWrapperElement.style.display = 'none';
+    const assumeControlWrapperElement = getDossierElementById('dossierAssumeControlWrap');
+    if (assumeControlWrapperElement) assumeControlWrapperElement.style.display = 'none';
+
+    const widgetTitleElement = getDossierElementById('dossierWidgetTitle');
+    if (widgetTitleElement) widgetTitleElement.innerText = "THE STORYTELLER'S DOSSIER";
+    const characterNameElement = getDossierElementById('dossierCharName');
+    if (characterNameElement) characterNameElement.innerText = "The Storyteller";
+    const characterClanElement = getDossierElementById('dossierClan');
+    if (characterClanElement) characterClanElement.innerText = 'Omnipotent • Generation 0';
+    const characterPathElement = getDossierElementById('dossierPath');
+    if (characterPathElement) characterPathElement.innerText = 'Architect of Fate ("YOU LOSE")';
+    const playerOwnerElement = getDossierElementById('dossierPlayerOwner');
+    if (playerOwnerElement) playerOwnerElement.innerText = 'Caine\'s Boss';
+    const avatarImageElement = getDossierElementById('dossierAvatarImg');
+    if (avatarImageElement) {
+      avatarImageElement.onerror = function() {
+        this.onerror = null;
+        this.src = '/images/caine_portrait.jpg?v=2';
+      };
+      avatarImageElement.src = '/images/st_avatar.png';
+    }
+
+    const hungerValueElement = getDossierElementById('dossierHungerVal');
+    if (hungerValueElement) hungerValueElement.innerText = '0 / 5 (Sated on Player Tears)';
+    const hungerPipsContainerElement = getDossierElementById('dossierHungerPips');
+    if (hungerPipsContainerElement) {
+      hungerPipsContainerElement.innerHTML = Array(5).fill(0).map(() =>
+        `<div class="dossier-pip pip-empty" style="cursor:default;border-color:rgba(245,158,11,0.45);" title="Sated on Player Tears"></div>`
+      ).join('');
+    }
+
+    const goldPipStyle = 'background:linear-gradient(135deg,#f59e0b,#b45309);border-color:#fbbf24;color:#090507;font-weight:900;font-size:10px;cursor:default;box-shadow:0 0 6px rgba(245,158,11,0.45);';
+    const healthValueElement = getDossierElementById('dossierHealthVal');
+    if (healthValueElement) healthValueElement.innerText = '∞ (Plot Armor)';
+    const healthPipsContainerElement = getDossierElementById('dossierHealthPips');
+    if (healthPipsContainerElement) {
+      healthPipsContainerElement.innerHTML = Array(10).fill(0).map(() =>
+        `<div class="dossier-pip" style="${goldPipStyle}" title="Infinite Plot Armor">∞</div>`
+      ).join('');
+    }
+
+    const willpowerValueElement = getDossierElementById('dossierWpVal');
+    if (willpowerValueElement) willpowerValueElement.innerText = '∞ (Rule Zero)';
+    const willpowerPipsContainerElement = getDossierElementById('dossierWpPips');
+    if (willpowerPipsContainerElement) {
+      willpowerPipsContainerElement.innerHTML = Array(10).fill(0).map(() =>
+        `<div class="dossier-pip" style="${goldPipStyle}" title="Absolute Narrative Authority">∞</div>`
+      ).join('');
+    }
+
+    const humanityValueElement = getDossierElementById('dossierHumanityVal');
+    if (humanityValueElement) humanityValueElement.innerText = '10 / 10 (Above Morality)';
+    const stainsValueElement = getDossierElementById('dossierStainsVal');
+    if (stainsValueElement) stainsValueElement.innerText = '0';
+    const humanityPipsContainerElement = getDossierElementById('dossierHumanityPips');
+    if (humanityPipsContainerElement) {
+      humanityPipsContainerElement.innerHTML = Array(10).fill(0).map(() =>
+        `<div class="dossier-pip pip-humanity" style="cursor:default;" title="Omniscient Detachment"></div>`
+      ).join('');
+    }
+
+    const attributesStatsContainerElement = getDossierElementById('dossierStatsContainer');
+    if (attributesStatsContainerElement) {
+      attributesStatsContainerElement.innerHTML = `
+        <div class="dossier-attrs-grid">
+            <div class="attr-col">
+                <span class="attr-col-hdr">Physical</span>
+                <div class="attr-micro-row"><span>Strength</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Dexterity</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Stamina</span><strong style="color:#fbbf24;">∞</strong></div>
+            </div>
+            <div class="attr-col">
+                <span class="attr-col-hdr">Social</span>
+                <div class="attr-micro-row"><span>Charisma</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Manipulation</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Composure</span><strong style="color:#fbbf24;">∞</strong></div>
+            </div>
+            <div class="attr-col">
+                <span class="attr-col-hdr">Mental</span>
+                <div class="attr-micro-row"><span>Intelligence</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Wits</span><strong style="color:#fbbf24;">∞</strong></div>
+                <div class="attr-micro-row"><span>Resolve</span><strong style="color:#fbbf24;">∞</strong></div>
+            </div>
+        </div>
+      `;
+    }
+
+    const skillsContainerElement = getDossierElementById('dossierSkillsContainer');
+    if (skillsContainerElement) {
+      const godSkills = [
+        { name: 'Dice Fudging', val: '10' },
+        { name: 'Dramatic Timing', val: '10' },
+        { name: 'Cat Herding', val: '10' },
+        { name: 'Plot Armor Piercing', val: '10' },
+        { name: 'Brooding Narration', val: '10' },
+        { name: 'Frenzy Induction', val: '10' }
+      ];
+      skillsContainerElement.innerHTML = godSkills.map(skillEntry => `
+        <div class="skill-chip">
+            <span>${escapeHtml(skillEntry.name)}</span>
+            <strong style="color:#fbbf24;">${skillEntry.val}</strong>
+        </div>
+      `).join('');
+    }
+
+    const disciplinesContainerElement = getDossierElementById('dossierDisciplinesContainer');
+    if (disciplinesContainerElement) {
+      disciplinesContainerElement.innerHTML = `
+        <div class="discipline-entry-card">
+            <div class="discipline-chip">
+                <span class="disc-name">Rule Zero (Omnipotence)</span>
+                <span class="disc-dots" style="color:#fbbf24;">&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;</span>
+            </div>
+            <div class="disc-powers-list">
+                <div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Rocks Fall, Everybody Makes a Rötschreck Check</span></div>
+                <div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Unscheduled Sunrise</span></div>
+                <div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Summon the Sheriff &amp; Three Blood Hounds</span></div>
+            </div>
+        </div>
+        <div class="discipline-entry-card">
+            <div class="discipline-chip">
+                <span class="disc-name">Caine's Sheet Reference</span>
+                <span class="disc-dots" style="color:#fbbf24;">&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;</span>
+            </div>
+            <div class="disc-powers-list">
+                <div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Any Kindred who attacks the Storyteller immediately loses.</span></div>
+                <div class="disc-power-item"><i class="fa-solid fa-angle-right"></i> <span>Select any character from Cast or Vault to inspect their sheet.</span></div>
+            </div>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error('Error rendering Storyteller God Dossier:', err);
+  }
+}
+
+function renderUnassignedPlayerDossier(widgetContainerId = 'widget-character-dossier') {
+  try {
+    if (widgetContainerId === 'widget-character-dossier') {
+      currentLoadedCharacterId = null;
+    }
+    const elementIdSuffix = widgetContainerId === 'widget-character-dossier' ? '' : `-${widgetContainerId.replace('widget-character-dossier-', '')}`;
+    const getDossierElementById = (baseElementId) => document.getElementById(baseElementId + elementIdSuffix);
+
+    setDossierStepperButtonsVisible(widgetContainerId, false);
+    const visBtn = getDossierElementById('dossierQuickVisibilityBtn');
+    if (visBtn) visBtn.style.display = 'none';
+    const categoryWrapperElement = getDossierElementById('dossierCategoryWrap');
+    if (categoryWrapperElement) categoryWrapperElement.style.display = 'none';
+    const assumeControlWrapperElement = getDossierElementById('dossierAssumeControlWrap');
+    if (assumeControlWrapperElement) assumeControlWrapperElement.style.display = 'none';
+
+    const widgetTitleElement = getDossierElementById('dossierWidgetTitle');
+    if (widgetTitleElement) widgetTitleElement.innerText = 'KINDRED DOSSIER';
+    const characterNameElement = getDossierElementById('dossierCharName');
+    if (characterNameElement) characterNameElement.innerText = 'No Kindred Selected';
+    const characterClanElement = getDossierElementById('dossierClan');
+    if (characterClanElement) characterClanElement.innerText = '—';
+    const characterPathElement = getDossierElementById('dossierPath');
+    if (characterPathElement) characterPathElement.innerText = 'Create or select your character in the Vault';
+    const playerOwnerElement = getDossierElementById('dossierPlayerOwner');
+    if (playerOwnerElement) playerOwnerElement.innerText = currentUser ? (currentUser.displayName || currentUser.username) : 'Player';
+    const avatarImageElement = getDossierElementById('dossierAvatarImg');
+    if (avatarImageElement) avatarImageElement.src = '/images/caine_portrait.jpg?v=2';
+    const hungerValueElement = getDossierElementById('dossierHungerVal');
+    if (hungerValueElement) hungerValueElement.innerText = '- / 5';
+    const hungerPipsContainerElement = getDossierElementById('dossierHungerPips');
+    if (hungerPipsContainerElement) hungerPipsContainerElement.innerHTML = '';
+    const healthValueElement = getDossierElementById('dossierHealthVal');
+    if (healthValueElement) healthValueElement.innerText = '-';
+    const healthPipsContainerElement = getDossierElementById('dossierHealthPips');
+    if (healthPipsContainerElement) healthPipsContainerElement.innerHTML = '';
+    const willpowerValueElement = getDossierElementById('dossierWpVal');
+    if (willpowerValueElement) willpowerValueElement.innerText = '-';
+    const willpowerPipsContainerElement = getDossierElementById('dossierWpPips');
+    if (willpowerPipsContainerElement) willpowerPipsContainerElement.innerHTML = '';
+    const humanityValueElement = getDossierElementById('dossierHumanityVal');
+    if (humanityValueElement) humanityValueElement.innerText = '- / 10';
+    const humanityPipsContainerElement = getDossierElementById('dossierHumanityPips');
+    if (humanityPipsContainerElement) humanityPipsContainerElement.innerHTML = '';
+    const attributesStatsContainerElement = getDossierElementById('dossierStatsContainer');
+    if (attributesStatsContainerElement) {
+      attributesStatsContainerElement.innerHTML = '<div style="padding:10px;color:#9ca3af;font-size:12px;font-style:italic;">Open Character Vault or Cast to view a Kindred dossier.</div>';
+    }
+    const skillsContainerElement = getDossierElementById('dossierSkillsContainer');
+    if (skillsContainerElement) skillsContainerElement.innerHTML = '';
+    const disciplinesContainerElement = getDossierElementById('dossierDisciplinesContainer');
+    if (disciplinesContainerElement) disciplinesContainerElement.innerHTML = '';
+  } catch (err) {
+    console.error('Error rendering unassigned dossier:', err);
+  }
 }
 
 function updateDossierWidget(characterRecord, widgetContainerId = 'widget-character-dossier') {
@@ -1517,10 +1807,11 @@ function updateDossierWidget(characterRecord, widgetContainerId = 'widget-charac
     const getDossierElementById = (baseElementId) => document.getElementById(baseElementId + elementIdSuffix);
 
     const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
-    const isCharacterOwner = currentUser && currentUser.id === characterRecord.user_id;
-    const authorizedUserIdsList = Array.isArray(characterRecord.authorized_user_ids) ? characterRecord.authorized_user_ids : [];
-    const isAuthorizedPilot = currentUser && authorizedUserIdsList.includes(currentUser.id);
+    const isCharacterOwner = currentUser && Number(currentUser.id) === Number(characterRecord.user_id);
+    const authorizedUserIdsList = Array.isArray(characterRecord.authorized_user_ids) ? characterRecord.authorized_user_ids.map(Number) : [];
+    const isAuthorizedPilot = currentUser && authorizedUserIdsList.includes(Number(currentUser.id));
     const canEditDossier = isStoryteller || isCharacterOwner || isAuthorizedPilot;
+    setDossierStepperButtonsVisible(widgetContainerId, canEditDossier);
     
     let concealedFieldsList = [];
     if (characterRecord.concealed_fields) {
@@ -1599,13 +1890,16 @@ function updateDossierWidget(characterRecord, widgetContainerId = 'widget-charac
         const hungerValueElement = getDossierElementById('dossierHungerVal');
         if (hungerValueElement) hungerValueElement.innerText = `${hungerLevel} / 5`;
         const hungerPipsContainerElement = getDossierElementById('dossierHungerPips');
+        const readOnlyPipCursor = canEditDossier ? '' : 'style="cursor:default;"';
         if (hungerPipsContainerElement) {
           if (!canEditDossier && (concealedFieldsList.includes('section_vitals') || concealedFieldsList.includes('hunger'))) {
             hungerPipsContainerElement.innerHTML = '<span style="color:#ef4444;font-size:12px;font-family:monospace;">[REDACTED]</span>';
           } else {
             hungerPipsContainerElement.innerHTML = Array(5).fill(0).map((_, pipIndex) => {
               const isHungerPipFilled = pipIndex < hungerLevel;
-              return `<div class="dossier-pip ${isHungerPipFilled ? 'pip-hunger' : 'pip-empty'}" onclick="clickDossierHunger(${pipIndex + 1})" title="Hunger ${pipIndex + 1} (Click to set 1..${pipIndex + 1})">${isHungerPipFilled ? '' : ''}</div>`;
+              const pipOnClick = canEditDossier ? `onclick="clickDossierHunger(${pipIndex + 1})"` : '';
+              const pipTitle = canEditDossier ? `Hunger ${pipIndex + 1} (Click to set 1..${pipIndex + 1})` : `Hunger ${pipIndex + 1}`;
+              return `<div class="dossier-pip ${isHungerPipFilled ? 'pip-hunger' : 'pip-empty'}" ${pipOnClick} ${readOnlyPipCursor} title="${pipTitle}"></div>`;
             }).join('');
           }
         }
@@ -1627,14 +1921,15 @@ function updateDossierWidget(characterRecord, widgetContainerId = 'widget-charac
             if (healthValueElement) healthValueElement.innerText = `${maxHealthCapacity}`;
             if (healthPipsContainerElement) {
               healthPipsContainerElement.innerHTML = displayedHealthStates.map((boxDamageState, pipIndex) => {
+                const pipOnClick = canEditDossier ? `onclick="cycleDossierDamagePip('health', ${pipIndex}, ${characterRecord.id})"` : '';
                 if (boxDamageState === 'aggravated') {
-                  return `<div class="dossier-pip pip-aggravated" onclick="cycleDossierDamagePip('health', ${pipIndex}, ${characterRecord.id})" title="Aggravated Damage (Click to clear)">X</div>`;
+                  return `<div class="dossier-pip pip-aggravated" ${pipOnClick} ${readOnlyPipCursor} title="Aggravated Damage">X</div>`;
                 } else if (boxDamageState === 'superficial') {
-                  return `<div class="dossier-pip pip-superficial" onclick="cycleDossierDamagePip('health', ${pipIndex}, ${characterRecord.id})" title="Superficial Damage (Click to upgrade)">/</div>`;
+                  return `<div class="dossier-pip pip-superficial" ${pipOnClick} ${readOnlyPipCursor} title="Superficial Damage">/</div>`;
                 } else if (boxDamageState === 'filled') {
-                  return `<div class="dossier-pip pip-black" title="Beyond Max Health"></div>`;
+                  return `<div class="dossier-pip pip-black" style="cursor:default;" title="Beyond Max Health"></div>`;
                 } else {
-                  return `<div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('health', ${pipIndex}, ${characterRecord.id})" title="Unharmed (Click to mark damage)"></div>`;
+                  return `<div class="dossier-pip pip-empty" ${pipOnClick} ${readOnlyPipCursor} title="Unharmed"></div>`;
                 }
               }).join('');
             }
@@ -1654,14 +1949,15 @@ function updateDossierWidget(characterRecord, widgetContainerId = 'widget-charac
             if (willpowerValueElement) willpowerValueElement.innerText = `${maxWillpowerCapacity}`;
             if (willpowerPipsContainerElement) {
               willpowerPipsContainerElement.innerHTML = displayedWillpowerStates.map((boxDamageState, pipIndex) => {
+                const pipOnClick = canEditDossier ? `onclick="cycleDossierDamagePip('willpower', ${pipIndex}, ${characterRecord.id})"` : '';
                 if (boxDamageState === 'aggravated') {
-                  return `<div class="dossier-pip pip-aggravated" onclick="cycleDossierDamagePip('willpower', ${pipIndex}, ${characterRecord.id})" title="Aggravated Willpower">X</div>`;
+                  return `<div class="dossier-pip pip-aggravated" ${pipOnClick} ${readOnlyPipCursor} title="Aggravated Willpower">X</div>`;
                 } else if (boxDamageState === 'superficial') {
-                  return `<div class="dossier-pip pip-superficial" onclick="cycleDossierDamagePip('willpower', ${pipIndex}, ${characterRecord.id})" title="Superficial Willpower">/</div>`;
+                  return `<div class="dossier-pip pip-superficial" ${pipOnClick} ${readOnlyPipCursor} title="Superficial Willpower">/</div>`;
                 } else if (boxDamageState === 'filled') {
-                  return `<div class="dossier-pip pip-black" title="Beyond Max Willpower"></div>`;
+                  return `<div class="dossier-pip pip-black" style="cursor:default;" title="Beyond Max Willpower"></div>`;
                 } else {
-                  return `<div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('willpower', ${pipIndex}, ${characterRecord.id})" title="Unspent"></div>`;
+                  return `<div class="dossier-pip pip-empty" ${pipOnClick} ${readOnlyPipCursor} title="Unspent"></div>`;
                 }
               }).join('');
             }
@@ -1685,14 +1981,15 @@ function updateDossierWidget(characterRecord, widgetContainerId = 'widget-charac
                 return 'empty';
               });
               humanityPipsContainerElement.innerHTML = humanityStatesArray.map((boxDamageState, pipIndex) => {
+                const pipOnClick = canEditDossier ? `onclick="cycleDossierDamagePip('humanity', ${pipIndex}, ${characterRecord.id})"` : '';
                 if (boxDamageState === 'aggravated') {
-                  return `<div class="dossier-pip pip-aggravated" onclick="cycleDossierDamagePip('humanity', ${pipIndex}, ${characterRecord.id})" title="Aggravated Damage">X</div>`;
+                  return `<div class="dossier-pip pip-aggravated" ${pipOnClick} ${readOnlyPipCursor} title="Aggravated Damage">X</div>`;
                 } else if (boxDamageState === 'superficial') {
-                  return `<div class="dossier-pip pip-stain" onclick="cycleDossierDamagePip('humanity', ${pipIndex}, ${characterRecord.id})" title="Stain (Click to upgrade)">/</div>`;
+                  return `<div class="dossier-pip pip-stain" ${pipOnClick} ${readOnlyPipCursor} title="Stain">/</div>`;
                 } else if (boxDamageState === 'filled') {
-                  return `<div class="dossier-pip pip-humanity" onclick="cycleDossierDamagePip('humanity', ${pipIndex}, ${characterRecord.id})" title="Humanity Rating (Click to override)"></div>`;
+                  return `<div class="dossier-pip pip-humanity" ${pipOnClick} ${readOnlyPipCursor} title="Humanity Rating"></div>`;
                 } else {
-                  return `<div class="dossier-pip pip-empty" onclick="cycleDossierDamagePip('humanity', ${pipIndex}, ${characterRecord.id})" title="Empty Box"></div>`;
+                  return `<div class="dossier-pip pip-empty" ${pipOnClick} ${readOnlyPipCursor} title="Empty Box"></div>`;
                 }
               }).join('');
             }
@@ -1876,9 +2173,11 @@ function openCurrentFullSheet() {
 }
 
 
-function deleteCharacterDirectly(characterId) {
-  // Display a native browser confirmation dialog before permanently deleting the character
-  if (!confirm('Are you absolutely sure you want to delete this character? This cannot be undone.')) return;
+async function deleteCharacterDirectly(characterId) {
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Are you absolutely sure you want to delete this character? This cannot be undone.', 'Delete Character')
+    : true;
+  if (!isConfirmed) return;
   // Perform an authenticated HTTP DELETE request to delete the character on the server
   authFetch('/api/characters/' + characterId, {
     method: 'DELETE'
@@ -2145,9 +2444,9 @@ async function addNpcCategory() {
 
 
 async function editNpcCategory(categoryId, currentCategoryName, currentCategoryDescription) {
-  const promptedCategoryName = await vtmPrompt("Edit category name:", currentCategoryName);
+  const promptedCategoryName = await vtmPrompt("Edit category name:", "Edit Category", currentCategoryName);
   if (promptedCategoryName === null) return;
-  const promptedCategoryDescription = await vtmPrompt("Edit category description:", currentCategoryDescription || '');
+  const promptedCategoryDescription = await vtmPrompt("Edit category description:", "Edit Category Description", currentCategoryDescription || '');
   if (promptedCategoryDescription === null) return;
   if (!promptedCategoryName.trim()) return alert("Name cannot be empty");
   try {
@@ -2176,8 +2475,10 @@ async function editNpcCategory(categoryId, currentCategoryName, currentCategoryD
 }
 
 async function deleteNpcCategory(categoryId, categoryName) {
-  // Display a native browser confirmation dialog before deleting the NPC category
-  if (!confirm(`Are you sure you want to delete the "${categoryName}" category? All NPCs inside it will be marked as "Uncategorized".`)) return;
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm(`Are you sure you want to delete the "${categoryName}" category? All NPCs inside it will be marked as "Uncategorized".`, 'Delete NPC Category')
+    : true;
+  if (!isConfirmed) return;
   try {
     // Perform an authenticated HTTP DELETE request to delete the NPC category on the server
     const fetchResponse = await authFetch(`/api/npc-categories/${categoryId}`, {

@@ -1229,8 +1229,14 @@ function renderSvgConnectors() {
   // Look up the SVG overlay element in the DOM by its ID
   const svgOverlayElement = document.getElementById('canvasSvgOverlay');
   if (!svgOverlayElement) return;
+  svgOverlayElement.style.pointerEvents = 'none';
+  svgOverlayElement.style.zIndex = '999998';
   svgOverlayElement.innerHTML = '';
   if (!canvasState.links || canvasState.links.length === 0) return;
+
+  const zoomFactor = Math.max(0.15, (typeof canvasTransform !== 'undefined' && canvasTransform.zoom) ? Number(canvasTransform.zoom) : 1);
+  const invZoom = 1 / zoomFactor;
+
   canvasState.links.forEach(connectionLink => {
     let sourceEntity = canvasState.entities.find(entityItem => String(entityItem.id) === String(connectionLink.from));
     let targetEntity = canvasState.entities.find(entityItem => String(entityItem.id) === String(connectionLink.to));
@@ -1251,12 +1257,14 @@ function renderSvgConnectors() {
     let startY = parseFloat(sourceEntity.y) + (parseFloat(sourceEntity.height) || 320) / 2;
     let endX = parseFloat(targetEntity.x) + (parseFloat(targetEntity.width) || 480) / 2;
     let endY = parseFloat(targetEntity.y) + (parseFloat(targetEntity.height) || 320) / 2;
+    let sourceHalfWidth = 0, sourceHalfHeight = 0;
+    let targetHalfWidth = 0, targetHalfHeight = 0;
     
     // Override with exact DOM positions to avoid any logic drifts
     if (sourceIsPin) {
-        // Query the pins layer in the DOM to find the matching map pin marker element
-        const sourcePinDomElement = document.getElementById('canvasPinsLayer').querySelector(`.map-pin-marker[onclick*="'${sourceEntity.id}'"]`) || 
-                          Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => markerElement.onclick && markerElement.onclick.toString().includes(`finalizeLinkAction('${sourceEntity.id}')`)) ||
+        const pinsLayerEl = document.getElementById('canvasPinsLayer');
+        const sourcePinDomElement = (pinsLayerEl && pinsLayerEl.querySelector(`.map-pin-marker[data-pin-id="${sourceEntity.id}"]`)) ||
+                          Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => String(markerElement.dataset.pinId) === String(sourceEntity.id)) ||
                           Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => markerElement.style.left === sourceEntity.x + 'px');
         if (sourcePinDomElement) {
             startX = parseFloat(sourcePinDomElement.style.left);
@@ -1268,8 +1276,10 @@ function renderSvgConnectors() {
     }
     
     if (targetIsPin) {
-        // Query all map pin markers in the DOM to find the target pin marker element
-        const targetPinDomElement = Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => markerElement.style.left === targetEntity.x + 'px');
+        const pinsLayerEl = document.getElementById('canvasPinsLayer');
+        const targetPinDomElement = (pinsLayerEl && pinsLayerEl.querySelector(`.map-pin-marker[data-pin-id="${targetEntity.id}"]`)) ||
+                          Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => String(markerElement.dataset.pinId) === String(targetEntity.id)) ||
+                          Array.from(document.querySelectorAll('.map-pin-marker')).find(markerElement => markerElement.style.left === targetEntity.x + 'px');
         if (targetPinDomElement) {
             endX = parseFloat(targetPinDomElement.style.left);
             endY = parseFloat(targetPinDomElement.style.top);
@@ -1281,44 +1291,109 @@ function renderSvgConnectors() {
     
     // Also override notecards using DOM to be completely certain
     if (!sourceIsPin) {
-        // Look up the source entity card element in the DOM by its ID
         const sourceCardDomElement = document.getElementById(`canvas-entity-${sourceEntity.id}`);
         if (sourceCardDomElement) {
-            startX = parseFloat(sourceCardDomElement.style.left) + sourceCardDomElement.offsetWidth / 2;
-            startY = parseFloat(sourceCardDomElement.style.top) + sourceCardDomElement.offsetHeight / 2;
+            sourceHalfWidth = (sourceCardDomElement.offsetWidth || parseFloat(sourceEntity.width) || 340) / 2;
+            sourceHalfHeight = (sourceCardDomElement.offsetHeight || parseFloat(sourceEntity.height) || 220) / 2;
+            startX = parseFloat(sourceCardDomElement.style.left) + sourceHalfWidth;
+            startY = parseFloat(sourceCardDomElement.style.top) + sourceHalfHeight;
         } else {
             return; // Not on this map
         }
     }
     if (!targetIsPin) {
-        // Look up the target entity card element in the DOM by its ID
         const targetCardDomElement = document.getElementById(`canvas-entity-${targetEntity.id}`);
         if (targetCardDomElement) {
-            endX = parseFloat(targetCardDomElement.style.left) + targetCardDomElement.offsetWidth / 2;
-            endY = parseFloat(targetCardDomElement.style.top) + targetCardDomElement.offsetHeight / 2;
+            targetHalfWidth = (targetCardDomElement.offsetWidth || parseFloat(targetEntity.width) || 340) / 2;
+            targetHalfHeight = (targetCardDomElement.offsetHeight || parseFloat(targetEntity.height) || 220) / 2;
+            endX = parseFloat(targetCardDomElement.style.left) + targetHalfWidth;
+            endY = parseFloat(targetCardDomElement.style.top) + targetHalfHeight;
         } else {
             return; // Not on this map
         }
     }
-    const controlPointOffsetX = (endX - startX) * 0.4;
-    const svgPathData = `M ${startX} ${startY} C ${startX + controlPointOffsetX} ${startY}, ${endX - controlPointOffsetX} ${endY}, ${endX} ${endY}`;
-    console.log('[Trace][SVG] Drawing link', {
-        from: connectionLink.from, to: connectionLink.to,
-        sIsPin: sourceIsPin, tIsPin: targetIsPin,
-        x1: startX, y1: startY, x2: endX, y2: endY,
-        sx: sourceEntity.x, sy: sourceEntity.y,
-        tx: targetEntity.x, ty: targetEntity.y
-    });
-    // Create an SVG <path> element in the SVG namespace to draw the red string connector
+
+    // Clamp card center endpoints to the nearest border edge of the card so the attachment push-pin is clearly visible
+    const rawStartX = startX, rawStartY = startY;
+    const rawEndX = endX, rawEndY = endY;
+    if (!sourceIsPin && sourceHalfWidth > 0 && sourceHalfHeight > 0) {
+        const dx = rawEndX - rawStartX;
+        const dy = rawEndY - rawStartY;
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+            const scaleX = sourceHalfWidth / Math.max(Math.abs(dx), 0.001);
+            const scaleY = sourceHalfHeight / Math.max(Math.abs(dy), 0.001);
+            const edgeScale = Math.min(1, Math.min(scaleX, scaleY));
+            startX = rawStartX + dx * edgeScale;
+            startY = rawStartY + dy * edgeScale;
+        }
+    }
+    if (!targetIsPin && targetHalfWidth > 0 && targetHalfHeight > 0) {
+        const dx = rawStartX - rawEndX;
+        const dy = rawStartY - rawEndY;
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+            const scaleX = targetHalfWidth / Math.max(Math.abs(dx), 0.001);
+            const scaleY = targetHalfHeight / Math.max(Math.abs(dy), 0.001);
+            const edgeScale = Math.min(1, Math.min(scaleX, scaleY));
+            endX = rawEndX + dx * edgeScale;
+            endY = rawEndY + dy * edgeScale;
+        }
+    }
+
+    const controlPointOffsetX = (endX - startX) * 0.38;
+    const arcLiftY = Math.min(80 * invZoom, Math.hypot(endX - startX, endY - startY) * 0.14);
+    const svgPathData = `M ${startX} ${startY} C ${startX + controlPointOffsetX} ${startY - arcLiftY}, ${endX - controlPointOffsetX} ${endY - arcLiftY}, ${endX} ${endY}`;
+    const primaryColor = connectionLink.color || '#ff2a4b';
+
+    // 1. High-contrast dark outer casing path so the connector stands out on black-and-beige vintage maps
+    const casingPathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    casingPathElement.setAttribute('d', svgPathData);
+    casingPathElement.setAttribute('fill', 'none');
+    casingPathElement.setAttribute('stroke', 'rgba(8, 4, 7, 0.94)');
+    casingPathElement.setAttribute('stroke-width', String(9 * invZoom));
+    casingPathElement.setAttribute('stroke-linecap', 'round');
+    casingPathElement.style.filter = `drop-shadow(0 ${2 * invZoom}px ${6 * invZoom}px rgba(0, 0, 0, 0.95))`;
+    svgOverlayElement.appendChild(casingPathElement);
+
+    // 2. Crimson outer glow path
+    const glowPathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    glowPathElement.setAttribute('d', svgPathData);
+    glowPathElement.setAttribute('fill', 'none');
+    glowPathElement.setAttribute('stroke', primaryColor);
+    glowPathElement.setAttribute('stroke-width', String(5 * invZoom));
+    glowPathElement.setAttribute('stroke-linecap', 'round');
+    glowPathElement.setAttribute('stroke-opacity', '0.5');
+    glowPathElement.style.filter = `drop-shadow(0 0 ${8 * invZoom}px rgba(255, 42, 75, 0.95))`;
+    svgOverlayElement.appendChild(glowPathElement);
+
+    // 3. Crisp inner detective yarn path
     const svgPathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     svgPathElement.setAttribute('d', svgPathData);
     svgPathElement.setAttribute('fill', 'none');
-    svgPathElement.setAttribute('stroke', connectionLink.color || '#ef4444');
-    svgPathElement.setAttribute('stroke-width', '2.5');
+    svgPathElement.setAttribute('stroke', '#ff4d6d');
+    svgPathElement.setAttribute('stroke-width', String(3.2 * invZoom));
     svgPathElement.setAttribute('stroke-linecap', 'round');
-    svgPathElement.setAttribute('stroke-dasharray', '6 3');
-    svgPathElement.style.filter = 'drop-shadow(0 0 6px rgba(239, 68, 68, 0.7))';
+    svgPathElement.setAttribute('stroke-dasharray', `${10 * invZoom} ${6 * invZoom}`);
     svgOverlayElement.appendChild(svgPathElement);
+
+    // 4. Draw push-pin anchor nodes at both ends so the connection points are unmistakable
+    [[startX, startY], [endX, endY]].forEach(([nodeX, nodeY]) => {
+      const outerPinCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      outerPinCircle.setAttribute('cx', String(nodeX));
+      outerPinCircle.setAttribute('cy', String(nodeY));
+      outerPinCircle.setAttribute('r', String(6.5 * invZoom));
+      outerPinCircle.setAttribute('fill', primaryColor);
+      outerPinCircle.setAttribute('stroke', '#090507');
+      outerPinCircle.setAttribute('stroke-width', String(2.5 * invZoom));
+      outerPinCircle.style.filter = `drop-shadow(0 0 ${6 * invZoom}px rgba(255, 42, 75, 0.95))`;
+      svgOverlayElement.appendChild(outerPinCircle);
+
+      const innerHighlightCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      innerHighlightCircle.setAttribute('cx', String(nodeX));
+      innerHighlightCircle.setAttribute('cy', String(nodeY));
+      innerHighlightCircle.setAttribute('r', String(2.4 * invZoom));
+      innerHighlightCircle.setAttribute('fill', '#ffe4e6');
+      svgOverlayElement.appendChild(innerHighlightCircle);
+    });
   });
 }
 
@@ -1394,6 +1469,7 @@ function renderMapPins(mapPinsList) {
     // Create a new <div> element in memory for the map pin marker
     const markerElement = document.createElement('div');
     markerElement.className = 'map-pin-marker';
+    markerElement.dataset.pinId = String(mapPinRecord.id);
     markerElement.style.left = mapPinRecord.x + 'px';
     markerElement.style.top = mapPinRecord.y + 'px';
     markerElement.style.pointerEvents = 'auto';
@@ -1445,6 +1521,10 @@ function renderMapPins(mapPinsList) {
       delPinBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete Pin';
       delPinBtn.onclick = async (ev) => {
         ev.stopPropagation();
+        const confirmed = typeof vtmConfirm === 'function'
+          ? await vtmConfirm(`Delete the location pin "${mapPinRecord.title || 'Unknown Location'}"?`, 'Delete Map Pin')
+          : true;
+        if (!confirmed) return;
         await authFetch(`/api/chronicles/${activeChronicleId}/pins/${mapPinRecord.id}`, { method: 'DELETE' });
         loadMapPins();
       };
@@ -1520,18 +1600,34 @@ async function createMapPinSubmit() {
   const pinDescription = document.getElementById('newPinDescription') ? document.getElementById('newPinDescription').value.trim() : '';
   const securityMeasures = document.getElementById('newPinSecurity') ? document.getElementById('newPinSecurity').value.trim() : '';
   const infiltrationRoutes = document.getElementById('newPinInfiltration') ? document.getElementById('newPinInfiltration').value.trim() : '';
-  // Show a browser alert if the location title is missing
-  if (!pinTitle) return alert('Location title required.');
+  // Show a styled alert if the location title is missing
+  if (!pinTitle) {
+    if (typeof vtmAlert === 'function') vtmAlert('Please enter a location title for this map pin.', 'Location Title Required');
+    else alert('Location title required.');
+    return;
+  }
 
-  // Look up the workshop minimap image and coordinate input elements in the DOM by their IDs
-  const minimapImageElement = document.getElementById('workshopMinimapImg');
-  let rawMapUrl = minimapImageElement ? minimapImageElement.getAttribute('src') : '/images/concept_map.jpg';
-  const mapUrlPathname = normalizeCityMapUrl(rawMapUrl);
-  const percentageX = parseFloat(document.getElementById('newPinX').value);
-  const percentageY = parseFloat(document.getElementById('newPinY').value);
+  const modalElement = document.getElementById('newMapPinModal');
+  const coordMode = modalElement && modalElement.dataset.coordMode ? modalElement.dataset.coordMode : 'percent';
+  const rawCoordX = parseFloat(document.getElementById('newPinX').value);
+  const rawCoordY = parseFloat(document.getElementById('newPinY').value);
 
-  const mapCoordinateX = Math.round((percentageX / 100) * 2800);
-  const mapCoordinateY = Math.round((percentageY / 100) * 2000);
+  let mapUrlPathname = '';
+  let mapCoordinateX = 0;
+  let mapCoordinateY = 0;
+
+  if (coordMode === 'stage') {
+    const rawStageUrl = (modalElement && modalElement.dataset.targetMapUrl) || getActiveCityMapUrl() || '/images/concept_map.jpg';
+    mapUrlPathname = normalizeCityMapUrl(rawStageUrl);
+    mapCoordinateX = Math.round(rawCoordX);
+    mapCoordinateY = Math.round(rawCoordY);
+  } else {
+    const minimapImageElement = document.getElementById('workshopMinimapImg');
+    const rawMapUrl = minimapImageElement ? minimapImageElement.getAttribute('src') : (getActiveCityMapUrl() || '/images/concept_map.jpg');
+    mapUrlPathname = normalizeCityMapUrl(rawMapUrl);
+    mapCoordinateX = Math.round((rawCoordX / 100) * 2800);
+    mapCoordinateY = Math.round((rawCoordY / 100) * 2000);
+  }
 
   try {
       // Perform an authenticated HTTP POST request to create the new map pin on the server
@@ -1551,8 +1647,8 @@ async function createMapPinSubmit() {
           })
       });
       closeModal('newMapPinModal');
-      loadCampaignPins(mapUrlPathname);
-      loadMapPins();
+      if (typeof loadCampaignPins === 'function') loadCampaignPins(mapUrlPathname);
+      if (typeof loadMapPins === 'function') loadMapPins();
   } catch (errorObject) {
       console.error(errorObject);
   }
@@ -1642,11 +1738,17 @@ window.vtmHandleMapClick = function(mouseEvent) {
     // Look up the new map pin modal and its coordinate/title/description inputs in the DOM by their IDs
     const modalElement = document.getElementById('newMapPinModal');
     if (modalElement) {
+        modalElement.dataset.coordMode = 'percent';
+        modalElement.dataset.targetMapUrl = '';
         document.getElementById('newPinX').value = percentageX;
         document.getElementById('newPinY').value = percentageY;
         document.getElementById('newPinTitle').value = '';
         const descriptionInputElement = document.getElementById('newPinDescription');
         if (descriptionInputElement) descriptionInputElement.value = '';
+        const securityInputElement = document.getElementById('newPinSecurity');
+        if (securityInputElement) securityInputElement.value = '';
+        const infiltrationInputElement = document.getElementById('newPinInfiltration');
+        if (infiltrationInputElement) infiltrationInputElement.value = '';
         modalElement.classList.add('active'); modalElement.style.zIndex = '9999999';
         vtmMapLog("Modal opened successfully. Display: " + modalElement.style.display + ", z-index: " + modalElement.style.zIndex);
     } else {

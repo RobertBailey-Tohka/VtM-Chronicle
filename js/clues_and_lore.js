@@ -544,9 +544,11 @@ function createMatrixSubmit() {
   });
 }
 
-function deleteMatrix(matrixId) {
-  // Prompt the user with a browser confirm dialog before deleting the clue matrix
-  if (confirm('Delete this clue matrix and all clues inside it?')) {
+async function deleteMatrix(matrixId) {
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Delete this clue matrix and all clues inside it?', 'Delete Clue Matrix')
+    : true;
+  if (isConfirmed) {
     // Perform an authenticated HTTP DELETE request to delete the clue matrix
     authFetch(`/api/matrices/${matrixId}`, {
       method: 'DELETE'
@@ -667,9 +669,11 @@ function createLoreMatrixSubmit() {
   });
 }
 
-function deleteLoreMatrix(loreMatrixId) {
-  // Prompt the user with a browser confirm dialog before deleting the lore matrix
-  if (confirm('Delete this lore matrix and all lore revelations inside it?')) {
+async function deleteLoreMatrix(loreMatrixId) {
+  const isConfirmed = typeof vtmConfirm === 'function'
+    ? await vtmConfirm('Delete this lore matrix and all lore revelations inside it?', 'Delete Lore Matrix')
+    : true;
+  if (isConfirmed) {
     // Perform an authenticated HTTP DELETE request to delete the lore matrix
     authFetch(`/api/lore_matrices/${loreMatrixId}`, {
       method: 'DELETE'
@@ -1380,8 +1384,10 @@ window.editClueSubmit = async function() {
 };
 
 window.deleteClue = async function(clueId) {
-    // Ask the user for confirmation using a browser confirm dialog before deleting the clue
-    if (!confirm('Are you sure you want to delete this clue completely?')) return;
+    const isConfirmed = typeof vtmConfirm === 'function'
+      ? await vtmConfirm('Are you sure you want to delete this clue completely?', 'Delete Clue')
+      : true;
+    if (!isConfirmed) return;
     try {
         // Perform an authenticated HTTP DELETE request to delete the clue from the server
         const fetchResponse = await authFetch('/api/clues/' + clueId, { method: 'DELETE' });
@@ -1400,8 +1406,10 @@ window.deleteClue = async function(clueId) {
 
 
 async function deleteLoreEntry(loreEntryId, loreTitle) {
-    // Ask the user for confirmation using a browser confirm dialog before deleting the lore entry
-    if (!confirm('Are you sure you want to permanently delete the lore revelation "' + loreTitle + '"?')) return;
+    const isConfirmed = typeof vtmConfirm === 'function'
+      ? await vtmConfirm('Are you sure you want to permanently delete the lore revelation "' + loreTitle + '"?', 'Delete Lore Entry')
+      : true;
+    if (!isConfirmed) return;
     try {
         // Perform an authenticated HTTP DELETE request to remove the lore entry from the server
         const fetchResponse = await authFetch('/api/lore_entries/' + loreEntryId, { method: 'DELETE' });
