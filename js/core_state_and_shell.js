@@ -161,13 +161,13 @@ function restoreWidgetLayoutState() {
           if (entry.width) {
             const parsedW = parseFloat(entry.width);
             if (!Number.isNaN(parsedW) && parsedW >= 180) {
-              widgetElement.style.width = `${Math.min(parsedW, vw - 16)}px`;
+              widgetElement.style.width = `${parsedW}px`;
             }
           }
           if (entry.height) {
             const parsedH = parseFloat(entry.height);
             if (!Number.isNaN(parsedH) && parsedH >= 120) {
-              widgetElement.style.height = `${Math.min(parsedH, vh - 56)}px`;
+              widgetElement.style.height = `${parsedH}px`;
             }
           }
           if (entry.zIndex) {
@@ -379,7 +379,7 @@ function notifyOpenCharacterSheetFrames(updatedCharId) {
   }
   document.querySelectorAll('iframe[src*="V5-Character-Sheet"]').forEach(frame => {
     if (frame.id === 'sheetFrame' || !frame.contentWindow) return;
-    const match = (frame.src || '').match(/[?&]id=(\d+)/);
+    const match = (frame.src || '').match(/[?&](?:char_id|id)=(\d+)/);
     const frameCharId = match ? Number(match[1]) : null;
     if (!targetId || !frameCharId || targetId === frameCharId) {
       frame.contentWindow.postMessage({
@@ -1738,7 +1738,7 @@ function initDesktopWidgetsDragAndResize() {
           };
         }
     }
-    attachMultiDirectionResizeHandles(widgetElement, 260, 180);
+    attachMultiDirectionResizeHandles(widgetElement, 180, 120);
     if (!desktopListenersAttached) {
       desktopListenersAttached = true;
       // Attach a global mousemove listener to the window to handle active widget dragging and resizing
@@ -1764,8 +1764,10 @@ function initDesktopWidgetsDragAndResize() {
           const dir = activeWidgetResize.dir || 'se';
           const deltaWidth = mouseEvent.clientX - activeWidgetResize.startX;
           const deltaHeight = mouseEvent.clientY - activeWidgetResize.startY;
-          const minW = activeWidgetResize.minWidth || 220;
-          const minH = activeWidgetResize.minHeight || 140;
+          const minW = activeWidgetResize.minWidth || 180;
+          const minH = activeWidgetResize.minHeight || 120;
+          activeWidgetResize.widget.style.maxWidth = 'none';
+          activeWidgetResize.widget.style.maxHeight = 'none';
 
           if (dir.includes('e')) {
             const newWidth = Math.max(minW, activeWidgetResize.initialWidth + deltaWidth);
@@ -1776,30 +1778,16 @@ function initDesktopWidgetsDragAndResize() {
             activeWidgetResize.widget.style.height = `${newHeight}px`;
           }
           if (dir.includes('w')) {
-            const proposedWidth = activeWidgetResize.initialWidth - deltaWidth;
-            if (proposedWidth >= minW) {
-              activeWidgetResize.widget.style.width = `${proposedWidth}px`;
-              activeWidgetResize.widget.style.left = `${Math.max(0, activeWidgetResize.initialLeft + deltaWidth)}px`;
-            }
+            const rightEdge = activeWidgetResize.initialLeft + activeWidgetResize.initialWidth;
+            const newWidth = Math.max(minW, activeWidgetResize.initialWidth - deltaWidth);
+            activeWidgetResize.widget.style.width = `${newWidth}px`;
+            activeWidgetResize.widget.style.left = `${rightEdge - newWidth}px`;
           }
           if (dir.includes('n')) {
-            const minTopAllowed = activeWidgetResize.isFixed ? 52 : 2;
-            const vh = window.innerHeight;
-            if (deltaHeight > 0 && activeWidgetResize.initialViewportBottom > vh - 12) {
-              // When the bottom of the widget is hidden beneath the browser window and the player drags
-              // the top edge/corner down to shrink it, pull the bottom up into the visible viewport too
-              const maxFittingHeight = Math.max(minH, vh - activeWidgetResize.initialViewportTop - 16);
-              const baseHeight = Math.min(activeWidgetResize.initialHeight, maxFittingHeight);
-              const shrunkHeight = Math.max(minH, baseHeight - deltaHeight * 1.35);
-              activeWidgetResize.widget.style.height = `${shrunkHeight}px`;
-              activeWidgetResize.widget.style.top = `${Math.max(minTopAllowed, activeWidgetResize.initialTop + Math.min(deltaHeight * 0.35, 80))}px`;
-            } else {
-              const proposedHeight = activeWidgetResize.initialHeight - deltaHeight;
-              if (proposedHeight >= minH) {
-                activeWidgetResize.widget.style.height = `${proposedHeight}px`;
-                activeWidgetResize.widget.style.top = `${Math.max(minTopAllowed, activeWidgetResize.initialTop + deltaHeight)}px`;
-              }
-            }
+            const bottomEdge = activeWidgetResize.initialTop + activeWidgetResize.initialHeight;
+            const newHeight = Math.max(minH, activeWidgetResize.initialHeight - deltaHeight);
+            activeWidgetResize.widget.style.height = `${newHeight}px`;
+            activeWidgetResize.widget.style.top = `${bottomEdge - newHeight}px`;
           }
           if (activeWidgetResize.widget.id === 'widget-clue-board' || activeWidgetResize.widget.classList.contains('widget-matrix-popup')) {
             renderClueCords();

@@ -690,10 +690,12 @@ html, body {
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 14px rgba(220, 38, 38, 0.1);
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
     transition: box-shadow 0.2s, border-color 0.2s;
-    min-width: 220px;
-    min-height: 140px;
+    min-width: 180px;
+    min-height: 120px;
+    max-width: none !important;
+    max-height: none !important;
     box-sizing: border-box;
 }
 
@@ -772,6 +774,7 @@ html, body {
 
 .widget-body {
     flex: 1;
+    min-height: 0;
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -779,7 +782,7 @@ html, body {
 
 /* ---------------- WIDGET 1: CRIMSON REVELRY CHAT (Left Top) ---------------- */
 .widget-chat {
-    min-height: 200px;
+    min-height: 120px;
 }
 
 .chat-widget-body {
@@ -1624,7 +1627,7 @@ select optgroup,
 /* ---------------- WIDGET 3: CITY MAP (Center) ---------------- */
 .widget-city-map,
 .widget-map {
-    min-height: 350px;
+    min-height: 140px;
 }
 
 .map-widget-body {
@@ -1834,7 +1837,7 @@ select optgroup,
 /* ---------------- WIDGET 4: CHARACTER DOSSIER (Center-Right) ---------------- */
 .widget-character-dossier,
 .widget-dossier {
-    min-height: 350px;
+    min-height: 140px;
 }
 
 .dossier-widget-body {
@@ -2203,7 +2206,7 @@ select optgroup,
 /* ---------------- WIDGET 5: CLUE EVIDENCE BOARD (Right) ---------------- */
 .widget-clue-board,
 .widget-clues {
-    min-height: 350px;
+    min-height: 140px;
 }
 
 .clues-widget-body {
@@ -3925,8 +3928,8 @@ body.vtm-dragging-or-resizing {
 /* ---------------- STORYTELLER CHARACTER CAST & PERSONAS WIDGET ---------------- */
 .widget-character-cast,
 .widget-npc-cast {
-    min-height: 380px;
-    max-height: 600px;
+    min-height: 140px;
+    max-height: none;
 }
 
 .npc-cast-filter-bar {
@@ -4863,7 +4866,9 @@ body.vtm-dragging-or-resizing {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: calc(100% - 100px);
+    flex: 1;
+    min-height: 0;
+    max-height: none;
 }
 
 .lore-entry-card {

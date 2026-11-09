@@ -1473,7 +1473,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         : (remoteCharPayload.sheet_data || {});
                     const prevUnlocked = Boolean(currentSheetData.player_base_edit_unlocked);
                     const nextUnlocked = Boolean(remoteSheetData.player_base_edit_unlocked);
-                    currentSheetData.player_base_edit_unlocked = nextUnlocked;
+                    const mergedBaseStats = {
+                        ...(currentSheetData.base_stats || {}),
+                        ...(remoteSheetData.base_stats || {})
+                    };
+                    const mergedXpUpgrades = {
+                        ...(currentSheetData.xp_upgrades || {}),
+                        ...(remoteSheetData.xp_upgrades || {})
+                    };
+                    currentSheetData = {
+                        ...currentSheetData,
+                        ...remoteSheetData,
+                        base_stats: mergedBaseStats,
+                        xp_upgrades: mergedXpUpgrades,
+                        player_base_edit_unlocked: nextUnlocked
+                    };
                     if (remoteSheetData.total_experience !== undefined) {
                         currentSheetData.total_experience = remoteSheetData.total_experience;
                         currentSheetData.total = String(remoteSheetData.total_experience);
@@ -1482,41 +1496,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentSheetData.spent_experience = remoteSheetData.spent_experience;
                         currentSheetData.spent = String(remoteSheetData.spent_experience);
                     }
-                    if (Array.isArray(remoteSheetData.xp_log)) {
-                        currentSheetData.xp_log = remoteSheetData.xp_log;
-                    }
-                    if (remoteSheetData.base_stats && typeof remoteSheetData.base_stats === 'object') {
-                        currentSheetData.base_stats = remoteSheetData.base_stats;
-                    }
-                    if (remoteSheetData.xp_upgrades && typeof remoteSheetData.xp_upgrades === 'object') {
-                        currentSheetData.xp_upgrades = remoteSheetData.xp_upgrades;
-                    }
-                    if (Array.isArray(remoteSheetData.health_states)) {
-                        currentSheetData.health_states = remoteSheetData.health_states;
-                    }
-                    if (remoteSheetData.health_max !== undefined) {
-                        currentSheetData.health_max = remoteSheetData.health_max;
-                    }
-                    if (Array.isArray(remoteSheetData.willpower_states)) {
-                        currentSheetData.willpower_states = remoteSheetData.willpower_states;
-                    }
-                    if (remoteSheetData.willpower_max !== undefined) {
-                        currentSheetData.willpower_max = remoteSheetData.willpower_max;
-                    }
-                    if (Array.isArray(remoteSheetData.humanity_states)) {
-                        currentSheetData.humanity_states = remoteSheetData.humanity_states;
-                    }
-                    if (remoteSheetData.stains !== undefined) {
-                        currentSheetData.stains = remoteSheetData.stains;
-                    }
-                    if (Array.isArray(remoteSheetData.hunger)) {
-                        currentSheetData.hunger = remoteSheetData.hunger;
-                    } else if (remoteCharPayload.hunger !== undefined) {
+                    if (!Array.isArray(remoteSheetData.hunger) && remoteCharPayload.hunger !== undefined) {
                         const hVal = Math.max(0, Math.min(5, Number(remoteCharPayload.hunger) || 0));
                         currentSheetData.hunger = Array.from({ length: 5 }, (_, i) => i < hVal ? 'filled' : 'empty');
                     }
                     currentSheetData = normalizeSheetData(currentSheetData, remoteCharPayload);
+                    document.querySelectorAll('input, textarea, select').forEach(el => {
+                        if (!el.id || document.activeElement === el) return;
+                        if (currentSheetData[el.id] !== undefined) {
+                            if (el.type === 'checkbox') {
+                                el.checked = Boolean(currentSheetData[el.id]);
+                            } else if (String(el.value) !== String(currentSheetData[el.id])) {
+                                el.value = currentSheetData[el.id];
+                            }
+                        }
+                    });
                     syncSquareTrackerDomFromCurrentSheetData();
+                    document.querySelectorAll('.dot-group:not(.square-group)').forEach(dotGroupElement => {
+                        if (!dotGroupElement.id) return;
+                        if (currentSheetData[dotGroupElement.id] !== undefined) {
+                            renderCircularDotGroup(dotGroupElement);
+                        }
+                    });
                     if (remoteCharPayload.concealed_fields !== undefined) {
                         try {
                             const parsedConcealed = typeof remoteCharPayload.concealed_fields === 'string'
@@ -1655,7 +1656,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const incomingSheet = typeof messageEvent.data.sheet_data === 'string'
                     ? JSON.parse(messageEvent.data.sheet_data || '{}')
                     : JSON.parse(JSON.stringify(messageEvent.data.sheet_data));
-                currentSheetData = normalizeSheetData({ ...currentSheetData, ...incomingSheet });
+                currentSheetData = normalizeSheetData({
+                    ...currentSheetData,
+                    ...incomingSheet,
+                    base_stats: { ...(currentSheetData.base_stats || {}), ...(incomingSheet.base_stats || {}) },
+                    xp_upgrades: { ...(currentSheetData.xp_upgrades || {}), ...(incomingSheet.xp_upgrades || {}) }
+                });
+                document.querySelectorAll('input, textarea, select').forEach(el => {
+                    if (!el.id || document.activeElement === el) return;
+                    if (currentSheetData[el.id] !== undefined) {
+                        if (el.type === 'checkbox') {
+                            el.checked = Boolean(currentSheetData[el.id]);
+                        } else if (String(el.value) !== String(currentSheetData[el.id])) {
+                            el.value = currentSheetData[el.id];
+                        }
+                    }
+                });
                 syncSquareTrackerDomFromCurrentSheetData();
                 document.querySelectorAll('.dot-group:not(.square-group)').forEach(dotGroupElement => {
                     if (!dotGroupElement.id) return;

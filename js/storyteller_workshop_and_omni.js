@@ -1476,49 +1476,108 @@ function addEpisodeNpcSubmit() {
 async function renderChronicleTimelineEpisodes() {
   if (!activeChronicleId) return;
   try {
-    // Perform an authenticated HTTP GET request to fetch all episodes for the active chronicle
-    const fetchResponse = await authFetch(`/api/episodes?campaign_id=${activeChronicleId}`);
+    // Perform an authenticated HTTP GET request to fetch all episodes and campaigns for the active chronicle
+    const [fetchResponse, chronResponse] = await Promise.all([
+      authFetch(`/api/episodes?chronicle_id=${activeChronicleId}`),
+      authFetch(`/api/chronicles/${activeChronicleId}/campaigns`).catch(() => null)
+    ]);
     if (!fetchResponse.ok) return;
     // Parse the JSON response into an array of episode records
     let episodeRecordsList = await fetchResponse.json();
+    let campaignsList = [];
+    if (chronResponse && chronResponse.ok) {
+      try {
+        campaignsList = await chronResponse.json();
+      } catch (e) {}
+    }
+    if (!Array.isArray(campaignsList) || campaignsList.length === 0) {
+      const chronRec = (Array.isArray(allChroniclesData) ? allChroniclesData : []).find(c => Number(c.id) === Number(activeChronicleId));
+      if (chronRec && Array.isArray(chronRec.campaigns)) {
+        campaignsList = chronRec.campaigns;
+      }
+    }
     // Look up the story timeline sidebar element in the DOM by ID
     const timelineSidebarElement = document.getElementById('storyTimelineSidebar');
     if (!timelineSidebarElement) return;
     
     const isStoryteller = activeChronicleRole === 'gm' || activeChronicleRole === 'storyteller';
     let timelineSidebarHtml = '';
-    const sortedEpisodes = episodeRecordsList.slice().sort((firstEpisode, secondEpisode) => firstEpisode.episode_number - secondEpisode.episode_number);
-    
-    sortedEpisodes.forEach(episodeRecord => {
-      const isRevealed = Boolean(episodeRecord.revealed) || (window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
-      const isLiveEp = Boolean(window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
-      
-      if (!isRevealed && !isStoryteller) {
-          // Locked episode for players
-          timelineSidebarHtml += `
-            <div style="position: relative; cursor: not-allowed; opacity: 0.5;">
-                <div style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #6b7280;"></div>
-                <div style="font-size: 10px; color: #6b7280; font-weight: bold;">Ep ${episodeRecord.episode_number}</div>
-                <div style="font-size: 12px; color: #9ca3af; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Classified</div>
-                <i class="fa-solid fa-lock" style="position: absolute; right: 0; top: 4px; font-size: 10px; color: #ef4444;"></i>
-            </div>
-          `;
-      } else {
-          // Revealed episode or GM view
-          const isHiddenBadge = (!isRevealed && isStoryteller) ? '<i class="fa-solid fa-eye-slash" style="color:#ef4444; margin-left:4px;" title="Hidden from players"></i>' : '';
-          const liveBadge = isLiveEp ? '<span style="font-size:8px; padding:1px 4px; border-radius:3px; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.5); margin-left:4px;">LIVE</span>' : '';
-          
-          timelineSidebarHtml += `
-            <div style="position: relative; cursor: pointer; transition: all 0.2s;" class="timeline-ep-item" data-ep-id="${episodeRecord.id}" onclick="loadTimelineEpisodeDetail(${episodeRecord.id}, this)" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='none'">
-                <div class="timeline-dot" style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: ${isLiveEp ? '#10b981' : '#9ca3af'}; transition: all 0.2s;"></div>
-                <div style="font-size: 10px; color: #9ca3af; font-weight: bold;" class="timeline-ep-num">Ep ${episodeRecord.episode_number} ${isHiddenBadge}${liveBadge}</div>
-                <div style="font-size: 12px; color: #d1d5db; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" class="timeline-ep-title">${escapeHtml(episodeRecord.title)}</div>
-            </div>
-          `;
+
+    // Build ordered Campaign groups so each Campaign shows its own Episode 1..X sequence
+    const campaignMap = new Map();
+    if (Array.isArray(campaignsList)) {
+      campaignsList
+        .slice()
+        .sort((a, b) => Number(a.id) - Number(b.id))
+        .forEach((camp, idx) => {
+          campaignMap.set(Number(camp.id), {
+            id: Number(camp.id),
+            index: idx + 1,
+            title: camp.title || `Campaign ${idx + 1}`,
+            episodes: []
+          });
+        });
+    }
+    (Array.isArray(episodeRecordsList) ? episodeRecordsList : []).forEach(ep => {
+      const cId = Number(ep.campaign_id || 0);
+      if (!campaignMap.has(cId)) {
+        const nextIdx = campaignMap.size + 1;
+        campaignMap.set(cId, {
+          id: cId,
+          index: nextIdx,
+          title: ep.campaign_title || (cId === 5 ? 'The Labrynth' : cId === 6 ? 'The Crossroads' : `Campaign ${nextIdx}`),
+          episodes: []
+        });
       }
+      campaignMap.get(cId).episodes.push(ep);
     });
+
+    const orderedGroups = Array.from(campaignMap.values()).filter(g => g.episodes.length > 0);
+    const flatSortedEpisodes = [];
+
+    orderedGroups.forEach((group, groupIdx) => {
+      group.episodes.sort((a, b) => Number(a.episode_number) - Number(b.episode_number));
+      const hasLiveInGroup = group.episodes.some(ep => window.liveGameboardEpisodeId && Number(ep.id) === Number(window.liveGameboardEpisodeId));
+      timelineSidebarHtml += `
+        <div style="position: relative; margin-top: ${groupIdx === 0 ? '0px' : '12px'}; margin-bottom: 4px; padding: 5px 8px; background: ${hasLiveInGroup ? 'rgba(185, 28, 28, 0.22)' : 'rgba(255, 255, 255, 0.04)'}; border: 1px solid ${hasLiveInGroup ? 'rgba(239, 68, 68, 0.45)' : 'rgba(255, 255, 255, 0.08)'}; border-radius: 5px; margin-left: -8px;">
+          <div style="font-size: 9px; color: #f87171; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Campaign ${group.index}</div>
+          <div style="font-size: 11px; color: #f3f4f6; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(group.title)}">${escapeHtml(group.title)}</div>
+        </div>
+      `;
+
+      group.episodes.forEach(episodeRecord => {
+        flatSortedEpisodes.push(episodeRecord);
+        const isRevealed = Boolean(episodeRecord.revealed) || (window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
+        const isLiveEp = Boolean(window.liveGameboardEpisodeId && Number(episodeRecord.id) === Number(window.liveGameboardEpisodeId));
+        
+        if (!isRevealed && !isStoryteller) {
+            // Locked episode for players
+            timelineSidebarHtml += `
+              <div style="position: relative; cursor: not-allowed; opacity: 0.5;">
+                  <div style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #6b7280;"></div>
+                  <div style="font-size: 10px; color: #6b7280; font-weight: bold;">Ep ${episodeRecord.episode_number}</div>
+                  <div style="font-size: 12px; color: #9ca3af; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Classified</div>
+                  <i class="fa-solid fa-lock" style="position: absolute; right: 0; top: 4px; font-size: 10px; color: #ef4444;"></i>
+              </div>
+            `;
+        } else {
+            // Revealed episode or GM view
+            const isHiddenBadge = (!isRevealed && isStoryteller) ? '<i class="fa-solid fa-eye-slash" style="color:#ef4444; margin-left:4px;" title="Hidden from players"></i>' : '';
+            const liveBadge = isLiveEp ? '<span style="font-size:8px; padding:1px 4px; border-radius:3px; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.5); margin-left:4px;">LIVE</span>' : '';
+            
+            timelineSidebarHtml += `
+              <div style="position: relative; cursor: pointer; transition: all 0.2s;" class="timeline-ep-item" data-ep-id="${episodeRecord.id}" onclick="loadTimelineEpisodeDetail(${episodeRecord.id}, this)" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='none'">
+                  <div class="timeline-dot" style="position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: ${isLiveEp ? '#10b981' : '#9ca3af'}; transition: all 0.2s;"></div>
+                  <div style="font-size: 10px; color: #9ca3af; font-weight: bold;" class="timeline-ep-num">Ep ${episodeRecord.episode_number} ${isHiddenBadge}${liveBadge}</div>
+                  <div style="font-size: 12px; color: #d1d5db; font-family: 'Cinzel', serif; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" class="timeline-ep-title">${escapeHtml(episodeRecord.title)}</div>
+              </div>
+            `;
+        }
+      });
+    });
+
     timelineSidebarElement.innerHTML = timelineSidebarHtml;
-    const targetAutoEpId = window.liveGameboardEpisodeId || (sortedEpisodes.find(e => e.revealed) || sortedEpisodes[0])?.id;
+    const targetAutoEpId = window.liveGameboardEpisodeId || (flatSortedEpisodes.find(e => e.revealed) || flatSortedEpisodes[0])?.id;
     const timelineContentEl = document.getElementById('storyTimelineContent');
     if (targetAutoEpId && timelineContentEl && (timelineContentEl.innerText.includes('Select an episode') || window.lastTimelineLoadedEpId === Number(targetAutoEpId))) {
       const itemEl = timelineSidebarElement.querySelector(`.timeline-ep-item[data-ep-id="${targetAutoEpId}"]`);
@@ -1578,9 +1637,12 @@ async function loadTimelineEpisodeDetail(episodeId, clickedTimelineItemElement) 
         // Parse the JSON response into an episode record object
         const episodeRecord = await fetchResponse.json();
         
+        const campaignTitleBadge = episodeRecord.campaign_title
+            ? `<div style="font-size: 10px; background: rgba(255,255,255,0.08); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.15); display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 16px; margin-right: 6px; letter-spacing: 0.8px; text-transform: uppercase;">${escapeHtml(episodeRecord.campaign_title)}</div>`
+            : '';
         let episodeDetailHtml = `
             <h2 style="font-family: 'Cinzel', serif; font-size: 20px; color: #ffffff; font-weight: bold; margin: 0 0 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">${escapeHtml(episodeRecord.title)}</h2>
-            <div style="font-size: 10px; background: rgba(239,68,68,0.2); color: #fca5a5; display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 16px; letter-spacing: 1px;">EPISODE ${episodeRecord.episode_number}</div>
+            ${campaignTitleBadge}<div style="font-size: 10px; background: rgba(239,68,68,0.2); color: #fca5a5; display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 16px; letter-spacing: 1px;">EPISODE ${episodeRecord.episode_number}</div>
         `;
         
         if (episodeRecord.location) {

@@ -391,6 +391,70 @@
           ) {
             ch.hidden_from_user_ids = JSON.stringify(allPlayerUserIds);
           }
+          // Heal September (id: 24) discipline & XP upgrades sync state
+          if (Number(ch.id) === 24 && ch.sheet_data) {
+            try {
+              const sd24 = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+              let changed24 = false;
+              if (Number(sd24.discipline_dots_0 || 0) < 3) {
+                sd24.discipline_dots_0 = 3;
+                changed24 = true;
+              }
+              if (!sd24.discipline_power_0_2) {
+                sd24.discipline_power_0_2 = 'Shape Change';
+                changed24 = true;
+              }
+              if (Number(sd24.discipline_dots_1 || 0) < 2) {
+                sd24.discipline_dots_1 = 2;
+                changed24 = true;
+              }
+              if (!sd24.discipline_power_1_1 || sd24.discipline_power_1_1 === 'Feral') {
+                sd24.discipline_power_1_1 = 'Feral Whispers';
+                changed24 = true;
+              }
+              sd24.xp_upgrades = sd24.xp_upgrades && typeof sd24.xp_upgrades === 'object' ? sd24.xp_upgrades : {};
+              if (Number(sd24.xp_upgrades.discipline_dots_0 || 0) < 1) {
+                sd24.xp_upgrades.discipline_dots_0 = 1;
+                changed24 = true;
+              }
+              if (Number(sd24.xp_upgrades.discipline_dots_1 || 0) < 1) {
+                sd24.xp_upgrades.discipline_dots_1 = 1;
+                changed24 = true;
+              }
+              if (Number(sd24.spent_experience || 0) < 25) {
+                sd24.spent_experience = '25';
+                sd24.spent = '25';
+                changed24 = true;
+              }
+              if (Number(sd24.total_experience || 0) < 25) {
+                sd24.total_experience = '25';
+                sd24.total = '25';
+                changed24 = true;
+              }
+              if (changed24) {
+                if (
+                  Array.isArray(sd24.willpower_states) &&
+                  sd24.willpower_states.filter((s) => s === 'superficial').length === 3 &&
+                  (!ch.updated_at || ch.updated_at <= '2026-10-27')
+                ) {
+                  sd24.willpower_states = [
+                    'empty',
+                    'empty',
+                    'empty',
+                    'empty',
+                    'filled',
+                    'filled',
+                    'filled',
+                    'filled',
+                    'filled',
+                    'filled',
+                  ];
+                  ch.willpower_superficial = 0;
+                }
+                ch.sheet_data = JSON.stringify(sd24);
+              }
+            } catch (e) {}
+          }
         }
       }
       // Heal legacy 1920s or deleted-episode default scene in localStorage if present
@@ -928,11 +992,20 @@
             : activeChron.ui_settings;
       } catch (e) {}
     }
+    const compactCampaigns = (db.campaigns || [])
+      .filter((c) => Number(c.chronicle_id) === defaultChronicleId())
+      .map((c) => ({
+        id: c.id,
+        chronicle_id: c.chronicle_id,
+        title: c.title,
+        description: c.description || '',
+      }));
     sendRawNtfyPacket({
       senderId: CLIENT_ID,
       ts: Date.now(),
       type: 'st_authoritative_sync',
       characters: compactChars,
+      campaigns: compactCampaigns,
       discovered_clue_ids: discoveredClueIds,
       discovered_lore_ids: discoveredLoreIds,
       active_member_ids: activeMemberIds,
@@ -969,6 +1042,74 @@
         });
       }
     }, 320);
+  }
+
+  function buildCompactCharacterSheetPayload(ch) {
+    let sd = {};
+    try {
+      sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+    } catch (e) {}
+    const compactSd = {};
+    for (const [k, v] of Object.entries(sd)) {
+      if (k === 'history' || k === 'notes' || k === 'xp_log') continue;
+      if (v === '' || v === null || v === undefined) continue;
+      if (typeof v === 'number' && v === 0 && !k.startsWith('discipline_dots_') && k !== 'stains') continue;
+      if (k === 'xp_upgrades' && v && typeof v === 'object') {
+        const nonZeroXp = {};
+        for (const [xk, xv] of Object.entries(v)) {
+          if (Number(xv) !== 0) nonZeroXp[xk] = xv;
+        }
+        compactSd.xp_upgrades = nonZeroXp;
+        continue;
+      }
+      if (k === 'base_stats' && v && typeof v === 'object') {
+        const nonZeroBase = {};
+        for (const [bk, bv] of Object.entries(v)) {
+          if (Number(bv) !== 0) nonZeroBase[bk] = bv;
+        }
+        compactSd.base_stats = nonZeroBase;
+        continue;
+      }
+      compactSd[k] = v;
+    }
+    return {
+      id: ch.id,
+      user_id: ch.user_id,
+      name: ch.name,
+      short_name: ch.short_name,
+      clan: ch.clan,
+      concept: ch.concept,
+      hunger: ch.hunger,
+      humanity: ch.humanity,
+      health_superficial: ch.health_superficial,
+      health_aggravated: ch.health_aggravated,
+      willpower_superficial: ch.willpower_superficial,
+      willpower_aggravated: ch.willpower_aggravated,
+      concealed_fields: ch.concealed_fields,
+      updated_at: ch.updated_at || new Date().toISOString(),
+      sheet_data: compactSd,
+    };
+  }
+
+  function broadcastOwnedCharacterSync(specificCharId = null) {
+    if (!db || !Array.isArray(db.characters)) return;
+    const authUser = extractValidAuthUser();
+    if (!authUser || !authUser.id) return;
+    const targetChars = db.characters.filter((c) => {
+      if (specificCharId && Number(c.id) !== Number(specificCharId)) return false;
+      if (specificCharId) return true;
+      return c.category === 'pc' && Number(c.user_id) === Number(authUser.id);
+    });
+    targetChars.forEach((ch, idx) => {
+      setTimeout(() => {
+        sendRawNtfyPacket({
+          senderId: CLIENT_ID,
+          ts: Date.now(),
+          type: 'player_char_sync',
+          character: buildCompactCharacterSheetPayload(ch),
+        });
+      }, idx * 180);
+    });
   }
 
   function upsertDiceRollIntoDb(roll) {
@@ -1194,6 +1335,7 @@
         if (presenceReplyTimer) clearTimeout(presenceReplyTimer);
         presenceReplyTimer = setTimeout(() => {
           broadcastLocalPresence(false, true);
+          broadcastOwnedCharacterSync();
         }, 400);
         const authUser = extractValidAuthUser();
         if (authUser && isChronicleGM(defaultChronicleId(), authUser.id)) {
@@ -1210,6 +1352,77 @@
       if (!localPresenceRecord || Number(pkt.userId) !== Number(localPresenceRecord.userId)) {
         activePresencesByUserId.delete(Number(pkt.userId));
         if (!isReplay) emitCombinedPresences();
+      }
+      return;
+    }
+
+    if (pkt.type === 'player_char_sync' && pkt.character && pkt.character.id && db && Array.isArray(db.characters)) {
+      const incomingChar = pkt.character;
+      const ch = db.characters.find((c) => Number(c.id) === Number(incomingChar.id));
+      if (ch) {
+        if (incomingChar.name !== undefined) ch.name = incomingChar.name;
+        if (incomingChar.short_name !== undefined) ch.short_name = incomingChar.short_name;
+        if (incomingChar.clan !== undefined) ch.clan = incomingChar.clan;
+        if (incomingChar.concept !== undefined) ch.concept = incomingChar.concept;
+        if (incomingChar.hunger !== undefined) ch.hunger = Number(incomingChar.hunger);
+        if (incomingChar.humanity !== undefined) ch.humanity = Number(incomingChar.humanity);
+        if (incomingChar.health_superficial !== undefined)
+          ch.health_superficial = Number(incomingChar.health_superficial);
+        if (incomingChar.health_aggravated !== undefined)
+          ch.health_aggravated = Number(incomingChar.health_aggravated);
+        if (incomingChar.willpower_superficial !== undefined)
+          ch.willpower_superficial = Number(incomingChar.willpower_superficial);
+        if (incomingChar.willpower_aggravated !== undefined)
+          ch.willpower_aggravated = Number(incomingChar.willpower_aggravated);
+        if (incomingChar.concealed_fields !== undefined) ch.concealed_fields = incomingChar.concealed_fields;
+        let sd = {};
+        try {
+          sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
+        } catch (e) {}
+        if (incomingChar.sheet_data && typeof incomingChar.sheet_data === 'object') {
+          const {
+            xp_upgrades: incXp,
+            base_stats: incBase,
+            total_experience: incTotXp,
+            total: incTot,
+            player_base_edit_unlocked: incUnlocked,
+            ...restSd
+          } = incomingChar.sheet_data;
+          Object.assign(sd, restSd);
+          if (incXp && typeof incXp === 'object') {
+            sd.xp_upgrades = { ...(sd.xp_upgrades || {}), ...incXp };
+          }
+          if (incBase && typeof incBase === 'object') {
+            sd.base_stats = { ...(sd.base_stats || {}), ...incBase };
+          }
+          // Keep higher total_experience between GM award and player sheet
+          if (incTotXp !== undefined && Number(incTotXp) > Number(sd.total_experience || 0)) {
+            sd.total_experience = String(incTotXp);
+            sd.total = String(incTotXp);
+          }
+          if (incUnlocked !== undefined && sd.player_base_edit_unlocked === undefined) {
+            sd.player_base_edit_unlocked = incUnlocked;
+          }
+          ch.sheet_data = JSON.stringify(sd);
+        }
+        ch.updated_at = incomingChar.updated_at || new Date(pkt.ts || Date.now()).toISOString();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (e) {}
+        if (!isReplay) {
+          emitToLocalSockets('character:updated', { id: ch.id });
+          emitToLocalSockets('character:vitals_updated', {
+            id: ch.id,
+            character_id: ch.id,
+            hunger: ch.hunger,
+            humanity: ch.humanity,
+            health_superficial: ch.health_superficial,
+            health_aggravated: ch.health_aggravated,
+            willpower_superficial: ch.willpower_superficial,
+            willpower_aggravated: ch.willpower_aggravated,
+            sheet_data: sd,
+          });
+        }
       }
       return;
     }
@@ -1251,6 +1464,7 @@
       if (pktTs > 0 && lastStAuthSyncTs > 0 && pktTs < lastStAuthSyncTs) return;
       if (pktTs > 0) lastStAuthSyncTs = Math.max(lastStAuthSyncTs, pktTs);
       let anyChanged = false;
+      const authUserForStSync = extractValidAuthUser();
       for (const sc of pkt.characters) {
         const cid = sc.i !== undefined ? sc.i : sc.id;
         const ch = db.characters.find((c) => Number(c.id) === Number(cid));
@@ -1282,10 +1496,20 @@
         } else if (sc.player_base_edit_unlocked !== undefined) {
           sd.player_base_edit_unlocked = Boolean(sc.player_base_edit_unlocked);
         }
+        const isOwnedByLocalPlayer =
+          authUserForStSync &&
+          ch.category === 'pc' &&
+          Number(ch.user_id) === Number(authUserForStSync.id) &&
+          !isChronicleGM(defaultChronicleId(), authUserForStSync.id);
         const canApplyVitals =
-          !ch.updated_at || !sc.ut || new Date(sc.ut).getTime() >= new Date(ch.updated_at).getTime();
+          !isOwnedByLocalPlayer &&
+          (!ch.updated_at || !sc.ut || new Date(sc.ut).getTime() >= new Date(ch.updated_at).getTime());
         if (canApplyVitals) {
-          if (sc.s !== undefined) {
+          const hasLocalXpUpgrades =
+            sd.xp_upgrades &&
+            typeof sd.xp_upgrades === 'object' &&
+            Object.values(sd.xp_upgrades).some((v) => Number(v) > 0);
+          if (sc.s !== undefined && (!hasLocalXpUpgrades || Number(sc.s) >= Number(sd.spent_experience || 0))) {
             sd.spent_experience = String(sc.s);
             sd.spent = String(sc.s);
           }
@@ -1325,6 +1549,19 @@
         anyChanged = true;
       }
       let clueOrLoreChanged = false;
+      if (Array.isArray(pkt.campaigns) && pkt.campaigns.length > 0) {
+        db.campaigns = db.campaigns || [];
+        for (const incCamp of pkt.campaigns) {
+          if (!incCamp || incCamp.id === undefined) continue;
+          const idx = db.campaigns.findIndex((c) => Number(c.id) === Number(incCamp.id));
+          if (idx >= 0) {
+            db.campaigns[idx] = { ...db.campaigns[idx], ...incCamp };
+          } else {
+            db.campaigns.push(incCamp);
+            clueOrLoreChanged = true;
+          }
+        }
+      }
       if (Array.isArray(pkt.deleted_episode_ids) && pkt.deleted_episode_ids.length > 0 && Array.isArray(db.episodes)) {
         const delEpSet = new Set(pkt.deleted_episode_ids.map(Number));
         for (const epId of delEpSet) {
@@ -1438,10 +1675,17 @@
           sd = typeof ch.sheet_data === 'string' ? JSON.parse(ch.sheet_data || '{}') : ch.sheet_data || {};
         } catch (e) {}
         if (pkt.sheetPatch && typeof pkt.sheetPatch === 'object') {
-          const { xp_upgrades: incomingXpUpgrades, ...restPatch } = pkt.sheetPatch;
+          const {
+            xp_upgrades: incomingXpUpgrades,
+            base_stats: incomingBaseStats,
+            ...restPatch
+          } = pkt.sheetPatch;
           Object.assign(sd, restPatch);
           if (incomingXpUpgrades && typeof incomingXpUpgrades === 'object') {
             sd.xp_upgrades = { ...(sd.xp_upgrades || {}), ...incomingXpUpgrades };
+          }
+          if (incomingBaseStats && typeof incomingBaseStats === 'object') {
+            sd.base_stats = { ...(sd.base_stats || {}), ...incomingBaseStats };
           }
           if (Array.isArray(sd.hunger)) {
             ch.hunger = sd.hunger.filter((s) => s === 'filled').length;
@@ -1821,6 +2065,7 @@
             pkt.type === 'ledger_sync' ||
             pkt.type === 'xp_sync' ||
             pkt.type === 'st_authoritative_sync' ||
+            pkt.type === 'player_char_sync' ||
             pkt.type === 'char_delta' ||
             pkt.type === 'scene_sync' ||
             pkt.type === 'pins_sync' ||
@@ -1897,6 +2142,7 @@
               announcedOnOpen = true;
               broadcastLocalPresence(true);
               broadcastStorytellerAuthoritativeState();
+              broadcastOwnedCharacterSync();
             }
           };
           src.onmessage = (ev) => {
@@ -3368,10 +3614,34 @@
     }
 
     if (path === '/api/episodes' && method === 'GET') {
-      const cId = Number(q.get('chronicle_id') || q.get('campaign_id')) || defChronId;
-      const eps = (db.episodes || [])
-        .filter((e) => Number(e.chronicle_id) === cId || Number(e.campaign_id) === cId)
-        .sort((a, b) => Number(a.episode_number) - Number(b.episode_number));
+      const subCampParam = q.get('sub_campaign_id');
+      const chronParam = q.get('chronicle_id');
+      const campParam = q.get('campaign_id');
+      const campTitleById = new Map((db.campaigns || []).map((c) => [Number(c.id), c.title]));
+      let eps = [];
+      if (subCampParam) {
+        const scId = Number(subCampParam);
+        eps = (db.episodes || []).filter((e) => Number(e.campaign_id) === scId);
+      } else if (chronParam) {
+        const chId = Number(chronParam) || defChronId;
+        eps = (db.episodes || []).filter((e) => Number(e.chronicle_id) === chId);
+      } else {
+        const cId = Number(campParam) || defChronId;
+        const isChronIdMatch = (db.chronicles || []).some((ch) => Number(ch.id) === cId);
+        eps = (db.episodes || []).filter((e) =>
+          isChronIdMatch ? Number(e.chronicle_id) === cId : Number(e.campaign_id) === cId || Number(e.chronicle_id) === cId
+        );
+      }
+      eps = eps
+        .map((e) => ({
+          ...e,
+          campaign_title: campTitleById.get(Number(e.campaign_id)) || e.campaign_title || '',
+        }))
+        .sort((a, b) => {
+          const campDiff = Number(a.campaign_id || 0) - Number(b.campaign_id || 0);
+          if (campDiff !== 0) return campDiff;
+          return Number(a.episode_number) - Number(b.episode_number);
+        });
       return jsonResponse(eps);
     }
 
@@ -3439,7 +3709,11 @@
       const ep = (db.episodes || []).find((e) => Number(e.id) === epId);
       if (!ep) return jsonResponse({ error: 'Episode not found' }, 404);
       if (method === 'GET') {
-        const copy = { ...ep };
+        const parentCamp = (db.campaigns || []).find((c) => Number(c.id) === Number(ep.campaign_id));
+        const copy = {
+          ...ep,
+          campaign_title: (parentCamp && parentCamp.title) || ep.campaign_title || '',
+        };
         try {
           copy.scenes = typeof copy.scenes === 'string' ? JSON.parse(copy.scenes || '[]') : copy.scenes || [];
         } catch (e) {
@@ -4100,8 +4374,48 @@
         if (body.sheet_data && typeof body.sheet_data === 'object') {
           const sd = body.sheet_data;
           for (const k of Object.keys(sd)) {
-            if (JSON.stringify(existingSheet[k]) !== JSON.stringify(sd[k])) {
-              sheetPatch[k] = sd[k];
+            if (k === 'xp_upgrades' && sd.xp_upgrades && typeof sd.xp_upgrades === 'object') {
+              const prevXp =
+                existingSheet.xp_upgrades && typeof existingSheet.xp_upgrades === 'object'
+                  ? existingSheet.xp_upgrades
+                  : {};
+              const xpDiff = {};
+              for (const xk of Object.keys(sd.xp_upgrades)) {
+                if (Number(prevXp[xk] || 0) !== Number(sd.xp_upgrades[xk] || 0)) {
+                  xpDiff[xk] = sd.xp_upgrades[xk];
+                }
+              }
+              if (Object.keys(xpDiff).length > 0) {
+                sheetPatch.xp_upgrades = xpDiff;
+              }
+              continue;
+            }
+            if (k === 'base_stats' && sd.base_stats && typeof sd.base_stats === 'object') {
+              const prevBase =
+                existingSheet.base_stats && typeof existingSheet.base_stats === 'object'
+                  ? existingSheet.base_stats
+                  : {};
+              const baseDiff = {};
+              for (const bk of Object.keys(sd.base_stats)) {
+                if (Number(prevBase[bk] || 0) !== Number(sd.base_stats[bk] || 0)) {
+                  baseDiff[bk] = sd.base_stats[bk];
+                }
+              }
+              if (Object.keys(baseDiff).length > 0) {
+                sheetPatch.base_stats = baseDiff;
+              }
+              continue;
+            }
+            const prevVal = existingSheet[k];
+            const nextVal = sd[k];
+            if (
+              (prevVal === undefined || prevVal === null || prevVal === '' || prevVal === 0) &&
+              (nextVal === '' || nextVal === 0 || (Array.isArray(nextVal) && nextVal.length === 0))
+            ) {
+              continue;
+            }
+            if (JSON.stringify(prevVal) !== JSON.stringify(nextVal)) {
+              sheetPatch[k] = nextVal;
             }
           }
           if (sd.name) {
@@ -4238,38 +4552,11 @@
         if (deltaStr.length < 3600) {
           sendRawNtfyPacket(deltaPkt);
         } else {
-          // Send immediate inline compact delta for vitals/XP/privacy AND send full delta via bytebin overflow
+          // Send immediate inline compact delta for all sheet stats/disciplines/XP/vitals AND send full delta via bytebin overflow
           const compactSheetPatch = {};
-          const essentialKeys = [
-            'total_experience',
-            'total',
-            'spent_experience',
-            'spent',
-            'xp_locked_baselines',
-            'sheet_template',
-            'name',
-            'clan',
-            'concept',
-            'predator',
-            'ambition',
-            'desire',
-            'hunger',
-            'health_states',
-            'willpower_states',
-            'humanity_states',
-            'humanity',
-            'health_max',
-            'willpower_max',
-            'stains',
-            'blood_potency',
-          ];
+          const skipLongTextKeys = new Set(['history', 'notes', 'xp_log', 'description', 'appearance']);
           for (const k of Object.keys(sheetPatch)) {
-            if (
-              essentialKeys.includes(k) ||
-              k.startsWith('attr_') ||
-              k.startsWith('skill_') ||
-              k.startsWith('disc_')
-            ) {
+            if (!skipLongTextKeys.has(k)) {
               compactSheetPatch[k] = sheetPatch[k];
             }
           }
@@ -4282,6 +4569,9 @@
             sheetPatch: compactSheetPatch,
           });
           sendRawNtfyPacket(deltaPkt);
+        }
+        if (char.category === 'pc') {
+          setTimeout(() => broadcastOwnedCharacterSync(char.id), 250);
         }
         return jsonResponse({
           success: true,

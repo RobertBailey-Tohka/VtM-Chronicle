@@ -996,17 +996,15 @@ function openClueReaderModal(clueRecord) {
       });
     }
   };
-  // Register a global resize listener on the browser window to keep floating desktop widgets within viewport bounds
+  // Register a global resize listener on the browser window to keep floating desktop widget headers reachable
   window.addEventListener('resize', () => {
     // Query all desktop widget elements in the DOM
     document.querySelectorAll('.elysium-widget').forEach(widgetElement => {
       if (widgetElement.style.display !== 'none') {
-        // Measure the widget's bounding rectangle in the browser viewport
-        const widgetBoundingRect = widgetElement.getBoundingClientRect();
         let currentLeftPixels = parseInt(widgetElement.style.left) || 0;
         let currentTopPixels = parseInt(widgetElement.style.top) || 0;
-        if (currentLeftPixels + widgetBoundingRect.width > window.innerWidth) widgetElement.style.left = Math.max(0, window.innerWidth - widgetBoundingRect.width) + 'px';
-        if (currentTopPixels + widgetBoundingRect.height > window.innerHeight) widgetElement.style.top = Math.max(0, window.innerHeight - widgetBoundingRect.height) + 'px';
+        if (currentLeftPixels > window.innerWidth - 100) widgetElement.style.left = Math.max(0, window.innerWidth - 140) + 'px';
+        if (currentTopPixels > window.innerHeight - 60) widgetElement.style.top = Math.max(0, window.innerHeight - 80) + 'px';
       }
     });
   });
