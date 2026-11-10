@@ -3800,10 +3800,25 @@
         const epId = q.get('episode_id') ? Number(q.get('episode_id')) : null;
         const mats = (db.clue_matrices || [])
           .filter((m) => Number(m.chronicle_id) === cId && (!epId || Number(m.episode_id) === epId || !m.episode_id))
-          .map((m) => ({
-            ...m,
-            clues: (db.clues || []).filter((c) => Number(c.matrix_id) === Number(m.id)),
-          }));
+          .map((m) => {
+            const ep = (db.episodes || []).find((e) => Number(e.id) === Number(m.episode_id));
+            const camp = ep ? (db.campaigns || []).find((c) => Number(c.id) === Number(ep.campaign_id)) : null;
+            return {
+              ...m,
+              episode_number: ep ? Number(ep.episode_number || 1) : null,
+              episode_title: ep ? ep.title || '' : '',
+              campaign_id: ep ? Number(ep.campaign_id || 0) : null,
+              campaign_title: camp ? camp.title || '' : '',
+              clues: (db.clues || []).filter((c) => Number(c.matrix_id) === Number(m.id)),
+            };
+          })
+          .sort(
+            (a, b) =>
+              (Number(a.campaign_id) || 999999) - (Number(b.campaign_id) || 999999) ||
+              (Number(a.episode_number) || 0) - (Number(b.episode_number) || 0) ||
+              (Number(a.episode_id) || 0) - (Number(b.episode_id) || 0) ||
+              (Number(a.id) || 0) - (Number(b.id) || 0)
+          );
         return jsonResponse(mats);
       }
       if (method === 'POST') {

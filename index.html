@@ -5,14 +5,14 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="color-scheme" content="dark">
-    <script src="js/github-cloud-adapter.js?v=20261109_v27"></script>
-    <script src="js/fault_isolation.js?v=20261109_v27"></script>
+    <script src="js/github-cloud-adapter.js?v=20261109_v28"></script>
+    <script src="js/fault_isolation.js?v=20261109_v28"></script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vampire: The Masquerade — Elysium Virtual Tabletop</title>
     <link rel="stylesheet" href="css/all.min.css">
-    <link rel="stylesheet" href="css/app.css?v=20261109_v27">
+    <link rel="stylesheet" href="css/app.css?v=20261109_v28">
 
     <!-- Cropper.js -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
@@ -585,9 +585,15 @@
                     </div>
                     <!-- Clue Matrix Switcher Strip -->
                     <div class="clue-matrix-picker-strip">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;">
+                            <span id="clueMatrixActiveMetaLabel" style="font-size:10px;color:#fca5a5;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;" title="Active Campaign &amp; Episode">All Campaigns &amp; Episodes</span>
+                            <button type="button" id="btnClueFilterCurrentEp" class="btn-clue-ep-filter" onclick="toggleClueCurrentEpisodeFilter()" title="Hide matrices that are not part of the current episode">
+                                <i class="fa-solid fa-eye-slash"></i> <span>Hide Other Episodes</span>
+                            </button>
+                        </div>
                         <div style="display:flex;align-items:center;gap:6px;width:100%;">
-                            <i class="fa-solid fa-layer-group" style="color:#ef4444;font-size:11px;"></i>
-                            <select id="clueMatrixWidgetSelect" class="map-select-dropdown" style="flex:1;font-size:11px;" onchange="handleClueMatrixWidgetChange(this.value)"><option value="">Select Investigation Matrix...</option></select>
+                            <i class="fa-solid fa-layer-group" style="color:#ef4444;font-size:11px;flex-shrink:0;"></i>
+                            <select id="clueMatrixWidgetSelect" class="map-select-dropdown" style="flex:1;width:100%;max-width:none;font-size:11px;" onchange="handleClueMatrixWidgetChange(this.value)"><option value="">Select Investigation Matrix...</option></select>
                         </div>
                     </div>
                     <div class="widget-body clues-widget-body">
@@ -900,7 +906,7 @@
                     <div class="widget-header" id="dragHeader-clue-detail">
                         <span class="widget-title"><i class="fa-solid fa-magnifying-glass" style="color:#ef4444;margin-right:6px;"></i> <span id="clueDetailTitle">Clue Detail</span></span>
                         <div class="widget-actions">
-                            <button class="btn-w-ctrl" onclick="toggleWidgetClose('widget-clue-detail')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
+                            <button class="btn-w-ctrl" id="clueDetailCloseBtn" onclick="toggleWidgetClose('widget-clue-detail')"><i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i></button>
                         </div>
                     </div>
                     <div class="widget-body" id="clueDetailBody" style="padding: 20px; font-size: 14px; line-height: 1.5; color: #d1d5db; overflow-y: auto; height: calc(100% - 38px);">
@@ -2915,19 +2921,19 @@
     </div>
 
     <script src="socket.io/socket.io.js" onerror="console.log('[VtM] Using Serverless Socket.IO Engine')"></script>
-    <script src="js/v5_data.js?v=20261109_v27"></script>
-    <script src="js/character_wizard.js?v=20261109_v27"></script>
-    <script src="js/relationship_map.js?v=20261109_v27"></script>
-    <script src="js/dice_animations.js?v=20261109_v27"></script>
-    <script src="js/core_state_and_shell.js?v=20261109_v27"></script>
-    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v27"></script>
-    <script src="js/turn_tracker.js?v=20261109_v27"></script>
-    <script src="js/chat_and_dice.js?v=20261109_v27"></script>
-    <script src="js/city_map.js?v=20261109_v27"></script>
-    <script src="js/character_vault_and_dossier.js?v=20261109_v27"></script>
-    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v27"></script>
-    <script src="js/clues_and_lore.js?v=20261109_v27"></script>
-    <script src="js/rulebook_and_notes.js?v=20261109_v27"></script>
-    <script src="js/asset_library.js?v=20261109_v27"></script>
+    <script src="js/v5_data.js?v=20261109_v28"></script>
+    <script src="js/character_wizard.js?v=20261109_v28"></script>
+    <script src="js/relationship_map.js?v=20261109_v28"></script>
+    <script src="js/dice_animations.js?v=20261109_v28"></script>
+    <script src="js/core_state_and_shell.js?v=20261109_v28"></script>
+    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v28"></script>
+    <script src="js/turn_tracker.js?v=20261109_v28"></script>
+    <script src="js/chat_and_dice.js?v=20261109_v28"></script>
+    <script src="js/city_map.js?v=20261109_v28"></script>
+    <script src="js/character_vault_and_dossier.js?v=20261109_v28"></script>
+    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v28"></script>
+    <script src="js/clues_and_lore.js?v=20261109_v28"></script>
+    <script src="js/rulebook_and_notes.js?v=20261109_v28"></script>
+    <script src="js/asset_library.js?v=20261109_v28"></script>
 </body>
 </html>

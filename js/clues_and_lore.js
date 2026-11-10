@@ -30,6 +30,9 @@ function openClueDetailWidget(clueId) {
   
   // Look up the clue detail widget, header, title, and body elements in the DOM
   const clueDetailWidgetElement = document.getElementById('widget-clue-detail');
+  if (clueDetailWidgetElement) {
+    clueDetailWidgetElement.classList.remove('minimized-widget');
+  }
   const widgetHeaderElement = clueDetailWidgetElement ? clueDetailWidgetElement.querySelector('.widget-header') : null;
   const clueDetailTitleElement = document.getElementById('clueDetailTitle');
   const clueDetailBodyElement = document.getElementById('clueDetailBody');
@@ -54,12 +57,18 @@ function openClueDetailWidget(clueId) {
           widgetHeaderElement.style.right = '0';
           widgetHeaderElement.style.width = '100%';
           widgetHeaderElement.style.zIndex = '100';
+          widgetHeaderElement.style.justifyContent = 'flex-end';
           
-          // Query the widget title span and control button inside the widget header element
+          // Query the widget title span, minimize button, and close button inside the widget header element
           const widgetTitleSpanElement = widgetHeaderElement.querySelector('.widget-title');
           if (widgetTitleSpanElement) widgetTitleSpanElement.style.display = 'none';
           
-          const closeButtonElement = widgetHeaderElement.querySelector('.btn-w-ctrl');
+          const minButtonElement = widgetHeaderElement.querySelector('.btn-w-min');
+          if (minButtonElement) minButtonElement.style.display = 'none';
+          
+          const closeButtonElement =
+              document.getElementById('clueDetailCloseBtn') ||
+              widgetHeaderElement.querySelector('.btn-w-ctrl:not(.btn-w-min)');
           if (closeButtonElement) {
               closeButtonElement.className = 'custom-paper-close-btn';
               closeButtonElement.innerHTML = '×';
@@ -113,15 +122,21 @@ function openClueDetailWidget(clueId) {
           widgetHeaderElement.style.right = '';
           widgetHeaderElement.style.width = '';
           widgetHeaderElement.style.zIndex = '';
+          widgetHeaderElement.style.justifyContent = '';
           
-          // Query the widget title span and control button inside the widget header element
+          // Query the widget title span, minimize button, and close button inside the widget header element
           const widgetTitleSpanElement = widgetHeaderElement.querySelector('.widget-title');
           if (widgetTitleSpanElement) widgetTitleSpanElement.style.display = '';
           
-          const closeButtonElement = widgetHeaderElement.querySelector('.btn-w-ctrl');
+          const minButtonElement = widgetHeaderElement.querySelector('.btn-w-min');
+          if (minButtonElement) minButtonElement.style.display = '';
+          
+          const closeButtonElement =
+              document.getElementById('clueDetailCloseBtn') ||
+              widgetHeaderElement.querySelector('.btn-w-ctrl:not(.btn-w-min)');
           if (closeButtonElement) {
               closeButtonElement.className = 'btn-w-ctrl';
-              closeButtonElement.innerHTML = '×';
+              closeButtonElement.innerHTML = '<i class="fa-solid fa-xmark" style="font-size: 18px; margin-top:2px;"></i>';
               closeButtonElement.style.color = '';
               closeButtonElement.style.fontSize = '';
               closeButtonElement.style.textShadow = '';
@@ -760,6 +775,152 @@ function switchMatrixModalTab(selectedTabName) {
 }
 
 
+window.hideNonCurrentEpisodeClueMatrices =
+  typeof localStorage !== 'undefined' && localStorage.getItem('vtm_clue_filter_current_ep') === '1';
+
+function toggleClueCurrentEpisodeFilter() {
+  window.hideNonCurrentEpisodeClueMatrices = !window.hideNonCurrentEpisodeClueMatrices;
+  try {
+    localStorage.setItem('vtm_clue_filter_current_ep', window.hideNonCurrentEpisodeClueMatrices ? '1' : '0');
+  } catch (storageError) {
+    // Ignore storage quota errors
+  }
+  populateClueMatrixWidgetSelect();
+}
+window.toggleClueCurrentEpisodeFilter = toggleClueCurrentEpisodeFilter;
+
+function updateClueMatrixActiveMetaLabel(matrixId) {
+  const metaLabelEl = document.getElementById('clueMatrixActiveMetaLabel');
+  if (!metaLabelEl) return;
+  const selectedMatrix = (allChronicleClueMatrices || []).find(
+    clueMatrixRecord => Number(clueMatrixRecord.id) === Number(matrixId)
+  );
+  if (selectedMatrix) {
+    const campName = selectedMatrix.campaign_title || 'Main Campaign';
+    const epNum = selectedMatrix.episode_number || 1;
+    const epTitle = selectedMatrix.episode_title || 'Episode';
+    metaLabelEl.innerText = `${campName} • Ep ${epNum}: ${epTitle}`;
+    metaLabelEl.title = `${campName} — Episode ${epNum}: ${epTitle}`;
+  } else {
+    metaLabelEl.innerText = window.hideNonCurrentEpisodeClueMatrices
+      ? 'Current Episode Matrices'
+      : 'All Campaigns & Episodes';
+    metaLabelEl.title = metaLabelEl.innerText;
+  }
+}
+
+function populateClueMatrixWidgetSelect() {
+  const matrixSelectElement = document.getElementById('clueMatrixWidgetSelect');
+  const filterBtnElement = document.getElementById('btnClueFilterCurrentEp');
+  const currentEpId = Number(window.liveGameboardEpisodeId || activeEpisodeId || 0);
+
+  if (filterBtnElement) {
+    if (window.hideNonCurrentEpisodeClueMatrices) {
+      filterBtnElement.classList.add('active');
+      filterBtnElement.innerHTML = '<i class="fa-solid fa-filter"></i> <span>Current Episode Only</span>';
+      filterBtnElement.title = 'Showing only matrices from the current episode. Click to show all campaigns & episodes.';
+    } else {
+      filterBtnElement.classList.remove('active');
+      filterBtnElement.innerHTML = '<i class="fa-solid fa-eye-slash"></i> <span>Hide Other Episodes</span>';
+      filterBtnElement.title = 'Click to hide matrices that are not part of the current episode.';
+    }
+  }
+
+  if (!matrixSelectElement) return;
+  const allMatrices = Array.isArray(allChronicleClueMatrices) ? allChronicleClueMatrices : [];
+  const visibleMatrices =
+    window.hideNonCurrentEpisodeClueMatrices && currentEpId > 0
+      ? allMatrices.filter(clueMatrixRecord => Number(clueMatrixRecord.episode_id) === currentEpId)
+      : allMatrices;
+
+  matrixSelectElement.innerHTML = '<option value="">Select Investigation Matrix...</option>';
+
+  // Group matrices hierarchically: Campaign -> Episode -> Matrices
+  const campaignGroups = [];
+  const campaignMap = new Map();
+  visibleMatrices.forEach(clueMatrixRecord => {
+    const campId = Number(clueMatrixRecord.campaign_id || 0);
+    const campTitle = (clueMatrixRecord.campaign_title || 'Main Campaign').trim();
+    const campKey = `${campId}::${campTitle}`;
+    if (!campaignMap.has(campKey)) {
+      const groupObj = {
+        campaign_id: campId,
+        campaign_title: campTitle,
+        episodes: [],
+        episodeMap: new Map()
+      };
+      campaignMap.set(campKey, groupObj);
+      campaignGroups.push(groupObj);
+    }
+    const campGroup = campaignMap.get(campKey);
+    const epId = Number(clueMatrixRecord.episode_id || 0);
+    const epNum = Number(clueMatrixRecord.episode_number || 1);
+    const epTitle = (clueMatrixRecord.episode_title || 'Episode').trim();
+    const epKey = `${epId}::${epNum}`;
+    if (!campGroup.episodeMap.has(epKey)) {
+      const epGroup = {
+        episode_id: epId,
+        episode_number: epNum,
+        episode_title: epTitle,
+        matrices: []
+      };
+      campGroup.episodeMap.set(epKey, epGroup);
+      campGroup.episodes.push(epGroup);
+    }
+    campGroup.episodeMap.get(epKey).matrices.push(clueMatrixRecord);
+  });
+
+  campaignGroups.sort((a, b) => (a.campaign_id || 999999) - (b.campaign_id || 999999));
+
+  campaignGroups.forEach((campGroup, campIdx) => {
+    const campaignDividerOption = document.createElement('option');
+    campaignDividerOption.disabled = true;
+    campaignDividerOption.className = 'clue-select-camp-divider';
+    campaignDividerOption.innerText = `━━ CAMPAIGN ${campIdx + 1}: ${campGroup.campaign_title.toUpperCase()} ━━`;
+    matrixSelectElement.appendChild(campaignDividerOption);
+
+    campGroup.episodes.sort(
+      (a, b) =>
+        (Number(a.episode_number) || 0) - (Number(b.episode_number) || 0) ||
+        (Number(a.episode_id) || 0) - (Number(b.episode_id) || 0)
+    );
+
+    campGroup.episodes.forEach(epGroup => {
+      const isCurrentEpisode = currentEpId > 0 && Number(epGroup.episode_id) === currentEpId;
+      const optGroupElement = document.createElement('optgroup');
+      optGroupElement.label = `   Ep ${epGroup.episode_number}: ${epGroup.episode_title}${isCurrentEpisode ? ' ★ CURRENT' : ''}`;
+
+      epGroup.matrices.forEach(clueMatrixRecord => {
+        const optionElement = document.createElement('option');
+        optionElement.value = clueMatrixRecord.id;
+        optionElement.innerText = `${clueMatrixRecord.title} (Ep ${epGroup.episode_number}: ${epGroup.episode_title})`;
+        optGroupElement.appendChild(optionElement);
+      });
+
+      matrixSelectElement.appendChild(optGroupElement);
+    });
+  });
+
+  if (visibleMatrices.length > 0) {
+    const liveEpMatrix = currentEpId
+      ? visibleMatrices.find(clueMatrixRecord => Number(clueMatrixRecord.episode_id) === currentEpId)
+      : null;
+    if (
+      !activeWidgetMatrixId ||
+      !visibleMatrices.some(clueMatrixRecord => Number(clueMatrixRecord.id) === Number(activeWidgetMatrixId))
+    ) {
+      activeWidgetMatrixId = (liveEpMatrix || visibleMatrices[0]).id;
+    }
+    matrixSelectElement.value = String(activeWidgetMatrixId);
+    updateClueMatrixActiveMetaLabel(activeWidgetMatrixId);
+    renderWidgetClueCards(activeWidgetMatrixId);
+  } else {
+    updateClueMatrixActiveMetaLabel(null);
+    renderWidgetClueCards(null);
+  }
+}
+window.populateClueMatrixWidgetSelect = populateClueMatrixWidgetSelect;
+
 async function loadClueMatricesForWidget() {
   if (!activeChronicleId) return;
   try {
@@ -767,6 +928,18 @@ async function loadClueMatricesForWidget() {
     const episodesFetchResponse = await authFetch(`/api/episodes?campaign_id=${activeChronicleId}`);
     if (!episodesFetchResponse.ok) return;
     const episodesList = await episodesFetchResponse.json();
+
+    // Build a lookup of campaign titles from allChroniclesData if available
+    const campaignTitleLookup = new Map();
+    if (Array.isArray(allChroniclesData)) {
+      const chronRecord = allChroniclesData.find(c => Number(c.id) === Number(activeChronicleId));
+      if (chronRecord && Array.isArray(chronRecord.campaigns)) {
+        chronRecord.campaigns.forEach(camp => {
+          campaignTitleLookup.set(Number(camp.id), camp.title);
+        });
+      }
+    }
+
     let collectedMatricesList = [];
     for (const episodeSummary of episodesList) {
       // Perform an authenticated HTTP GET request to load each episode's full clue matrices
@@ -774,39 +947,38 @@ async function loadClueMatricesForWidget() {
       if (episodeDetailResponse.ok) {
         const episodeDetailData = await episodeDetailResponse.json();
         if (episodeDetailData.matrices && Array.isArray(episodeDetailData.matrices)) {
+          const resolvedCampId = Number(episodeSummary.campaign_id || episodeDetailData.campaign_id || 0);
+          const resolvedCampTitle =
+            episodeSummary.campaign_title ||
+            episodeDetailData.campaign_title ||
+            campaignTitleLookup.get(resolvedCampId) ||
+            'Main Campaign';
+          const resolvedEpNum = Number(episodeSummary.episode_number || episodeDetailData.episode_number || 1);
+          const resolvedEpTitle = episodeSummary.title || episodeDetailData.title || 'Episode';
+
           episodeDetailData.matrices.forEach(clueMatrixRecord => {
-            clueMatrixRecord.episode_title = episodeSummary.title;
+            clueMatrixRecord.episode_id = Number(episodeSummary.id);
+            clueMatrixRecord.episode_number = resolvedEpNum;
+            clueMatrixRecord.episode_title = resolvedEpTitle;
+            clueMatrixRecord.campaign_id = resolvedCampId;
+            clueMatrixRecord.campaign_title = resolvedCampTitle;
             collectedMatricesList.push(clueMatrixRecord);
           });
         }
       }
     }
+
+    // Sort matrices by Campaign ID, then Episode Number, then Episode ID, then Matrix ID
+    collectedMatricesList.sort(
+      (a, b) =>
+        (Number(a.campaign_id) || 999999) - (Number(b.campaign_id) || 999999) ||
+        (Number(a.episode_number) || 0) - (Number(b.episode_number) || 0) ||
+        (Number(a.episode_id) || 0) - (Number(b.episode_id) || 0) ||
+        (Number(a.id) || 0) - (Number(b.id) || 0)
+    );
+
     allChronicleClueMatrices = collectedMatricesList;
-    // Look up the clue matrix widget select dropdown element in the DOM by its ID
-    const matrixSelectElement = document.getElementById('clueMatrixWidgetSelect');
-    if (matrixSelectElement) {
-      matrixSelectElement.innerHTML = '<option value="">Select Investigation Matrix...</option>';
-      collectedMatricesList.forEach(clueMatrixRecord => {
-        // Create a new <option> element in memory for each clue matrix
-        const optionElement = document.createElement('option');
-        optionElement.value = clueMatrixRecord.id;
-        optionElement.innerText = `${clueMatrixRecord.title} (${clueMatrixRecord.episode_title || 'Episode'})`;
-        matrixSelectElement.appendChild(optionElement);
-      });
-      if (collectedMatricesList.length > 0) {
-        const liveEpId = Number(window.liveGameboardEpisodeId || activeEpisodeId || 0);
-        const liveEpMatrix = liveEpId
-          ? collectedMatricesList.find(clueMatrixRecord => Number(clueMatrixRecord.episode_id) === liveEpId)
-          : null;
-        if (!activeWidgetMatrixId || !collectedMatricesList.some(clueMatrixRecord => clueMatrixRecord.id === activeWidgetMatrixId)) {
-          activeWidgetMatrixId = (liveEpMatrix || collectedMatricesList[0]).id;
-        }
-        matrixSelectElement.value = String(activeWidgetMatrixId);
-        renderWidgetClueCards(activeWidgetMatrixId);
-      } else {
-        renderWidgetClueCards(null);
-      }
-    }
+    populateClueMatrixWidgetSelect();
   } catch (errorObject) {
     console.error('Failed to load clue matrices for widget:', errorObject);
   }
@@ -814,6 +986,7 @@ async function loadClueMatricesForWidget() {
 
 function handleClueMatrixWidgetChange(matrixId) {
   activeWidgetMatrixId = matrixId ? parseInt(matrixId, 10) : null;
+  updateClueMatrixActiveMetaLabel(activeWidgetMatrixId);
   renderWidgetClueCards(activeWidgetMatrixId);
 }
 

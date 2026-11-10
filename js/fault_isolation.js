@@ -185,6 +185,9 @@
     ]);
     window.vtmIsolateModule('clues_and_lore', [
       'loadClueMatricesForWidget',
+      'populateClueMatrixWidgetSelect',
+      'toggleClueCurrentEpisodeFilter',
+      'openClueDetailWidget',
       'loadLoreMatricesForWidget',
       'renderWidgetClueCards',
       'addClueToBoard',
