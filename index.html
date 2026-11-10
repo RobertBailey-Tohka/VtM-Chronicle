@@ -5,14 +5,14 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="color-scheme" content="dark">
-    <script src="js/github-cloud-adapter.js?v=20261109_v26"></script>
-    <script src="js/fault_isolation.js?v=20261109_v26"></script>
+    <script src="js/github-cloud-adapter.js?v=20261109_v27"></script>
+    <script src="js/fault_isolation.js?v=20261109_v27"></script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vampire: The Masquerade — Elysium Virtual Tabletop</title>
     <link rel="stylesheet" href="css/all.min.css">
-    <link rel="stylesheet" href="css/app.css?v=20261109_v26">
+    <link rel="stylesheet" href="css/app.css?v=20261109_v27">
 
     <!-- Cropper.js -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
@@ -771,23 +771,17 @@
                             </button>
                         </div>
 
-                        <div id="turnTrackerNowActingBanner" style="margin-bottom:10px;"></div>
+                        <div id="turnTrackerNowActingBanner" class="turn-tracker-now-acting" style="margin-bottom:10px; display:none;"></div>
 
                         <div id="turnTrackerAddBar" class="gm-only-control" style="display:flex; gap:6px; margin-bottom:10px;">
-                            <div class="vtm-custom-select-wrap" style="flex:1;">
-                                <select id="turnTrackerAddSelect" class="vtm-themed-select" style="padding:5px 26px 5px 8px; font-size:11px;">
-                                    <option value="">+ Override / Add Offline Player or NPC...</option>
-                                </select>
-                                <img src="images/vtm_arrow_down.svg" alt="" class="vtm-select-custom-arrow" draggable="false">
-                            </div>
-                            <button type="button" class="btn-action-outline btn-sm" onclick="addSelectedToTurnTracker()" style="padding:4px 10px; font-size:11px; white-space:nowrap;">
-                                <i class="fa-solid fa-plus"></i> Add
+                            <button type="button" class="btn-action-outline btn-sm" onclick="openTurnTrackerAddPlayerModal()" style="width:100%; padding:7px 12px; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; border-color:rgba(239,68,68,0.45); background:rgba(239,68,68,0.12); color:#fca5a5;">
+                                <i class="fa-solid fa-user-plus"></i> Add Player to Queue
                             </button>
                         </div>
 
-                        <div id="turnTrackerGmSubbar" class="gm-only-control" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.8px;">Click row to set turn • Drag or arrows to reorder</span>
-                            <button type="button" class="btn-text-danger" onclick="clearTurnTrackerOrder()" title="Reset to Online Players Only" style="font-size:10px; background:none; border:none; color:#f87171; cursor:pointer; padding:2px 4px;">
+                        <div id="turnTrackerGmSubbar" class="gm-only-control" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;">
+                            <span style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Click row to set turn • Drag or arrows to reorder</span>
+                            <button type="button" class="btn-text-danger" onclick="clearTurnTrackerOrder()" title="Reset to Online Players Only" style="font-size:10px; background:none; border:none; color:#f87171; cursor:pointer; padding:2px 4px; white-space:nowrap; flex-shrink:0;">
                                 <i class="fa-solid fa-trash-can"></i> Reset
                             </button>
                         </div>
@@ -2899,20 +2893,41 @@
         </div>
     </div>
 
+    <!-- TURN TRACKER: ADD PLAYER TO QUEUE MODAL -->
+    <div id="turnTrackerAddPlayerModal" class="vtm-modal" style="z-index: 100600;" onclick="if(event.target === this) closeTurnTrackerAddPlayerModal()">
+        <div class="vtm-modal-content" style="max-width: 440px; background: #120b0f; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 10px; overflow: hidden;">
+            <div class="vtm-modal-header" style="background: linear-gradient(90deg, #1f0d14 0%, #120b0f 100%); border-bottom: 1px solid rgba(239, 68, 68, 0.25); padding: 14px 18px;">
+                <h2 style="font-family: 'Cinzel', serif; font-size: 15px; color: #f8fafc; display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <i class="fa-solid fa-user-plus" style="color: #ef4444;"></i> Add Player to Turn Queue
+                </h2>
+                <button type="button" class="btn-close-modal" onclick="closeTurnTrackerAddPlayerModal()" title="Close">&times;</button>
+            </div>
+            <div class="vtm-modal-body" style="padding: 14px 18px; max-height: 65vh; overflow-y: auto; gap: 10px;">
+                <div style="font-size: 11.5px; color: #9ca3af; line-height: 1.4;">
+                    Logged-in players appear in the Turn Tracker automatically. Select any player below to add or restore them to the turn queue:
+                </div>
+                <div id="turnTrackerAddPlayerList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+            <div class="vtm-modal-footer" style="padding: 10px 18px; background: rgba(0, 0, 0, 0.35); border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                <button type="button" class="btn-action-outline btn-sm" onclick="closeTurnTrackerAddPlayerModal()">Done</button>
+            </div>
+        </div>
+    </div>
+
     <script src="socket.io/socket.io.js" onerror="console.log('[VtM] Using Serverless Socket.IO Engine')"></script>
-    <script src="js/v5_data.js?v=20261109_v26"></script>
-    <script src="js/character_wizard.js?v=20261109_v26"></script>
-    <script src="js/relationship_map.js?v=20261109_v26"></script>
-    <script src="js/dice_animations.js?v=20261109_v26"></script>
-    <script src="js/core_state_and_shell.js?v=20261109_v26"></script>
-    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v26"></script>
-    <script src="js/turn_tracker.js?v=20261109_v26"></script>
-    <script src="js/chat_and_dice.js?v=20261109_v26"></script>
-    <script src="js/city_map.js?v=20261109_v26"></script>
-    <script src="js/character_vault_and_dossier.js?v=20261109_v26"></script>
-    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v26"></script>
-    <script src="js/clues_and_lore.js?v=20261109_v26"></script>
-    <script src="js/rulebook_and_notes.js?v=20261109_v26"></script>
-    <script src="js/asset_library.js?v=20261109_v26"></script>
+    <script src="js/v5_data.js?v=20261109_v27"></script>
+    <script src="js/character_wizard.js?v=20261109_v27"></script>
+    <script src="js/relationship_map.js?v=20261109_v27"></script>
+    <script src="js/dice_animations.js?v=20261109_v27"></script>
+    <script src="js/core_state_and_shell.js?v=20261109_v27"></script>
+    <script src="js/chronicle_hub_and_coterie.js?v=20261109_v27"></script>
+    <script src="js/turn_tracker.js?v=20261109_v27"></script>
+    <script src="js/chat_and_dice.js?v=20261109_v27"></script>
+    <script src="js/city_map.js?v=20261109_v27"></script>
+    <script src="js/character_vault_and_dossier.js?v=20261109_v27"></script>
+    <script src="js/storyteller_workshop_and_omni.js?v=20261109_v27"></script>
+    <script src="js/clues_and_lore.js?v=20261109_v27"></script>
+    <script src="js/rulebook_and_notes.js?v=20261109_v27"></script>
+    <script src="js/asset_library.js?v=20261109_v27"></script>
 </body>
 </html>

@@ -1551,12 +1551,17 @@ select optgroup,
 }
 
 .turn-badge {
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 999px;
     font-size: 9px;
     font-weight: 800;
     letter-spacing: 0.5px;
     flex-shrink: 0;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
 }
 
 .turn-badge-acting {
